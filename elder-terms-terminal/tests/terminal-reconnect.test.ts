@@ -8,9 +8,12 @@ import { createConnection, createServer, type Socket } from 'node:net';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { waitForResult } from 'gestament/testing';
-import { expectElementKind } from './test-helpers';
-import { runGtkTest, withTemporaryDirectory } from './gtk-test-helpers';
-import { startSshLatencyFixture } from './performance/ssh-latency-fixture.mjs';
+import {
+  withTemporaryDirectory,
+  expectElementKind,
+} from '../../shared/tests/connection-test-helpers.ts';
+import { runGtkTest } from './gtk-test-helpers';
+import { startSshLatencyFixture } from '../../shared/tests/ssh-latency-fixture.mts';
 
 describe.concurrent('terminal reconnection', () => {
   it('restarts a local command after exit and exchanges new input', async (context) => {

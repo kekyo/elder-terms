@@ -22,7 +22,10 @@ import {
 } from 'gestament';
 import { waitForResult } from 'gestament/testing';
 import { describe, expect, it } from 'vitest';
-import { createTestEvidence, expectElementKind } from './test-helpers';
+import {
+  createTestEvidence,
+  expectElementKind,
+} from '../../shared/tests/connection-test-helpers.ts';
 
 describe('Local directory menu', () => {
   for (const [failure, language] of [
@@ -89,7 +92,7 @@ await appendFile(path, JSON.stringify(process.argv.slice(2)) + '\\n');
         accessibilitySession: 'minimal',
         appPath: fileURLToPath(
           new URL(
-            '../../.build/elder-terms-terminal/elder-terms-file-transfer',
+            '../../.build/elder-terms-file-transfer/elder-terms-file-transfer',
             import.meta.url
           )
         ),

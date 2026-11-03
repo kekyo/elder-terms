@@ -409,10 +409,12 @@ validate_deb_package() {
 		usr/lib/elder-terms/launcher/elder-terms \
 		usr/lib/elder-terms/launcher/main-window.ui \
 		usr/lib/elder-terms/elder-terms-terminal/elder-terms-terminal \
-		usr/lib/elder-terms/elder-terms-terminal/elder-terms-file-transfer \
+		usr/lib/elder-terms/elder-terms-file-transfer/elder-terms-file-transfer \
 		usr/lib/elder-terms/elder-terms-terminal/main-window.ui \
 		usr/lib/elder-terms/elder-terms-terminal/green-on.png \
 		usr/lib/elder-terms/elder-terms-terminal/green-off.png \
+		usr/lib/elder-terms/elder-terms-file-transfer/green-on.png \
+		usr/lib/elder-terms/elder-terms-file-transfer/green-off.png \
 		usr/share/applications/net.kekyo.elder-terms.desktop \
 		usr/share/applications/net.kekyo.elder-terms-terminal.desktop \
 		etc/xdg/autostart/net.kekyo.elder-terms.desktop \
@@ -454,7 +456,7 @@ validate_deb_package() {
 	assert_symlink "$tmp_dir/usr/bin/elder-terms-terminal" \
 		'../lib/elder-terms/elder-terms-terminal/elder-terms-terminal'
 	assert_symlink "$tmp_dir/usr/bin/elder-terms-file-transfer" \
-		'../lib/elder-terms/elder-terms-terminal/elder-terms-file-transfer'
+		'../lib/elder-terms/elder-terms-file-transfer/elder-terms-file-transfer'
 
 	for elf_path in \
 		usr/bin/etctl \
@@ -469,7 +471,7 @@ validate_deb_package() {
 		usr/lib/elder-terms/libsmb2.so.7 \
 		usr/lib/elder-terms/launcher/elder-terms \
 		usr/lib/elder-terms/elder-terms-terminal/elder-terms-terminal \
-		usr/lib/elder-terms/elder-terms-terminal/elder-terms-file-transfer; do
+		usr/lib/elder-terms/elder-terms-file-transfer/elder-terms-file-transfer; do
 		elf_name=$(printf '%s' "$elf_path" | tr '/' '-')
 		assert_elf_architecture \
 			"$tmp_dir/$elf_path" "$expected_arch" "$tmp_dir/readelf-$elf_name.txt"

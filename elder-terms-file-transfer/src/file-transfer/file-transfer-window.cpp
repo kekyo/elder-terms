@@ -1,0 +1,3496 @@
+// elder-terms: A terminal application, inspired by personal computing in the 1990s.
+// Copyright (c) Kouji Matsui. (@kekyo@mi.kekyo.net)
+// Under MIT.
+// https://github.com/kekyo/elder-terms/
+
+#include <elder-terms/modal-dialog.h>
+#include <elder-terms/tracked-window.h>
+#include <elder-terms/connection-icon-image.h>
+#include <elder-terms/connection-icon-presets.h>
+#include <elder-terms/connection-desktop-session.h>
+#include <elder-terms/settings-widget.h>
+#include <elder-terms/http-url.h>
+#include "file-transfer-window.h"
+
+#include <algorithm>
+#include <array>
+#include <cstdarg>
+#include <cstdint>
+#include <ctime>
+#include <exception>
+#include <filesystem>
+#include <memory>
+#include <map>
+#include <optional>
+#include <stdexcept>
+#include <string>
+#include <set>
+#include <utility>
+#include <vector>
+
+#include <gio/gio.h>
+#include <gestament/gtk.h>
+#ifdef GDK_WINDOWING_X11
+#include <gdk/gdkx.h>
+#endif
+
+#define GETTEXT_PACKAGE "elder-terms"
+#include <glib/gi18n-lib.h>
+
+#include "file-transfer-engine.h"
+#include "file-transfer-job.h"
+#include "file-transfer-job-view.h"
+#include "file-transfer-node-icon.h"
+#include "activity-file-client.h"
+#include "../../../shared/src/connection-runtime/activity-indicator.h"
+#include "../../../shared/src/connection-runtime/compact-header.h"
+#include "../../../shared/src/connection-runtime/indicator-color.h"
+#include "local-file-reveal.h"
+#include "../../../shared/src/connection-runtime/widget-background.h"
+
+namespace elder_terms {
+
+static std::string format_translated_string(const char *format, ...)
+    G_GNUC_PRINTF(1, 2);
+
+static std::string format_translated_string(const char *format, ...) {
+  va_list arguments;
+  va_start(arguments, format);
+  gchar *formatted = g_strdup_vprintf(format, arguments);
+  va_end(arguments);
+  const std::string result = formatted == nullptr ? std::string() : formatted;
+  g_free(formatted);
+  return result;
+}
+
+static constexpr char local_browser_attributes[] =
+    G_FILE_ATTRIBUTE_STANDARD_NAME ","
+    G_FILE_ATTRIBUTE_STANDARD_TYPE ","
+    G_FILE_ATTRIBUTE_STANDARD_IS_SYMLINK ","
+    G_FILE_ATTRIBUTE_STANDARD_SIZE ","
+    G_FILE_ATTRIBUTE_UNIX_MODE ","
+    G_FILE_ATTRIBUTE_TIME_ACCESS ","
+    G_FILE_ATTRIBUTE_TIME_MODIFIED;
+static constexpr guint action_progress_pulse_period_ms = 100;
+static constexpr const char *file_transfer_header_style_class =
+    "file-transfer-header";
+static constexpr const char *file_transfer_exterior_component_style_class =
+    "file-transfer-exterior-components";
+static constexpr int file_transfer_content_padding = 12;
+static constexpr int file_transfer_pane_spacing = 12;
+static constexpr int file_transfer_control_spacing = 8;
+static constexpr int file_transfer_tree_expander_minimum_hit_width = 24;
+
+enum FileTransferTreeColumn {
+  file_transfer_tree_name_column = 0,
+  file_transfer_tree_size_column = 1,
+  file_transfer_tree_modified_column = 2,
+  file_transfer_tree_path_column = 3,
+  file_transfer_tree_type_column = 4,
+  file_transfer_tree_loaded_column = 5,
+  file_transfer_tree_dummy_column = 6,
+  file_transfer_tree_icon_column = 7,
+  file_transfer_tree_column_count = 8,
+};
+
+struct FileTransferGObjectDeleter {
+  void operator()(void *object) const {
+    if (object != nullptr) {
+      g_object_unref(object);
+    }
+  }
+};
+
+struct FileTransferGFreeDeleter {
+  void operator()(void *value) const {
+    g_free(value);
+  }
+};
+
+template <typename T>
+using FileTransferGObjectPtr =
+    std::unique_ptr<T, FileTransferGObjectDeleter>;
+using FileTransferGCharPtr = std::unique_ptr<char, FileTransferGFreeDeleter>;
+
+struct FileTransferWindow;
+static void clear_file_transfer_window_colors(FileTransferWindow *window);
+
+enum class FileTransferConnectionState {
+  connecting,
+  authenticating,
+  ready,
+  failed,
+  disconnected,
+};
+
+struct FileTransferPaneState {
+  FileTransferWindow *window = nullptr;
+  bool remote = false;
+  GtkWidget *frame = nullptr;
+  GtkWidget *path_entry = nullptr;
+  GtkWidget *up_button = nullptr;
+  GtkWidget *refresh_button = nullptr;
+  GtkWidget *tree = nullptr;
+  GtkTreeStore *store = nullptr;
+  GtkWidget *menu = nullptr;
+  GtkWidget *transfer_item = nullptr;
+  GtkWidget *receive_file_item = nullptr;
+  GtkWidget *expand_html_item = nullptr;
+  GtkWidget *hash_item = nullptr;
+  GtkWidget *open_directory_item = nullptr;
+  GtkWidget *new_directory_item = nullptr;
+  GtkWidget *rename_item = nullptr;
+  GtkWidget *delete_item = nullptr;
+  std::string current_directory;
+  std::optional<cardio::promise<void>> task;
+  bool busy = false;
+  std::uint64_t generation = 0;
+};
+
+struct FileTransferSelectedItem {
+  std::string name;
+  std::string path;
+  RemoteFileType type = RemoteFileType::other;
+};
+
+struct FileTransferWindow {
+  std::weak_ptr<FileTransferWindow> self;
+  GtkWidget *window = nullptr;
+  SettingsStore settings;
+  std::optional<std::filesystem::path> config_path;
+  GtkWidget *settings_dialog = nullptr;
+  SettingsWidgetState *settings_widget = nullptr;
+  guint settings_close_idle = 0;
+  GtkWidget *header_bar = nullptr;
+  GtkCssProvider *header_provider = nullptr;
+  GtkWidget *application_menu_button = nullptr;
+  GtkWidget *application_menu_button_image = nullptr;
+  GtkWidget *header_connection_icon = nullptr;
+  GtkWidget *title_box = nullptr;
+  GtkWidget *title_label = nullptr;
+  GtkWidget *root_overlay = nullptr;
+  GtkWidget *frame_start_border = nullptr;
+  GtkWidget *frame_end_border = nullptr;
+  GtkWidget *frame_bottom_border = nullptr;
+  GtkWidget *paned = nullptr;
+  GtkWidget *dim_overlay = nullptr;
+  GtkWidget *reconnect_button = nullptr;
+  GtkWidget *action_overlay = nullptr;
+  GtkWidget *action_label = nullptr;
+  GtkWidget *action_progress = nullptr;
+  GtkWidget *action_cancel_button = nullptr;
+  GtkWidget *prompt_panel = nullptr;
+  GtkWidget *prompt_background = nullptr;
+  std::array<ActivityIndicatorWidget, 3> indicators;
+  GdkPixbuf *indicator_on = nullptr;
+  GdkPixbuf *indicator_off = nullptr;
+  GdkPixbuf *indicator_default_on = nullptr;
+  GdkPixbuf *indicator_default_off = nullptr;
+  GtkWidget *status_bar = nullptr;
+  GtkWidget *status_content = nullptr;
+  GtkWidget *indicator_bar = nullptr;
+  GtkWidget *status_label = nullptr;
+  std::string status_text;
+  bool certificate_exception = false;
+  bool certificate_confirmation = false;
+  GtkCssProvider *exterior_background_provider = nullptr;
+  GtkCssProvider *exterior_component_background_provider = nullptr;
+  GtkCssProvider *background_provider = nullptr;
+  GtkCssProvider *component_background_provider = nullptr;
+  GtkCssProvider *popup_component_background_provider = nullptr;
+  FileTransferPaneState local;
+  FileTransferPaneState remote;
+  std::shared_ptr<RemoteFileClient> client;
+  std::shared_ptr<FileTransferQueue> jobs;
+  std::shared_ptr<FileTransferJobView> job_view;
+  GtkWidget *vertical_paned = nullptr;
+  std::string protocol_name;
+  std::string connection_id;
+  std::shared_ptr<InlinePromptController> prompt;
+  std::function<cardio::promise<FileHashes>(
+      std::string, cardio::cancellation)> remote_file_hash;
+  std::function<void()> closed;
+  std::function<cardio::promise<void>(SettingsStore)> reconnect;
+  std::optional<cardio::promise<void>> reconnect_task;
+  bool reconnecting = false;
+  cardio::cancellation_source stop_source;
+  std::optional<cardio::cancellation_source> transfer_cancel_source;
+  std::optional<cardio::promise<void>> transfer_task;
+  std::optional<cardio::promise<void>> browser_action_task;
+  guint action_pulse_source = 0;
+  FileTransferConnectionState connection_state =
+      FileTransferConnectionState::connecting;
+  bool shown = false;
+  bool local_load_started = false;
+  bool remote_load_started = false;
+  bool connection_available = false;
+  bool transfer_active = false;
+  bool browser_action_active = false;
+  bool browser_action_progress = false;
+  bool destroyed = false;
+
+  ~FileTransferWindow() {
+    disconnect_file_transfer_queue(jobs, true);
+    cancel_inline_prompt(prompt);
+    (void)stop_source.cancel();
+    if (transfer_cancel_source.has_value()) {
+      (void)transfer_cancel_source->cancel();
+    }
+    if (action_pulse_source != 0) {
+      g_source_remove(action_pulse_source);
+      action_pulse_source = 0;
+    }
+    if (window != nullptr && !destroyed) {
+      clear_file_transfer_window_colors(this);
+      gtk_widget_destroy(window);
+    }
+    g_clear_object(&exterior_background_provider);
+    g_clear_object(&exterior_component_background_provider);
+    g_clear_object(&background_provider);
+    g_clear_object(&component_background_provider);
+    g_clear_object(&popup_component_background_provider);
+    if (local.store != nullptr) {
+      g_object_unref(local.store);
+      local.store = nullptr;
+    }
+    if (remote.store != nullptr) {
+      g_object_unref(remote.store);
+      remote.store = nullptr;
+    }
+  }
+};
+
+static bool is_remote_disconnection(std::exception_ptr failure) {
+  if (!failure) return false;
+  try {
+    std::rethrow_exception(failure);
+  } catch (const RemoteFileError &error) {
+    return error.connection_lost;
+  } catch (...) {
+    return false;
+  }
+}
+
+static std::string exception_text(std::exception_ptr error) {
+  if (!error) {
+    return _("Unknown file transfer failure");
+  }
+  try {
+    std::rethrow_exception(error);
+  } catch (const std::exception &exception) {
+    return exception.what();
+  } catch (...) {
+    return _("Unknown file transfer failure");
+  }
+}
+
+static std::string file_size_text(const RemoteFileAttributes &attributes) {
+  if (attributes.type != RemoteFileType::regular || !attributes.size) {
+    return {};
+  }
+  FileTransferGCharPtr formatted(
+      g_format_size(static_cast<guint64>(*attributes.size)));
+  return formatted == nullptr ? std::string()
+                              : std::string(formatted.get());
+}
+
+static std::string modification_time_text(
+    const RemoteFileAttributes &attributes) {
+  if (!attributes.modification_time_unix_seconds.has_value() ||
+      *attributes.modification_time_unix_seconds <= 0) {
+    return {};
+  }
+  const std::time_t seconds = static_cast<std::time_t>(
+      *attributes.modification_time_unix_seconds);
+  std::tm local_time = {};
+  if (localtime_r(&seconds, &local_time) == nullptr) {
+    return {};
+  }
+  char buffer[32] = {};
+  if (std::strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M",
+                    &local_time) == 0) {
+    return {};
+  }
+  return buffer;
+}
+
+static int type_sort_rank(RemoteFileType type) {
+  if (type == RemoteFileType::directory) {
+    return 0;
+  }
+  if (type == RemoteFileType::regular) {
+    return 1;
+  }
+  if (type == RemoteFileType::symbolic_link) {
+    return 2;
+  }
+  return 3;
+}
+
+static void sort_browser_entries(
+    std::vector<RemoteFileAttributes> *entries) {
+  std::sort(
+      entries->begin(), entries->end(),
+      [](const RemoteFileAttributes &left,
+         const RemoteFileAttributes &right) {
+        const int left_rank = type_sort_rank(left.type);
+        const int right_rank = type_sort_rank(right.type);
+        if (left_rank != right_rank) {
+          return left_rank < right_rank;
+        }
+        return left.name < right.name;
+      });
+}
+
+static void append_dummy_row(GtkTreeStore *store,
+                             GtkTreeIter *parent) {
+  GtkTreeIter child;
+  gtk_tree_store_append(store, &child, parent);
+  gtk_tree_store_set(
+      store, &child, file_transfer_tree_name_column, _("Loading…"),
+      file_transfer_tree_size_column, "", file_transfer_tree_modified_column, "",
+      file_transfer_tree_path_column, "", file_transfer_tree_type_column,
+      static_cast<int>(RemoteFileType::other),
+      file_transfer_tree_loaded_column, TRUE, file_transfer_tree_dummy_column, TRUE, -1);
+}
+
+static void set_browser_row(
+    GtkTreeStore *store, GtkTreeIter *iterator,
+    const RemoteFileAttributes &attributes) {
+  const std::string size = file_size_text(attributes);
+  const std::string modified = modification_time_text(attributes);
+  gtk_tree_store_set(
+      store, iterator, file_transfer_tree_name_column,
+      attributes.name.c_str(), file_transfer_tree_size_column, size.c_str(),
+      file_transfer_tree_modified_column, modified.c_str(),
+      file_transfer_tree_path_column, attributes.path.c_str(),
+      file_transfer_tree_type_column, static_cast<int>(attributes.type),
+      file_transfer_tree_loaded_column,
+      attributes.type != RemoteFileType::directory && attributes.type != RemoteFileType::unresolved,
+      file_transfer_tree_dummy_column, FALSE,
+      file_transfer_tree_icon_column, file_transfer_node_icon(attributes).data(), -1);
+  if (attributes.type == RemoteFileType::directory || attributes.type == RemoteFileType::unresolved) {
+    append_dummy_row(store, iterator);
+  }
+}
+
+static void append_browser_row(
+    GtkTreeStore *store, GtkTreeIter *parent,
+    const RemoteFileAttributes &attributes) {
+  GtkTreeIter iterator;
+  gtk_tree_store_append(store, &iterator, parent);
+  set_browser_row(store, &iterator, attributes);
+}
+
+static void append_browser_entries(
+    GtkTreeStore *store, GtkTreeIter *parent,
+    std::vector<RemoteFileAttributes> entries) {
+  sort_browser_entries(&entries);
+  for (const RemoteFileAttributes &entry : entries) {
+    append_browser_row(store, parent, entry);
+  }
+}
+
+static void replace_dummy_with_browser_entries(
+    GtkTreeStore *store, GtkTreeIter *parent,
+    std::vector<RemoteFileAttributes> entries) {
+  sort_browser_entries(&entries);
+  GtkTreeIter dummy;
+  if (!gtk_tree_model_iter_children(
+          GTK_TREE_MODEL(store), &dummy, parent)) {
+    for (const RemoteFileAttributes &entry : entries) {
+      append_browser_row(store, parent, entry);
+    }
+    return;
+  }
+  if (entries.empty()) {
+    gtk_tree_store_remove(store, &dummy);
+    return;
+  }
+
+  auto entry = entries.cbegin();
+  set_browser_row(store, &dummy, *entry);
+  ++entry;
+  for (; entry != entries.cend(); ++entry) {
+    append_browser_row(store, parent, *entry);
+  }
+}
+
+static cardio::promise<GFileEnumerator *>
+enumerate_local_browser_async(
+    GFile *directory, cardio::cancellation cancellation) {
+  co_return co_await cardio::gio::submit<GFileEnumerator *>(
+      [directory](GCancellable *cancellable,
+                  GAsyncReadyCallback callback, gpointer user_data) {
+        g_file_enumerate_children_async(
+            directory, local_browser_attributes,
+            G_FILE_QUERY_INFO_NOFOLLOW_SYMLINKS, G_PRIORITY_DEFAULT,
+            cancellable, callback, user_data);
+      },
+      [](GObject *object, GAsyncResult *result, GError **error) {
+        return g_file_enumerate_children_finish(
+            G_FILE(object), result, error);
+      },
+      std::move(cancellation));
+}
+
+static cardio::promise<GList *>
+next_local_browser_files_async(
+    GFileEnumerator *enumerator,
+    cardio::cancellation cancellation) {
+  co_return co_await cardio::gio::submit<GList *>(
+      [enumerator](GCancellable *cancellable,
+                   GAsyncReadyCallback callback, gpointer user_data) {
+        g_file_enumerator_next_files_async(
+            enumerator, 64, G_PRIORITY_DEFAULT, cancellable, callback,
+            user_data);
+      },
+      [](GObject *object, GAsyncResult *result, GError **error) {
+        return g_file_enumerator_next_files_finish(
+            G_FILE_ENUMERATOR(object), result, error);
+      },
+      std::move(cancellation));
+}
+
+static cardio::promise<void>
+close_local_browser_enumerator_async(
+    GFileEnumerator *enumerator,
+    cardio::cancellation cancellation) {
+  co_await cardio::gio::submit<void>(
+      [enumerator](GCancellable *cancellable,
+                   GAsyncReadyCallback callback, gpointer user_data) {
+        g_file_enumerator_close_async(
+            enumerator, G_PRIORITY_DEFAULT, cancellable, callback,
+            user_data);
+      },
+      [](GObject *object, GAsyncResult *result, GError **error) {
+        if (!g_file_enumerator_close_finish(
+                G_FILE_ENUMERATOR(object), result, error)) {
+          throw cardio::gio::gio_error(*error);
+        }
+      },
+      std::move(cancellation));
+}
+
+static RemoteFileType local_browser_file_type(GFileInfo *info) {
+  if (g_file_info_get_is_symlink(info) != FALSE ||
+      g_file_info_get_file_type(info) == G_FILE_TYPE_SYMBOLIC_LINK) {
+    return RemoteFileType::symbolic_link;
+  }
+  if (g_file_info_get_file_type(info) == G_FILE_TYPE_DIRECTORY) {
+    return RemoteFileType::directory;
+  }
+  if (g_file_info_get_file_type(info) == G_FILE_TYPE_REGULAR) {
+    return RemoteFileType::regular;
+  }
+  return RemoteFileType::other;
+}
+
+static RemoteFileAttributes local_browser_attributes_for(
+    GFile *child, GFileInfo *info) {
+  FileTransferGCharPtr path(g_file_get_path(child));
+  if (path == nullptr) {
+    throw std::runtime_error(
+        _("The local pane only supports native filesystem paths"));
+  }
+  const char *name = g_file_info_get_name(info);
+  return {
+      .name = name == nullptr ? std::string() : std::string(name),
+      .path = path.get(),
+      .type = local_browser_file_type(info),
+      .size =
+          g_file_info_has_attribute(
+              info, G_FILE_ATTRIBUTE_STANDARD_SIZE)
+              ? static_cast<std::uint64_t>(
+                    g_file_info_get_size(info))
+              : 0,
+      .permissions =
+          g_file_info_has_attribute(info, G_FILE_ATTRIBUTE_UNIX_MODE)
+              ? g_file_info_get_attribute_uint32(
+                    info, G_FILE_ATTRIBUTE_UNIX_MODE)
+              : std::optional<std::uint32_t>(),
+      .access_time_unix_seconds =
+          g_file_info_has_attribute(info, G_FILE_ATTRIBUTE_TIME_ACCESS)
+              ? static_cast<std::int64_t>(
+                    g_file_info_get_attribute_uint64(
+                        info, G_FILE_ATTRIBUTE_TIME_ACCESS))
+              : std::optional<std::int64_t>(),
+      .modification_time_unix_seconds =
+          g_file_info_has_attribute(
+              info, G_FILE_ATTRIBUTE_TIME_MODIFIED)
+              ? static_cast<std::int64_t>(
+                    g_file_info_get_attribute_uint64(
+                        info, G_FILE_ATTRIBUTE_TIME_MODIFIED))
+              : std::optional<std::int64_t>(),
+  };
+}
+
+static cardio::promise<std::vector<RemoteFileAttributes>>
+list_local_browser_directory_async(
+    std::string path, cardio::cancellation cancellation) {
+  FileTransferGObjectPtr<GFile> directory(
+      g_file_new_for_path(path.c_str()));
+  FileTransferGObjectPtr<GFileEnumerator> enumerator(
+      co_await enumerate_local_browser_async(
+          directory.get(), cancellation));
+  std::vector<RemoteFileAttributes> entries;
+  for (;;) {
+    cancellation.throw_if_cancellation_requested();
+    GList *batch = co_await next_local_browser_files_async(
+        enumerator.get(), cancellation);
+    if (batch == nullptr) {
+      break;
+    }
+    for (GList *item = batch; item != nullptr; item = item->next) {
+      auto *info = G_FILE_INFO(item->data);
+      const char *name = g_file_info_get_name(info);
+      if (name == nullptr || name[0] == '\0') {
+        continue;
+      }
+      FileTransferGObjectPtr<GFile> child(
+          g_file_get_child(directory.get(), name));
+      entries.push_back(
+          local_browser_attributes_for(child.get(), info));
+    }
+    g_list_free_full(batch, g_object_unref);
+  }
+  co_await close_local_browser_enumerator_async(
+      enumerator.get(), cancellation);
+  co_return entries;
+}
+
+static std::string canonical_local_directory(
+    const std::string &path) {
+  FileTransferGCharPtr canonical(
+      g_canonicalize_filename(path.c_str(), nullptr));
+  if (canonical == nullptr || canonical.get()[0] == '\0') {
+    throw std::runtime_error(_("Local directory path is empty"));
+  }
+  return canonical.get();
+}
+
+static std::string local_parent_directory(
+    const std::string &path) {
+  const std::filesystem::path parent =
+      std::filesystem::path(path).parent_path();
+  return parent.empty() ? path : parent.string();
+}
+
+static void set_file_transfer_status(FileTransferWindow *window,
+                            const std::string &text) {
+  if (window == nullptr || window->destroyed ||
+      window->status_label == nullptr) {
+    return;
+  }
+  window->status_text = window->connection_state == FileTransferConnectionState::disconnected
+      ? _("Disconnected") : text;
+  const auto displayed = window->certificate_exception
+      ? window->status_text + " — " + _("Certificate exception active") : window->status_text;
+  gtk_label_set_text(GTK_LABEL(window->status_label), displayed.c_str());
+}
+
+static std::vector<FileTransferSelectedItem>
+selected_file_transfer_items(FileTransferPaneState *pane);
+
+static bool can_create_remote_children(const FileTransferWindow *window) {
+  return window->client && !window->remote.current_directory.empty() &&
+      window->client->path_capabilities(
+          window->remote.current_directory).create_children;
+}
+
+static bool can_modify_remote_items(
+    const FileTransferWindow *window,
+    const std::vector<FileTransferSelectedItem> &items) {
+  return window->client && !items.empty() &&
+      std::all_of(items.begin(), items.end(), [&window](const auto &item) {
+        return window->client->path_capabilities(item.path).modify;
+      });
+}
+
+static void update_file_transfer_sensitivity(FileTransferWindow *window) {
+  if (window == nullptr || window->destroyed) {
+    return;
+  }
+  const bool idle =
+      !window->reconnecting && !window->browser_action_active && !window->certificate_confirmation;
+  const bool local_ready = idle && !window->local.busy;
+  const bool remote_ready =
+      idle && !window->remote.busy && window->connection_available;
+  const bool transfer_ready = local_ready && remote_ready;
+  const bool remote_creatable = can_create_remote_children(window);
+  const auto remote_items = selected_file_transfer_items(&window->remote);
+  const bool remote_modifiable = can_modify_remote_items(window, remote_items);
+  gtk_widget_set_sensitive(window->local.frame, local_ready);
+  gtk_widget_set_sensitive(window->remote.frame, remote_ready);
+  gtk_widget_set_sensitive(window->local.transfer_item, transfer_ready && remote_creatable);
+  gtk_widget_set_sensitive(window->remote.transfer_item, transfer_ready);
+  if (window->local.hash_item != nullptr) {
+    gtk_widget_set_sensitive(window->local.hash_item, local_ready && !window->transfer_active);
+  }
+  if (window->remote.hash_item != nullptr) {
+    gtk_widget_set_sensitive(window->remote.hash_item, remote_ready && !window->transfer_active);
+  }
+  if (window->local.open_directory_item != nullptr) {
+    auto *selection = gtk_tree_view_get_selection(
+        GTK_TREE_VIEW(window->local.tree));
+    gtk_widget_set_sensitive(window->local.open_directory_item,
+        local_ready && gtk_tree_selection_count_selected_rows(selection) == 1);
+  }
+  gtk_widget_set_sensitive(window->local.new_directory_item, local_ready && !window->transfer_active);
+  gtk_widget_set_sensitive(window->remote.new_directory_item, remote_ready && !window->transfer_active && remote_creatable);
+  gtk_widget_set_sensitive(window->local.rename_item, local_ready && !window->transfer_active);
+  gtk_widget_set_sensitive(window->remote.rename_item,
+      remote_ready && !window->transfer_active && remote_modifiable && remote_items.size() == 1);
+  gtk_widget_set_sensitive(window->local.delete_item, local_ready && !window->transfer_active);
+  gtk_widget_set_sensitive(window->remote.delete_item, remote_ready && !window->transfer_active && remote_modifiable);
+}
+
+static void set_file_transfer_pane_busy(FileTransferPaneState *pane, bool busy) {
+  // Transfer completion can precede the directory refresh. Keep stale rows and
+  // paths unavailable until the replacement snapshot has been applied.
+  pane->busy = busy;
+  update_file_transfer_sensitivity(pane->window);
+}
+
+static void set_widget_visible(GtkWidget *widget, bool visible) {
+  gtk_widget_set_no_show_all(widget, !visible);
+  gtk_widget_set_visible(widget, visible);
+  if (visible) {
+    gtk_widget_show_all(widget);
+  }
+}
+
+static void update_file_action_overlay_presentation(
+    FileTransferWindow *window) {
+  if (window == nullptr || window->destroyed) {
+    return;
+  }
+  set_activity_indicator_widget_active(
+      &window->indicators[0], window->connection_available);
+  if (!window->connection_available) {
+    reset_activity_indicator_widget(&window->indicators[1]);
+    reset_activity_indicator_widget(&window->indicators[2]);
+  }
+  const bool disconnected =
+      window->connection_state == FileTransferConnectionState::disconnected;
+  set_widget_visible(window->reconnect_button, disconnected && static_cast<bool>(window->reconnect));
+  // A disconnected remote service must not prevent local browsing.
+  gtk_overlay_set_overlay_pass_through(GTK_OVERLAY(window->root_overlay),
+      window->dim_overlay, disconnected &&
+      !window->browser_action_active && !window->certificate_confirmation);
+  const bool connection_blocked =
+      disconnected ||
+      window->connection_state == FileTransferConnectionState::connecting ||
+      window->connection_state ==
+          FileTransferConnectionState::authenticating ||
+      window->connection_state == FileTransferConnectionState::failed;
+  set_widget_visible(window->dim_overlay,
+                     connection_blocked || window->certificate_confirmation ||
+                         window->browser_action_active);
+  set_widget_visible(window->action_overlay,
+                     window->browser_action_progress);
+}
+
+static cardio::promise<void> reconnect_file_transfer_window_async(
+    std::shared_ptr<FileTransferWindow> window) {
+  window->reconnecting = true;
+  window->connection_state = FileTransferConnectionState::connecting;
+  set_file_transfer_status(window.get(), _("Connecting"));
+  update_file_action_overlay_presentation(window.get());
+  update_file_transfer_sensitivity(window.get());
+  // Finish all old operations before releasing their client and renewing the
+  // cancellation source. Old completion callbacks cannot affect the new session.
+  disconnect_file_transfer_queue(window->jobs, false);
+  (void)window->stop_source.cancel();
+  if (window->transfer_cancel_source) (void)window->transfer_cancel_source->cancel();
+  std::string failure;
+  try {
+    for (auto *task : {&window->transfer_task, &window->browser_action_task,
+                      &window->local.task, &window->remote.task}) {
+      if (!task->has_value()) continue;
+      try { co_await **task; } catch (const cardio::canceled_exception &) {}
+      task->reset();
+    }
+    if (!window->destroyed) {
+      window->client.reset();
+      window->remote_load_started = false;
+      window->certificate_exception = false;
+      window->stop_source = cardio::cancellation_source();
+      co_await window->reconnect(window->settings);
+    }
+  } catch (const cardio::canceled_exception &) {
+  } catch (const std::exception &error) { failure = error.what(); }
+  if (!failure.empty()) {
+    co_await show_file_transfer_window_connection_error_async(
+        window, _("Connection failed"), std::move(failure),
+        window->stop_source.get_cancellation());
+  }
+  window->reconnecting = false;
+  update_file_transfer_sensitivity(window.get());
+}
+
+static void on_file_transfer_reconnect_clicked(GtkButton *, gpointer data) {
+  auto *window = static_cast<FileTransferWindow *>(data);
+  if (window->destroyed || window->reconnecting || !window->reconnect ||
+      window->connection_state != FileTransferConnectionState::disconnected) return;
+  window->reconnect_task.reset();
+  window->reconnect_task.emplace(reconnect_file_transfer_window_async(window->self.lock()));
+}
+
+static bool has_file_action_progress_operation(
+    const FileTransferWindow *window) {
+  return window->browser_action_progress;
+}
+
+static gboolean pulse_file_action_progress(gpointer data) {
+  auto *window = static_cast<FileTransferWindow *>(data);
+  if (window == nullptr || window->destroyed ||
+      !has_file_action_progress_operation(window) ||
+      window->action_progress == nullptr) {
+    if (window != nullptr) {
+      window->action_pulse_source = 0;
+    }
+    return G_SOURCE_REMOVE;
+  }
+  gtk_progress_bar_pulse(
+      GTK_PROGRESS_BAR(window->action_progress));
+  return G_SOURCE_CONTINUE;
+}
+
+static void stop_file_transfer_pulse(FileTransferWindow *window) {
+  if (window->action_pulse_source == 0) {
+    return;
+  }
+  g_source_remove(window->action_pulse_source);
+  window->action_pulse_source = 0;
+}
+
+static void set_file_transfer_browser_action_phase(
+    FileTransferWindow *window, bool active, bool show_progress,
+    const std::string &progress_label) {
+  window->browser_action_active = active;
+  window->browser_action_progress = active && show_progress;
+  const bool cancellable =
+      window->transfer_cancel_source.has_value();
+  set_widget_visible(window->action_cancel_button,
+                     cancellable);
+  gtk_widget_set_sensitive(window->action_cancel_button,
+                           cancellable);
+  if (window->browser_action_progress) {
+    gtk_label_set_text(GTK_LABEL(window->action_label),
+                       progress_label.c_str());
+    gtk_progress_bar_set_fraction(
+        GTK_PROGRESS_BAR(window->action_progress), 0.0);
+    if (window->action_pulse_source == 0) {
+      window->action_pulse_source = g_timeout_add(
+          action_progress_pulse_period_ms,
+          pulse_file_action_progress, window);
+    }
+  } else if (!has_file_action_progress_operation(window)) {
+    stop_file_transfer_pulse(window);
+  }
+  update_file_action_overlay_presentation(window);
+  update_file_transfer_sensitivity(window);
+}
+
+static cardio::promise<InlinePromptResponse>
+prompt_file_transfer_choice_async(
+    FileTransferWindow *window, const std::string &title,
+    const std::string &detail, const std::string &cancel_label,
+    const std::string &alternative_label,
+    const std::string &accept_label,
+    cardio::cancellation cancellation) {
+  cancellation.throw_if_cancellation_requested();
+  InlinePromptRequest request{
+      .title = title,
+      .message = detail,
+      .accept_label = accept_label,
+      .cancel_label = cancel_label,
+      .input_required = false,
+      .echo = false,
+      .cancel_visible = true,
+      .alternative_label = alternative_label,
+      .alternative_visible = true,
+  };
+  auto pending = prompt_inline_async(
+      window->prompt, std::move(request), cancellation);
+  InlinePromptResponse response = co_await pending;
+  cancellation.throw_if_cancellation_requested();
+  co_return response;
+}
+
+static cardio::promise<FileTransferConflictAction>
+prompt_file_transfer_conflict_async(
+    FileTransferWindow *window, const FileTransferConflict &conflict,
+    cardio::cancellation cancellation) {
+  const InlinePromptResponse response =
+      co_await prompt_file_transfer_choice_async(
+          window, _("Destination already exists"),
+          format_translated_string(
+              _("%s\nThe selected decision applies to all remaining conflicts."),
+              (conflict.direction == FileTransferDirection::send
+                  ? window->client->display_path(conflict.destination_path) : conflict.destination_path).c_str()),
+          _("Cancel"), _("Skip"), _("Overwrite"), cancellation);
+  if (response.accepted) {
+    co_return FileTransferConflictAction::overwrite;
+  }
+  if (response.alternative) {
+    co_return FileTransferConflictAction::skip;
+  }
+  co_return FileTransferConflictAction::cancel;
+}
+
+static cardio::promise<FileTransferFailureAction>
+prompt_file_transfer_failure_async(
+    FileTransferWindow *window, const FileTransferFailure &failure,
+    cardio::cancellation cancellation) {
+  const InlinePromptResponse response =
+      co_await prompt_file_transfer_choice_async(
+          window, _("File transfer failed"),
+          format_translated_string(_("%s\n\n%s\n→ %s"),
+                                   failure.message.c_str(),
+                                   (failure.direction == FileTransferDirection::receive
+                                       ? window->client->display_path(failure.source_path) : failure.source_path).c_str(),
+                                   (failure.direction == FileTransferDirection::send
+                                       ? window->client->display_path(failure.destination_path) : failure.destination_path).c_str()),
+          _("Abort"), _("Skip"), _("Retry"), cancellation);
+  if (response.accepted) {
+    co_return FileTransferFailureAction::retry;
+  }
+  if (response.alternative) {
+    co_return FileTransferFailureAction::skip;
+  }
+  co_return FileTransferFailureAction::abort;
+}
+
+static void on_notice_response(GtkDialog *dialog, gint, gpointer) {
+  gtk_widget_destroy(GTK_WIDGET(dialog));
+}
+
+static void show_file_transfer_error(FileTransferWindow *window,
+                            const std::string &message, std::exception_ptr failure) {
+  if (window == nullptr || window->destroyed || is_remote_disconnection(failure)) {
+    return;
+  }
+  GtkWidget *dialog = gtk_message_dialog_new(
+      GTK_WINDOW(window->window),
+      static_cast<GtkDialogFlags>(0),
+      GTK_MESSAGE_ERROR, GTK_BUTTONS_CLOSE, "%s",
+      _("File transfer operation failed"));
+  gtk_message_dialog_format_secondary_text(
+      GTK_MESSAGE_DIALOG(dialog), "%s", message.c_str());
+  gestament_gtk_assign_accessible_id(
+      dialog, "file_transfer_operation_error_dialog");
+  g_signal_connect(dialog, "response",
+                   G_CALLBACK(on_notice_response), nullptr);
+  elder_terms::show_modal_dialog(dialog, GTK_WINDOW(window->window));
+}
+
+static void clear_tree_children(GtkTreeStore *store,
+                                GtkTreeIter *parent) {
+  GtkTreeModel *model = GTK_TREE_MODEL(store);
+  GtkTreeIter child;
+  while (gtk_tree_model_iter_children(model, &child, parent)) {
+    gtk_tree_store_remove(store, &child);
+  }
+}
+
+static cardio::promise<RemoteDirectorySnapshot>
+load_file_transfer_pane_directory_async(
+    FileTransferPaneState *pane, std::string path,
+    cardio::cancellation cancellation, bool refresh = false, bool force_html = false) {
+  if (pane->remote) {
+    co_return co_await load_file_transfer_queue_directory_async(pane->window->jobs,
+        std::move(path), std::move(cancellation), refresh, force_html);
+  }
+  std::string canonical_path = canonical_local_directory(path);
+  std::vector<RemoteFileAttributes> entries =
+      co_await list_local_browser_directory_async(
+          canonical_path, std::move(cancellation));
+  co_return RemoteDirectorySnapshot{
+      .canonical_path = std::move(canonical_path),
+      .entries = std::move(entries),
+  };
+}
+
+static cardio::promise<void> load_file_transfer_pane_root_async(
+    FileTransferPaneState *pane, std::string requested_path, bool refresh, bool force_html) {
+  FileTransferWindow *window = pane->window;
+  const std::uint64_t generation = ++pane->generation;
+  const cardio::cancellation cancellation =
+      window->stop_source.get_cancellation();
+  try {
+    RemoteDirectorySnapshot snapshot =
+        co_await load_file_transfer_pane_directory_async(
+            pane, std::move(requested_path), cancellation, refresh, force_html);
+    if (window->destroyed || generation != pane->generation) {
+      set_file_transfer_pane_busy(pane, false);
+      co_return;
+    }
+    if (snapshot.resource_type != RemoteFileType::directory) {
+      set_file_transfer_status(window, _("This response is a file; use Receive as file"));
+      const auto display = pane->remote ? window->client->display_path(pane->current_directory) : pane->current_directory;
+      gtk_entry_set_text(GTK_ENTRY(pane->path_entry), display.c_str());
+      set_file_transfer_pane_busy(pane, false);
+      co_return;
+    }
+    gtk_tree_store_clear(pane->store);
+    append_browser_entries(
+        pane->store, nullptr, std::move(snapshot.entries));
+    pane->current_directory = std::move(snapshot.canonical_path);
+    const auto display = pane->remote ? window->client->display_path(pane->current_directory) : pane->current_directory;
+    gtk_entry_set_text(GTK_ENTRY(pane->path_entry),
+                       display.c_str());
+    if (!snapshot.notice.empty()) set_file_transfer_status(window, snapshot.notice);
+  } catch (const cardio::canceled_exception &) {
+  } catch (...) {
+    if (!window->destroyed) {
+      set_file_transfer_status(window, pane->remote
+                                  ? _("Failed to load remote directory")
+                                  : _("Failed to load local directory"));
+      show_file_transfer_error(window, exception_text(std::current_exception()), std::current_exception());
+      const auto display = pane->remote && window->client
+          ? window->client->display_path(pane->current_directory) : pane->current_directory;
+      gtk_entry_set_text(GTK_ENTRY(pane->path_entry), display.c_str());
+    }
+  }
+  set_file_transfer_pane_busy(pane, false);
+}
+
+static void start_file_transfer_pane_navigation(
+    FileTransferPaneState *pane, std::string path, bool refresh = false, bool force_html = false) {
+  if (pane == nullptr || pane->window == nullptr ||
+      pane->window->destroyed || pane->busy ||
+      (pane->remote &&
+       !pane->window->connection_available)) {
+    return;
+  }
+  pane->task.reset();
+  set_file_transfer_pane_busy(pane, true);
+  pane->task.emplace(
+      load_file_transfer_pane_root_async(pane, std::move(path), refresh, force_html));
+}
+
+static cardio::promise<void> expand_file_transfer_directory_async(
+    FileTransferPaneState *pane, GtkTreeRowReference *reference,
+    std::string path, std::uint64_t generation) {
+  FileTransferWindow *window = pane->window;
+  const cardio::cancellation cancellation =
+      window->stop_source.get_cancellation();
+  try {
+    RemoteDirectorySnapshot snapshot =
+        co_await load_file_transfer_pane_directory_async(
+            pane, std::move(path), cancellation);
+    if (window->destroyed || generation != pane->generation ||
+        !gtk_tree_row_reference_valid(reference)) {
+      gtk_tree_row_reference_free(reference);
+      set_file_transfer_pane_busy(pane, false);
+      co_return;
+    }
+    GtkTreePath *tree_path =
+        gtk_tree_row_reference_get_path(reference);
+    GtkTreeIter iterator;
+    if (tree_path != nullptr &&
+        gtk_tree_model_get_iter(
+            GTK_TREE_MODEL(pane->store), &iterator, tree_path)) {
+      // The same resource may appear under multiple branches. Suppress only
+      // ancestors of this occurrence, retaining independent visits elsewhere.
+      std::set<std::string> ancestors{pane->current_directory, snapshot.canonical_path};
+      GtkTreeIter ancestor = iterator;
+      for (;;) {
+        gchar *ancestor_path = nullptr;
+        gtk_tree_model_get(GTK_TREE_MODEL(pane->store), &ancestor, file_transfer_tree_path_column, &ancestor_path, -1);
+        if (ancestor_path) ancestors.insert(ancestor_path);
+        g_free(ancestor_path);
+        GtkTreeIter parent;
+        if (!gtk_tree_model_iter_parent(GTK_TREE_MODEL(pane->store), &parent, &ancestor)) break;
+        ancestor = parent;
+      }
+      std::erase_if(snapshot.entries, [&ancestors](const auto &entry) { return ancestors.contains(entry.path); });
+      RemoteFileAttributes classified;
+      classified.path = snapshot.canonical_path;
+      classified.type = snapshot.resource_type;
+      gtk_tree_store_set(pane->store, &iterator,
+          file_transfer_tree_type_column, static_cast<int>(snapshot.resource_type),
+          file_transfer_tree_path_column, snapshot.canonical_path.c_str(),
+          file_transfer_tree_icon_column, file_transfer_node_icon(classified).data(), -1);
+      replace_dummy_with_browser_entries(
+          pane->store, &iterator, std::move(snapshot.entries));
+    }
+    if (tree_path != nullptr) {
+      gtk_tree_path_free(tree_path);
+    }
+  } catch (const cardio::canceled_exception &) {
+  } catch (...) {
+    if (!window->destroyed &&
+        gtk_tree_row_reference_valid(reference)) {
+      GtkTreePath *tree_path =
+          gtk_tree_row_reference_get_path(reference);
+      GtkTreeIter iterator;
+      if (tree_path != nullptr &&
+          gtk_tree_model_get_iter(
+              GTK_TREE_MODEL(pane->store), &iterator, tree_path)) {
+        gtk_tree_store_set(
+            pane->store, &iterator, file_transfer_tree_loaded_column,
+            FALSE, -1);
+        clear_tree_children(pane->store, &iterator);
+        append_dummy_row(pane->store, &iterator);
+        gtk_tree_view_collapse_row(
+            GTK_TREE_VIEW(pane->tree), tree_path);
+      }
+      if (tree_path != nullptr) {
+        gtk_tree_path_free(tree_path);
+      }
+      set_file_transfer_status(window, _("Failed to expand directory"));
+      show_file_transfer_error(window, exception_text(std::current_exception()), std::current_exception());
+    }
+  }
+  gtk_tree_row_reference_free(reference);
+  set_file_transfer_pane_busy(pane, false);
+}
+
+static void on_file_transfer_row_expanded(
+    GtkTreeView *, GtkTreeIter *iterator, GtkTreePath *tree_path,
+    gpointer data) {
+  auto *pane = static_cast<FileTransferPaneState *>(data);
+  if (pane == nullptr || pane->busy ||
+      pane->window->destroyed ||
+      (pane->remote &&
+       !pane->window->connection_available)) {
+    return;
+  }
+  gchar *path = nullptr;
+  gboolean loaded = FALSE;
+  gboolean dummy = FALSE;
+  gint type = static_cast<gint>(RemoteFileType::other);
+  gtk_tree_model_get(
+      GTK_TREE_MODEL(pane->store), iterator,
+      file_transfer_tree_path_column, &path, file_transfer_tree_type_column, &type,
+      file_transfer_tree_loaded_column, &loaded, file_transfer_tree_dummy_column,
+      &dummy, -1);
+  const std::string directory =
+      path == nullptr ? std::string() : std::string(path);
+  g_free(path);
+  if (loaded != FALSE || dummy != FALSE ||
+      (type != static_cast<gint>(RemoteFileType::directory) && type != static_cast<gint>(RemoteFileType::unresolved)) ||
+      directory.empty()) {
+    return;
+  }
+
+  gtk_tree_store_set(
+      pane->store, iterator, file_transfer_tree_loaded_column, TRUE, -1);
+  GtkTreeRowReference *reference =
+      gtk_tree_row_reference_new(
+          GTK_TREE_MODEL(pane->store), tree_path);
+  if (reference == nullptr) {
+    gtk_tree_store_set(
+        pane->store, iterator, file_transfer_tree_loaded_column, FALSE, -1);
+    return;
+  }
+  pane->task.reset();
+  set_file_transfer_pane_busy(pane, true);
+  pane->task.emplace(expand_file_transfer_directory_async(
+      pane, reference, directory, pane->generation));
+}
+
+static void on_file_transfer_path_activate(GtkEntry *entry, gpointer data) {
+  auto *pane = static_cast<FileTransferPaneState *>(data);
+  if (pane->remote && (!pane->window->client || !pane->window->client->path_input_editable())) return;
+  const char *text = gtk_entry_get_text(entry);
+  start_file_transfer_pane_navigation(
+      pane, text == nullptr ? std::string() : std::string(text));
+}
+
+static void on_file_transfer_up_clicked(GtkButton *, gpointer data) {
+  auto *pane = static_cast<FileTransferPaneState *>(data);
+  const std::string parent =
+      pane->remote
+          ? pane->window->client->parent_path(pane->current_directory)
+          : local_parent_directory(pane->current_directory);
+  start_file_transfer_pane_navigation(pane, parent);
+}
+
+static void on_file_transfer_refresh_clicked(GtkButton *, gpointer data) {
+  auto *pane = static_cast<FileTransferPaneState *>(data);
+  start_file_transfer_pane_navigation(pane, pane->current_directory, true);
+}
+
+static void on_file_transfer_row_activated(
+    GtkTreeView *, GtkTreePath *path, GtkTreeViewColumn *,
+    gpointer data) {
+  auto *pane = static_cast<FileTransferPaneState *>(data);
+  GtkTreeIter iterator;
+  if (!gtk_tree_model_get_iter(
+          GTK_TREE_MODEL(pane->store), &iterator, path)) {
+    return;
+  }
+  gchar *item_path = nullptr;
+  gboolean dummy = FALSE;
+  gint type = static_cast<gint>(RemoteFileType::other);
+  gtk_tree_model_get(
+      GTK_TREE_MODEL(pane->store), &iterator,
+      file_transfer_tree_path_column, &item_path,
+      file_transfer_tree_type_column, &type, file_transfer_tree_dummy_column,
+      &dummy, -1);
+  const std::string directory =
+      item_path == nullptr ? std::string() : std::string(item_path);
+  g_free(item_path);
+  if (dummy == FALSE &&
+      (type == static_cast<gint>(RemoteFileType::directory) || type == static_cast<gint>(RemoteFileType::unresolved)) &&
+      !directory.empty()) {
+    start_file_transfer_pane_navigation(pane, directory);
+  }
+}
+
+static std::vector<FileTransferSelectedItem>
+selected_file_transfer_items(FileTransferPaneState *pane) {
+  GtkTreeSelection *selection = gtk_tree_view_get_selection(
+      GTK_TREE_VIEW(pane->tree));
+  GtkTreeModel *model = nullptr;
+  GList *rows =
+      gtk_tree_selection_get_selected_rows(selection, &model);
+  std::vector<FileTransferSelectedItem> items;
+  for (GList *item = rows; item != nullptr; item = item->next) {
+    auto *tree_path = static_cast<GtkTreePath *>(item->data);
+    GtkTreeIter iterator;
+    if (!gtk_tree_model_get_iter(model, &iterator, tree_path)) {
+      continue;
+    }
+    gchar *name = nullptr;
+    gchar *path = nullptr;
+    gboolean dummy = FALSE;
+    gint type = static_cast<gint>(RemoteFileType::other);
+    gtk_tree_model_get(
+        model, &iterator, file_transfer_tree_name_column, &name,
+        file_transfer_tree_path_column, &path,
+        file_transfer_tree_type_column, &type,
+        file_transfer_tree_dummy_column, &dummy, -1);
+    if (dummy == FALSE && name != nullptr && name[0] != '\0' &&
+        path != nullptr && path[0] != '\0') {
+      items.push_back({
+          .name = name,
+          .path = path,
+          .type = static_cast<RemoteFileType>(type),
+      });
+    }
+    g_free(name);
+    g_free(path);
+  }
+  g_list_free_full(rows,
+                   reinterpret_cast<GDestroyNotify>(
+                       gtk_tree_path_free));
+  return items;
+}
+
+static std::vector<std::string>
+selected_file_transfer_paths(FileTransferPaneState *pane) {
+  const std::vector<FileTransferSelectedItem> items =
+      selected_file_transfer_items(pane);
+  std::vector<std::string> paths;
+  paths.reserve(items.size());
+  for (const FileTransferSelectedItem &item : items) {
+    paths.push_back(item.path);
+  }
+  return paths;
+}
+
+static bool is_file_transfer_tree_expander_extension(
+    GtkTreeView *tree, GtkTreePath *path,
+    GtkTreeViewColumn *column, int x) {
+  if (!gtk_tree_view_get_show_expanders(tree) ||
+      column != gtk_tree_view_get_expander_column(tree)) {
+    return false;
+  }
+
+  GtkTreeModel *model = gtk_tree_view_get_model(tree);
+  GtkTreeIter iterator;
+  if (model == nullptr ||
+      !gtk_tree_model_get_iter(model, &iterator, path) ||
+      !gtk_tree_model_iter_has_child(model, &iterator)) {
+    return false;
+  }
+
+  int expander_size = 0;
+  int horizontal_separator = 0;
+  gboolean indent_expanders = TRUE;
+  gtk_widget_style_get(
+      GTK_WIDGET(tree), "expander-size", &expander_size,
+      "horizontal-separator", &horizontal_separator,
+      "indent-expanders", &indent_expanders, nullptr);
+  if (expander_size <= 0) {
+    return false;
+  }
+
+  // GTK exposes the column background but not the native expander
+  // rectangle. Rebuild its horizontal range from the same style values
+  // and extend only the space outside it, preserving GTK's own handling
+  // inside the chevron for both LTR and RTL layouts.
+  GdkRectangle background_area = {};
+  gtk_tree_view_get_background_area(
+      tree, path, column, &background_area);
+  const int target_width = std::min(
+      background_area.width,
+      std::max(expander_size,
+               file_transfer_tree_expander_minimum_hit_width));
+  if (target_width <= expander_size) {
+    return false;
+  }
+
+  const int depth = gtk_tree_path_get_depth(path);
+  const int expander_stride =
+      expander_size + std::max(0, horizontal_separator) / 2;
+  const int depth_offset =
+      indent_expanders != FALSE
+          ? std::max(0, depth - 1) * expander_stride
+          : 0;
+  const bool right_to_left =
+      gtk_widget_get_direction(GTK_WIDGET(tree)) ==
+      GTK_TEXT_DIR_RTL;
+  const int expander_x =
+      right_to_left
+          ? background_area.x + background_area.width -
+                expander_size - depth_offset
+          : background_area.x +
+                std::max(0, horizontal_separator) / 2 +
+                depth_offset;
+
+  int target_x =
+      expander_x - (target_width - expander_size) / 2;
+  target_x = std::clamp(
+      target_x, background_area.x,
+      background_area.x + background_area.width - target_width);
+  const bool inside_target =
+      x >= target_x && x < target_x + target_width;
+  const bool inside_native_expander =
+      x >= expander_x && x < expander_x + expander_size;
+  return inside_target && !inside_native_expander;
+}
+
+static gboolean toggle_file_transfer_tree_expander_extension(
+    GtkWidget *widget, GdkEventButton *event) {
+  auto *tree = GTK_TREE_VIEW(widget);
+  if (event->button != GDK_BUTTON_PRIMARY ||
+      event->window != gtk_tree_view_get_bin_window(tree)) {
+    return FALSE;
+  }
+
+  GtkTreePath *path = nullptr;
+  GtkTreeViewColumn *column = nullptr;
+  if (!gtk_tree_view_get_path_at_pos(
+          tree, static_cast<gint>(event->x),
+          static_cast<gint>(event->y), &path, &column, nullptr,
+          nullptr)) {
+    return FALSE;
+  }
+  const bool inside_extension =
+      is_file_transfer_tree_expander_extension(
+          tree, path, column, static_cast<int>(event->x));
+  if (inside_extension) {
+    if (gtk_tree_view_row_expanded(tree, path)) {
+      gtk_tree_view_collapse_row(tree, path);
+    } else {
+      gtk_tree_view_expand_row(tree, path, FALSE);
+    }
+    gtk_widget_grab_focus(widget);
+  }
+  gtk_tree_path_free(path);
+  return inside_extension ? TRUE : FALSE;
+}
+
+static gboolean on_file_transfer_tree_button_press(
+    GtkWidget *widget, GdkEventButton *event, gpointer data) {
+  auto *pane = static_cast<FileTransferPaneState *>(data);
+  if (event->type != GDK_BUTTON_PRESS || pane == nullptr) return FALSE;
+  if (toggle_file_transfer_tree_expander_extension(widget, event)) return TRUE;
+  if (event->button != GDK_BUTTON_SECONDARY || pane->busy ||
+      pane->window->browser_action_active ||
+      pane->window->certificate_confirmation ||
+      (pane->remote && !pane->window->connection_available)) return FALSE;
+  GtkTreePath *path = nullptr;
+  GtkTreeSelection *selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(widget));
+  if (gtk_tree_view_get_path_at_pos(GTK_TREE_VIEW(widget), static_cast<gint>(event->x),
+          static_cast<gint>(event->y), &path, nullptr, nullptr, nullptr)) {
+    if (!gtk_tree_selection_path_is_selected(selection, path)) {
+      gtk_tree_selection_unselect_all(selection);
+      gtk_tree_selection_select_path(selection, path);
+    }
+    gtk_tree_path_free(path);
+  } else {
+    // Background actions apply to the current folder, never to a stale row.
+    gtk_tree_selection_unselect_all(selection);
+  }
+  const auto items = selected_file_transfer_items(pane);
+  const bool transfer_ready = !pane->window->local.busy &&
+      !pane->window->remote.busy && pane->window->connection_available;
+  const bool remote_creatable = can_create_remote_children(pane->window);
+  const bool idle = !pane->window->transfer_active;
+  const bool modifiable = idle && (!pane->remote || can_modify_remote_items(pane->window, items));
+  gtk_widget_set_sensitive(pane->new_directory_item, idle && (!pane->remote || remote_creatable));
+  gtk_widget_set_sensitive(pane->transfer_item,
+      transfer_ready && !items.empty() && (pane->remote || remote_creatable));
+  if (pane->receive_file_item) {
+    const bool http = pane->window->client && pane->window->client->capabilities().incremental_receive;
+    gtk_widget_set_visible(pane->receive_file_item, http);
+    gtk_widget_set_visible(pane->expand_html_item, http);
+    gtk_widget_set_sensitive(pane->receive_file_item, transfer_ready && !items.empty());
+    gtk_widget_set_sensitive(pane->expand_html_item, idle && items.size() == 1);
+    gtk_menu_item_set_label(GTK_MENU_ITEM(pane->transfer_item), http ? _("Receive as directory") : _("Receive"));
+  }
+  gtk_widget_set_sensitive(pane->rename_item, modifiable && items.size() == 1);
+  if (pane->open_directory_item != nullptr) {
+    gtk_menu_item_set_label(GTK_MENU_ITEM(pane->open_directory_item),
+        items.size() == 1 && items.front().type == RemoteFileType::directory
+            ? _("Open this directory") : _("Open containing directory"));
+    gtk_widget_set_sensitive(pane->open_directory_item, items.size() == 1);
+  }
+  if (pane->hash_item != nullptr)
+    gtk_widget_set_sensitive(pane->hash_item,
+        idle && items.size() == 1 && items.front().type == RemoteFileType::regular);
+  gtk_widget_set_sensitive(pane->delete_item, modifiable && !items.empty());
+  gtk_menu_popup_at_pointer(GTK_MENU(pane->menu), reinterpret_cast<GdkEvent *>(event));
+  return TRUE;
+}
+
+static bool valid_file_transfer_item_name(const std::string &name) {
+  return !name.empty() && name != "." && name != ".." &&
+         name.find('/') == std::string::npos &&
+         name.find('\r') == std::string::npos &&
+         name.find('\n') == std::string::npos;
+}
+
+static std::string file_transfer_renamed_item_path(
+    const FileTransferPaneState *pane,
+    const FileTransferSelectedItem &item, const std::string &new_name) {
+  if (!pane->remote) {
+    return (std::filesystem::path(item.path).parent_path() / new_name)
+        .string();
+  }
+  const auto &client = pane->window->client;
+  return client->child_path(client->parent_path(item.path), new_name);
+}
+
+static cardio::promise<std::optional<std::string>>
+prompt_file_transfer_name_async(
+    FileTransferWindow *window, std::string title, std::string base_message,
+    std::string accept_label, std::string initial_text,
+    cardio::cancellation cancellation) {
+  std::string message = base_message;
+  for (;;) {
+    cancellation.throw_if_cancellation_requested();
+    InlinePromptRequest request{
+        .title = title,
+        .message = message,
+        .accept_label = accept_label,
+        .cancel_label = _("Cancel"),
+        .initial_text = initial_text,
+        .input_required = true,
+        .echo = true,
+        .cancel_visible = true,
+    };
+    auto pending = prompt_inline_async(
+        window->prompt, std::move(request), cancellation);
+    const InlinePromptResponse response = co_await pending;
+    cancellation.throw_if_cancellation_requested();
+    if (!response.accepted) {
+      co_return std::nullopt;
+    }
+    if (valid_file_transfer_item_name(response.text)) {
+      co_return response.text;
+    }
+    initial_text = response.text;
+    message = base_message + "\n\n" +
+              _("Names must not be empty, '.', or '..', and must not "
+                "contain '/' or line breaks.");
+  }
+}
+
+static cardio::promise<void>
+show_file_transfer_browser_action_error_async(
+    FileTransferWindow *window, std::string title, std::string message,
+    std::exception_ptr failure, cardio::cancellation cancellation) {
+  if (window->destroyed || is_remote_disconnection(failure)) co_return;
+  InlinePromptRequest request{
+      .title = std::move(title),
+      .message = std::move(message),
+      .accept_label = _("Close"),
+      .cancel_label = _("Cancel"),
+      .input_required = false,
+      .echo = false,
+      .cancel_visible = false,
+  };
+  auto pending = prompt_inline_async(
+      window->prompt, std::move(request), std::move(cancellation));
+  (void)co_await pending;
+}
+
+static std::string file_transfer_new_directory_path(
+    const FileTransferPaneState *pane, const std::string &name) {
+  if (!pane->remote) return (std::filesystem::path(pane->current_directory) / name).string();
+  return pane->window->client->child_path(pane->current_directory, name);
+}
+
+static cardio::promise<void> run_file_transfer_new_directory_async(FileTransferPaneState *pane) {
+  auto *window = pane->window;
+  const auto cancellation = window->stop_source.get_cancellation();
+  std::exception_ptr failure;
+  bool cancelled = false;
+  try {
+    set_file_transfer_browser_action_phase(window, true, false, {});
+    const auto name = co_await prompt_file_transfer_name_async(
+        window, _("New folder"), _("Enter a name for the new folder."), _("Create"), {}, cancellation);
+    if (window->destroyed) co_return;
+    if (!name) {
+      set_file_transfer_browser_action_phase(window, false, false, {});
+      set_file_transfer_status(window, _("Folder creation cancelled"));
+      co_return;
+    }
+    const auto destination = file_transfer_new_directory_path(pane, *name);
+    set_file_transfer_browser_action_phase(window, true, true, _("Creating folder…"));
+    co_await create_file_transfer_directory_async(window->client,
+        pane->remote ? FileTransferEndpoint::remote : FileTransferEndpoint::local,
+        destination, cancellation);
+    if (window->destroyed) co_return;
+    set_file_transfer_browser_action_phase(window, false, false, {});
+    set_file_transfer_status(window, format_translated_string(_("Created folder \"%s\""), name->c_str()));
+    start_file_transfer_pane_navigation(pane, pane->current_directory);
+  } catch (const cardio::canceled_exception &) { cancelled = true; }
+  catch (...) { failure = std::current_exception(); }
+  if (window->destroyed) co_return;
+  if (cancelled) {
+    set_file_transfer_browser_action_phase(window, false, false, {});
+    set_file_transfer_status(window, _("Folder creation cancelled"));
+  } else if (failure) {
+    set_file_transfer_browser_action_phase(window, true, false, {});
+    set_file_transfer_status(window, _("Failed to create folder"));
+    co_await show_file_transfer_browser_action_error_async(
+        window, _("Failed to create folder"), exception_text(failure), failure, cancellation);
+    if (!window->destroyed) {
+      set_file_transfer_browser_action_phase(window, false, false, {});
+      start_file_transfer_pane_navigation(pane, pane->current_directory);
+    }
+  }
+}
+
+static void on_file_transfer_new_directory_item_activate(GtkMenuItem *, gpointer data) {
+  auto *pane = static_cast<FileTransferPaneState *>(data);
+  if (!pane || !pane->window || pane->window->destroyed || pane->busy ||
+      pane->window->transfer_active || pane->window->browser_action_active ||
+      pane->window->certificate_confirmation ||
+      (pane->remote && (!pane->window->connection_available ||
+          !can_create_remote_children(pane->window)))) return;
+  pane->window->browser_action_task.reset();
+  pane->window->browser_action_task.emplace(run_file_transfer_new_directory_async(pane));
+}
+
+static cardio::promise<void> run_file_transfer_open_directory_async(
+    FileTransferWindow *window, FileTransferSelectedItem item) {
+  std::exception_ptr failure;
+  try {
+    set_file_transfer_browser_action_phase(window, true, false, {});
+    auto directory = item.path;
+    bool handled = false;
+    if (item.type != RemoteFileType::directory) {
+      std::string parent_window;
+#ifdef GDK_WINDOWING_X11
+      auto *native = gtk_widget_get_window(window->window);
+      if (native && GDK_IS_X11_WINDOW(native)) {
+        FileTransferGCharPtr identifier(g_strdup_printf("x11:%lx",
+            static_cast<unsigned long>(gdk_x11_window_get_xid(native))));
+        parent_window = identifier.get();
+      }
+#endif
+      handled = co_await try_reveal_local_file_async(
+          item.path, std::move(parent_window), window->stop_source.get_cancellation());
+      directory = local_parent_directory(item.path);
+    }
+    if (!handled) {
+      FileTransferGObjectPtr<GFile> file(g_file_new_for_path(directory.c_str()));
+      FileTransferGCharPtr uri(g_file_get_uri(file.get()));
+      co_await cardio::gio::submit<bool>(
+          [uri = uri.get()](GCancellable *cancellable,
+                           GAsyncReadyCallback callback, gpointer user_data) {
+            g_app_info_launch_default_for_uri_async(
+                uri, nullptr, cancellable, callback, user_data);
+          },
+          [](GObject *, GAsyncResult *result, GError **error) {
+            return g_app_info_launch_default_for_uri_finish(result, error) != FALSE;
+          },
+          window->stop_source.get_cancellation());
+    }
+  } catch (const cardio::canceled_exception &) {
+  } catch (...) {
+    failure = std::current_exception();
+  }
+  if (window->destroyed) co_return;
+  set_file_transfer_browser_action_phase(window, false, false, {});
+  if (failure) {
+    show_file_transfer_error(window,
+        std::string(_("Failed to open directory")) + "\n" + exception_text(failure), failure);
+  }
+}
+
+static void on_file_transfer_open_directory_item_activate(GtkMenuItem *, gpointer data) {
+  auto *pane = static_cast<FileTransferPaneState *>(data);
+  if (!pane || !pane->window || pane->window->destroyed || pane->remote ||
+      pane->busy || pane->window->transfer_active ||
+      pane->window->browser_action_active || pane->window->certificate_confirmation ||
+      has_modal_dialog(pane->window->window)) return;
+  const auto items = selected_file_transfer_items(pane);
+  if (items.size() != 1) return;
+  // Symbolic links reveal the selected link without following the target.
+  pane->window->browser_action_task.reset();
+  pane->window->browser_action_task.emplace(
+      run_file_transfer_open_directory_async(pane->window, items.front()));
+}
+
+static cardio::promise<void> run_file_transfer_rename_async(
+    FileTransferPaneState *pane, FileTransferSelectedItem item) {
+  FileTransferWindow *window = pane->window;
+  const cardio::cancellation cancellation =
+      window->stop_source.get_cancellation();
+  bool cancelled = false;
+  std::exception_ptr failure;
+  try {
+    set_file_transfer_browser_action_phase(window, true, false, {});
+    const std::optional<std::string> new_name =
+        co_await prompt_file_transfer_name_async(
+            window, _("Rename item"),
+            format_translated_string(_("Enter a new name for \"%s\"."), item.name.c_str()),
+            _("Rename"), item.name, cancellation);
+    if (window->destroyed) {
+      co_return;
+    }
+    if (!new_name.has_value() || *new_name == item.name) {
+      set_file_transfer_browser_action_phase(window, false, false, {});
+      set_file_transfer_status(window, _("Ready"));
+      co_return;
+    }
+
+    const std::string destination = file_transfer_renamed_item_path(
+        pane, item, *new_name);
+    set_file_transfer_browser_action_phase(
+        window, true, true, _("Renaming…"));
+    co_await rename_file_transfer_item_async(
+        window->client,
+        pane->remote ? FileTransferEndpoint::remote
+                     : FileTransferEndpoint::local,
+        item.path, destination, cancellation);
+    if (window->destroyed) {
+      co_return;
+    }
+    set_file_transfer_browser_action_phase(window, false, false, {});
+    set_file_transfer_status(
+        window,
+        format_translated_string(_("Renamed \"%s\" to \"%s\""),
+                                 item.name.c_str(), new_name->c_str()));
+    start_file_transfer_pane_navigation(pane, pane->current_directory);
+  } catch (const cardio::canceled_exception &) {
+    cancelled = true;
+  } catch (...) {
+    failure = std::current_exception();
+  }
+
+  if (window->destroyed) {
+    co_return;
+  }
+  if (cancelled) {
+    set_file_transfer_browser_action_phase(window, false, false, {});
+    set_file_transfer_status(window, _("Rename cancelled"));
+  } else if (failure != nullptr) {
+    const std::string message = exception_text(failure);
+    set_file_transfer_browser_action_phase(window, true, false, {});
+    set_file_transfer_status(window, _("Rename failed"));
+    co_await show_file_transfer_browser_action_error_async(
+        window, _("Failed to rename item"), message, failure, cancellation);
+    if (!window->destroyed) {
+      set_file_transfer_browser_action_phase(window, false, false, {});
+      start_file_transfer_pane_navigation(pane, pane->current_directory);
+    }
+  }
+}
+
+static void start_file_transfer_rename(FileTransferPaneState *pane) {
+  if (pane == nullptr || pane->window == nullptr ||
+      pane->window->destroyed || pane->window->transfer_active ||
+      pane->window->browser_action_active ||
+      (pane->remote && !pane->window->connection_available)) {
+    return;
+  }
+  const std::vector<FileTransferSelectedItem> items =
+      selected_file_transfer_items(pane);
+  if (items.size() != 1 ||
+      (pane->remote && !can_modify_remote_items(pane->window, items))) {
+    return;
+  }
+  pane->window->browser_action_task.reset();
+  pane->window->browser_action_task.emplace(
+      run_file_transfer_rename_async(pane, items.front()));
+}
+
+static void on_file_transfer_rename_item_activate(
+    GtkMenuItem *, gpointer data) {
+  start_file_transfer_rename(
+      static_cast<FileTransferPaneState *>(data));
+}
+
+static std::string file_transfer_hash_message(
+    const FileHashes &hashes) {
+  return "MD5: " + hashes.md5 + "\nSHA1: " + hashes.sha1 +
+         "\nSHA256: " + hashes.sha256;
+}
+
+static cardio::promise<void> run_file_transfer_hash_async(
+    FileTransferPaneState *pane, FileTransferSelectedItem item) {
+  FileTransferWindow *window = pane->window;
+  const cardio::cancellation hash_cancellation =
+      window->transfer_cancel_source->get_cancellation();
+  std::optional<FileHashes> hashes;
+  bool cancelled = false;
+  std::exception_ptr failure;
+  try {
+    set_file_transfer_browser_action_phase(
+        window, true, true, _("Calculating hash values…"));
+    if (pane->remote) {
+      note_activity_indicator_widget(&window->indicators[1]);
+      hashes = co_await window->remote_file_hash(
+          item.path, hash_cancellation);
+      if (!window->destroyed) {
+        note_activity_indicator_widget(&window->indicators[2]);
+      }
+    } else {
+      hashes = co_await calculate_local_file_hashes_async(
+          item.path, hash_cancellation);
+    }
+  } catch (const cardio::canceled_exception &) {
+    cancelled = true;
+  } catch (...) {
+    failure = std::current_exception();
+  }
+
+  if (window->destroyed) {
+    co_return;
+  }
+  window->transfer_cancel_source.reset();
+  if (cancelled) {
+    set_file_transfer_browser_action_phase(window, false, false, {});
+    set_file_transfer_status(window, _("Hash calculation cancelled"));
+    co_return;
+  }
+  if (failure != nullptr) {
+    const std::string message = exception_text(failure);
+    set_file_transfer_browser_action_phase(window, true, false, {});
+    set_file_transfer_status(window, _("Hash calculation failed"));
+    co_await show_file_transfer_browser_action_error_async(
+        window, _("Failed to calculate hash values"), message, failure,
+        window->stop_source.get_cancellation());
+    if (!window->destroyed) {
+      set_file_transfer_browser_action_phase(window, false, false, {});
+    }
+    co_return;
+  }
+
+  set_file_transfer_browser_action_phase(window, true, false, {});
+  set_file_transfer_status(window, _("Hash calculation complete"));
+  try {
+    InlinePromptRequest request{
+        .title = _("File hash values"),
+        .message = item.name,
+        .monospace_message = file_transfer_hash_message(*hashes),
+        .accept_label = _("Close"),
+        .cancel_label = _("Cancel"),
+        .input_required = false,
+        .echo = false,
+        .cancel_visible = false,
+    };
+    auto pending = prompt_inline_async(
+        window->prompt, std::move(request), window->stop_source.get_cancellation());
+    (void)co_await pending;
+  } catch (const cardio::canceled_exception &) {
+  }
+  if (!window->destroyed) {
+    set_file_transfer_browser_action_phase(window, false, false, {});
+  }
+}
+
+static void start_file_transfer_hash(FileTransferPaneState *pane) {
+  if (pane == nullptr || pane->window == nullptr ||
+      pane->window->destroyed || pane->window->transfer_active ||
+      pane->window->browser_action_active ||
+      (pane->remote &&
+       (!pane->window->connection_available ||
+        !pane->window->remote_file_hash))) {
+    return;
+  }
+  const std::vector<FileTransferSelectedItem> items =
+      selected_file_transfer_items(pane);
+  if (items.size() != 1 ||
+      items.front().type != RemoteFileType::regular) {
+    return;
+  }
+  pane->window->browser_action_task.reset();
+  pane->window->transfer_cancel_source.emplace();
+  pane->window->browser_action_task.emplace(
+      run_file_transfer_hash_async(pane, items.front()));
+}
+
+static void on_file_transfer_hash_item_activate(
+    GtkMenuItem *, gpointer data) {
+  start_file_transfer_hash(
+      static_cast<FileTransferPaneState *>(data));
+}
+
+static std::vector<FileTransferSelectedItem>
+normalize_file_transfer_delete_items(
+    const FileTransferPaneState *pane,
+    const std::vector<FileTransferSelectedItem> &items) {
+  std::vector<std::string> paths;
+  paths.reserve(items.size());
+  for (const FileTransferSelectedItem &item : items) {
+    paths.push_back(item.path);
+  }
+  const std::vector<std::string> normalized_paths =
+      normalize_file_transfer_delete_paths(
+          pane->remote ? FileTransferEndpoint::remote
+                       : FileTransferEndpoint::local,
+          std::move(paths));
+  std::vector<FileTransferSelectedItem> result;
+  result.reserve(normalized_paths.size());
+  for (const std::string &path : normalized_paths) {
+    const auto item = std::find_if(
+        items.begin(), items.end(), [&path](const auto &candidate) {
+          return candidate.path == path;
+        });
+    if (item == items.end()) {
+      throw std::logic_error(
+          "Normalized deletion path has no selected item");
+    }
+    result.push_back(*item);
+  }
+  return result;
+}
+
+static std::string file_transfer_delete_confirmation_message(
+    const std::vector<FileTransferSelectedItem> &items) {
+  std::string item_list;
+  for (const FileTransferSelectedItem &item : items) {
+    if (!item_list.empty()) {
+      item_list += '\n';
+    }
+    item_list += "• " + item.name;
+  }
+  return std::string(
+             _("The following items will be permanently deleted:")) +
+         "\n\n" + item_list + "\n\n" +
+         _("Directories and their contents will be deleted. This cannot be "
+           "undone.");
+}
+
+static cardio::promise<bool> prompt_file_transfer_delete_async(
+    FileTransferWindow *window,
+    const std::vector<FileTransferSelectedItem> &items,
+    cardio::cancellation cancellation) {
+  const char *title = g_dngettext(
+      GETTEXT_PACKAGE, "Delete selected item?", "Delete selected items?",
+      items.size());
+  InlinePromptRequest request{
+      .title = title,
+      .message = file_transfer_delete_confirmation_message(items),
+      .accept_label = _("Delete"),
+      .cancel_label = _("Cancel"),
+      .input_required = false,
+      .echo = false,
+      .cancel_visible = true,
+  };
+  auto pending = prompt_inline_async(
+      window->prompt, std::move(request), cancellation);
+  const InlinePromptResponse response = co_await pending;
+  cancellation.throw_if_cancellation_requested();
+  co_return response.accepted;
+}
+
+static cardio::promise<void> run_file_transfer_delete_async(
+    FileTransferPaneState *pane,
+    std::vector<FileTransferSelectedItem> selected_items) {
+  FileTransferWindow *window = pane->window;
+  const cardio::cancellation cancellation =
+      window->stop_source.get_cancellation();
+  bool cancelled = false;
+  std::exception_ptr failure;
+  try {
+    set_file_transfer_browser_action_phase(window, true, false, {});
+    std::vector<FileTransferSelectedItem> items =
+        normalize_file_transfer_delete_items(pane, selected_items);
+    if (items.empty()) {
+      throw std::invalid_argument(
+          "At least one file deletion item is required");
+    }
+    if (!(co_await prompt_file_transfer_delete_async(
+            window, items, cancellation))) {
+      if (!window->destroyed) {
+        set_file_transfer_browser_action_phase(window, false, false, {});
+        set_file_transfer_status(window, _("Ready"));
+      }
+      co_return;
+    }
+    if (window->destroyed) {
+      co_return;
+    }
+
+    std::vector<std::string> paths;
+    paths.reserve(items.size());
+    for (const FileTransferSelectedItem &item : items) {
+      paths.push_back(item.path);
+    }
+    set_file_transfer_browser_action_phase(
+        window, true, true, _("Deleting…"));
+    co_await delete_file_transfer_items_async(
+        window->client,
+        pane->remote ? FileTransferEndpoint::remote
+                     : FileTransferEndpoint::local,
+        std::move(paths), cancellation);
+    if (window->destroyed) {
+      co_return;
+    }
+    set_file_transfer_browser_action_phase(window, false, false, {});
+    const char *format = g_dngettext(
+        GETTEXT_PACKAGE, "Deleted %zu item", "Deleted %zu items",
+        items.size());
+    set_file_transfer_status(
+        window, format_translated_string(format, items.size()));
+    start_file_transfer_pane_navigation(pane, pane->current_directory);
+  } catch (const cardio::canceled_exception &) {
+    cancelled = true;
+  } catch (...) {
+    failure = std::current_exception();
+  }
+
+  if (window->destroyed) {
+    co_return;
+  }
+  if (cancelled) {
+    set_file_transfer_browser_action_phase(window, false, false, {});
+    set_file_transfer_status(window, _("Delete cancelled"));
+  } else if (failure != nullptr) {
+    const std::string message = exception_text(failure);
+    set_file_transfer_browser_action_phase(window, true, false, {});
+    set_file_transfer_status(window, _("Delete failed"));
+    co_await show_file_transfer_browser_action_error_async(
+        window, _("Failed to delete selected items"), message, failure,
+        cancellation);
+    if (!window->destroyed) {
+      set_file_transfer_browser_action_phase(window, false, false, {});
+      start_file_transfer_pane_navigation(pane, pane->current_directory);
+    }
+  }
+}
+
+static void start_file_transfer_delete(FileTransferPaneState *pane) {
+  if (pane == nullptr || pane->window == nullptr ||
+      pane->window->destroyed || pane->window->transfer_active ||
+      pane->window->browser_action_active ||
+      (pane->remote && !pane->window->connection_available)) {
+    return;
+  }
+  std::vector<FileTransferSelectedItem> items =
+      selected_file_transfer_items(pane);
+  if (items.empty() ||
+      (pane->remote && !can_modify_remote_items(pane->window, items))) {
+    return;
+  }
+  pane->window->browser_action_task.reset();
+  pane->window->browser_action_task.emplace(
+      run_file_transfer_delete_async(pane, std::move(items)));
+}
+
+static void on_file_transfer_delete_item_activate(
+    GtkMenuItem *, gpointer data) {
+  start_file_transfer_delete(
+      static_cast<FileTransferPaneState *>(data));
+}
+
+static void refresh_file_transfer_panes(FileTransferWindow *window) {
+  start_file_transfer_pane_navigation(
+      &window->local, window->local.current_directory);
+  if (window->connection_available) {
+    start_file_transfer_pane_navigation(
+        &window->remote, window->remote.current_directory);
+  }
+}
+
+static cardio::promise<void> run_file_transfer_window_transfer_async(
+    FileTransferWindow *window) {
+  const auto weak = window->self;
+  FileTransferCallbacks callbacks;
+  callbacks.conflict = [weak](const FileTransferConflict &conflict,
+      cardio::cancellation cancellation) -> cardio::promise<FileTransferConflictAction> {
+    const auto owner = weak.lock();
+    if (!owner || owner->destroyed) throw cardio::canceled_exception();
+    co_return co_await prompt_file_transfer_conflict_async(owner.get(), conflict, cancellation);
+  };
+  callbacks.failure = [weak](const FileTransferFailure &failure,
+      cardio::cancellation cancellation) -> cardio::promise<FileTransferFailureAction> {
+    const auto owner = weak.lock();
+    if (!owner || owner->destroyed) throw cardio::canceled_exception();
+    co_return co_await prompt_file_transfer_failure_async(owner.get(), failure, cancellation);
+  };
+  co_await run_file_transfer_queue_async(window->jobs, std::move(callbacks), window->stop_source.get_cancellation());
+  window->transfer_active = false;
+  if (window->destroyed) co_return;
+  update_file_transfer_sensitivity(window);
+  refresh_file_transfer_panes(window);
+}
+
+static void submit_file_transfer_request(FileTransferWindow *window, FileTransferRequest request) {
+  if (window->destroyed || !window->connection_available || window->reconnecting || window->browser_action_active) return;
+  enqueue_file_transfer_job(window->jobs, request);
+  if (window->transfer_active) return;
+  window->transfer_task.reset();
+  window->transfer_active = true;
+  update_file_transfer_sensitivity(window);
+  window->transfer_task.emplace(run_file_transfer_window_transfer_async(window));
+}
+
+static void file_transfer_job_changed(FileTransferWindow *window, const FileTransferJobSnapshot &snapshot) {
+  if (!window || window->destroyed) return;
+  update_file_transfer_job_view(window->job_view, file_transfer_jobs(window->jobs), window->connection_available);
+  if (!snapshot.result) return;
+  const auto &result = *snapshot.result;
+  if (result.outcome == FileTransferOutcome::completed) {
+    const auto count = static_cast<std::size_t>(result.succeeded_items);
+    const char *format = snapshot.direction == FileTransferDirection::send
+        ? g_dngettext(GETTEXT_PACKAGE, "Sent %zu item", "Sent %zu items", count)
+        : g_dngettext(GETTEXT_PACKAGE, "Received %zu item", "Received %zu items", count);
+    auto status = format_translated_string(format, count);
+    if (result.skipped_items) status += format_translated_string(_("; skipped %llu"),
+        static_cast<unsigned long long>(result.skipped_items));
+    set_file_transfer_status(window, status);
+  } else set_file_transfer_status(window,
+      result.outcome == FileTransferOutcome::cancelled ? _("Transfer cancelled") : _("Transfer failed"));
+}
+
+static void start_file_transfer_transfer(
+    FileTransferWindow *window, FileTransferDirection direction, bool as_file = false) {
+  if (window == nullptr || window->destroyed ||
+      window->browser_action_active ||
+      !window->connection_available ||
+      (direction == FileTransferDirection::send &&
+       !can_create_remote_children(window))) {
+    return;
+  }
+  FileTransferPaneState *source =
+      direction == FileTransferDirection::send
+          ? &window->local
+          : &window->remote;
+  const std::vector<std::string> sources =
+      selected_file_transfer_paths(source);
+  if (sources.empty()) {
+    return;
+  }
+  const std::string destination =
+      direction == FileTransferDirection::send
+          ? window->remote.current_directory
+          : window->local.current_directory;
+  if (destination.empty()) {
+    return;
+  }
+
+  FileTransferRequest request;
+  request.direction = direction;
+  request.receive_as_file = as_file;
+  request.source_paths = sources;
+  request.destination_directory = destination;
+  submit_file_transfer_request(window, std::move(request));
+}
+
+static void on_file_transfer_item_activate(
+    GtkMenuItem *, gpointer data) {
+  auto *pane = static_cast<FileTransferPaneState *>(data);
+  start_file_transfer_transfer(
+      pane->window,
+      pane->remote ? FileTransferDirection::receive
+                   : FileTransferDirection::send);
+}
+
+static void on_http_receive_file(GtkMenuItem *, gpointer data) {
+  auto *pane = static_cast<FileTransferPaneState *>(data);
+  start_file_transfer_transfer(pane->window, FileTransferDirection::receive, true);
+}
+
+static void on_http_expand_html(GtkMenuItem *, gpointer data) {
+  auto *pane = static_cast<FileTransferPaneState *>(data);
+  const auto items = selected_file_transfer_items(pane);
+  if (items.size() == 1) start_file_transfer_pane_navigation(pane, items.front().path, true, true);
+}
+
+static void on_file_transfer_cancel_clicked(
+    GtkButton *, gpointer data) {
+  auto *window = static_cast<FileTransferWindow *>(data);
+  if (window == nullptr ||
+      !window->transfer_cancel_source.has_value()) {
+    return;
+  }
+  if (window->transfer_cancel_source->cancel()) {
+    gtk_widget_set_sensitive(
+        window->action_cancel_button, FALSE);
+  }
+}
+
+static gboolean run_closed_callback_idle(gpointer data) {
+  auto *callback = static_cast<std::function<void()> *>(data);
+  if (*callback) {
+    (*callback)();
+  }
+  delete callback;
+  return G_SOURCE_REMOVE;
+}
+
+static void on_file_transfer_window_destroy(GtkWidget *, gpointer data) {
+  auto *window = static_cast<FileTransferWindow *>(data);
+  if (window == nullptr || window->destroyed) {
+    return;
+  }
+  if (window->settings_close_idle != 0) {
+    g_source_remove(window->settings_close_idle);
+    window->settings_close_idle = 0;
+  }
+  if (window->settings_dialog != nullptr) {
+    gtk_widget_destroy(window->settings_dialog);
+  }
+  disconnect_file_transfer_queue(window->jobs, true);
+  cancel_inline_prompt(window->prompt);
+  for (auto &indicator : window->indicators) {
+    release_activity_indicator_widget(&indicator);
+  }
+  g_clear_object(&window->indicator_on);
+  g_clear_object(&window->indicator_off);
+  g_clear_object(&window->indicator_default_on);
+  g_clear_object(&window->indicator_default_off);
+  clear_file_transfer_window_colors(window);
+  if (window->header_provider != nullptr) {
+    gtk_style_context_remove_provider_for_screen(
+        gtk_widget_get_screen(window->header_bar),
+        GTK_STYLE_PROVIDER(window->header_provider));
+    g_clear_object(&window->header_provider);
+  }
+  window->destroyed = true;
+  window->window = nullptr;
+  window->header_bar = nullptr;
+  window->application_menu_button = nullptr;
+  window->application_menu_button_image = nullptr;
+  window->header_connection_icon = nullptr;
+  window->root_overlay = nullptr;
+  window->paned = nullptr;
+  window->status_bar = nullptr;
+  (void)window->stop_source.cancel();
+  if (window->transfer_cancel_source.has_value()) {
+    (void)window->transfer_cancel_source->cancel();
+  }
+  stop_file_transfer_pulse(window);
+  if (window->closed) {
+    g_idle_add(run_closed_callback_idle,
+               new std::function<void()>(window->closed));
+  }
+}
+
+static GtkWidget *create_toolbar_button(
+    const char *label, const char *accessible_id) {
+  GtkWidget *button = gtk_button_new_with_label(label);
+  gestament_gtk_assign_accessible_id(button, accessible_id);
+  return button;
+}
+
+struct FileTransferTreeCellRendererText {
+  GtkCellRendererText parent_instance;
+};
+
+struct FileTransferTreeCellRendererTextClass {
+  GtkCellRendererTextClass parent_class;
+};
+
+static void render_file_transfer_tree_cell_text(
+    GtkCellRenderer *renderer, cairo_t *cr, GtkWidget *widget,
+    const GdkRectangle *background_area,
+    const GdkRectangle *cell_area, GtkCellRendererState flags);
+
+G_DEFINE_TYPE(FileTransferTreeCellRendererText,
+              file_transfer_tree_cell_renderer_text,
+              GTK_TYPE_CELL_RENDERER_TEXT)
+
+static int get_file_transfer_tree_cell_ink_offset(
+    GtkCellRenderer *renderer, GtkWidget *widget,
+    const GdkRectangle *cell_area) {
+  char *text_value = nullptr;
+  g_object_get(renderer, "text", &text_value, nullptr);
+  FileTransferGCharPtr text(text_value);
+  if (text == nullptr || text.get()[0] == '\0') {
+    return 0;
+  }
+
+  FileTransferGObjectPtr<PangoLayout> layout(
+      gtk_widget_create_pango_layout(widget, text.get()));
+  PangoRectangle ink_rect = {};
+  PangoRectangle logical_rect = {};
+  pango_layout_get_pixel_extents(
+      layout.get(), &ink_rect, &logical_rect);
+
+  int vertical_padding = 0;
+  gtk_cell_renderer_get_padding(
+      renderer, nullptr, &vertical_padding);
+  float vertical_alignment = 0.5F;
+  gtk_cell_renderer_get_alignment(
+      renderer, nullptr, &vertical_alignment);
+  const int content_height = std::max(
+      0, cell_area->height - 2 * vertical_padding);
+  const int logical_height = std::min(
+      logical_rect.height, content_height);
+  const int available_height = std::max(
+      0, cell_area->height -
+             (logical_height + 2 * vertical_padding));
+  const int aligned_offset = std::max(
+      0, static_cast<int>(
+             vertical_alignment * available_height));
+  const int ink_center_twice =
+      2 * (aligned_offset + vertical_padding + ink_rect.y) +
+      ink_rect.height;
+  return (ink_center_twice - cell_area->height) / 2;
+}
+
+static void render_file_transfer_tree_cell_text(
+    GtkCellRenderer *renderer, cairo_t *cr, GtkWidget *widget,
+    const GdkRectangle *background_area,
+    const GdkRectangle *cell_area, GtkCellRendererState flags) {
+  const int vertical_offset = get_file_transfer_tree_cell_ink_offset(
+      renderer, widget, cell_area);
+  GdkRectangle adjusted_cell_area = *cell_area;
+  adjusted_cell_area.y -= vertical_offset;
+
+  // GtkCellRendererText aligns the layout's logical rectangle. Font
+  // fallback can make its visible ink asymmetric within that rectangle,
+  // so move the rendered value by its measured ink center instead.
+  cairo_save(cr);
+  cairo_rectangle(
+      cr, cell_area->x, cell_area->y, cell_area->width,
+      cell_area->height);
+  cairo_clip(cr);
+  if (auto *icon = static_cast<cairo_surface_t *>(g_object_get_data(G_OBJECT(renderer), "node-icon"))) {
+    const bool rtl = gtk_widget_get_direction(widget) == GTK_TEXT_DIR_RTL;
+    cairo_set_source_surface(cr, icon,
+        rtl ? cell_area->x + cell_area->width - 18 : cell_area->x + 2,
+        cell_area->y + (cell_area->height - 16) / 2);
+    cairo_paint(cr);
+    if (!rtl) adjusted_cell_area.x += 20;
+    adjusted_cell_area.width = std::max(0, adjusted_cell_area.width - 20);
+  }
+  GTK_CELL_RENDERER_CLASS(
+      file_transfer_tree_cell_renderer_text_parent_class)
+      ->render(renderer, cr, widget, background_area,
+               &adjusted_cell_area, flags);
+  cairo_restore(cr);
+}
+
+static void file_transfer_tree_cell_renderer_text_class_init(
+    FileTransferTreeCellRendererTextClass *renderer_class) {
+  GTK_CELL_RENDERER_CLASS(renderer_class)->render =
+      render_file_transfer_tree_cell_text;
+}
+
+static void file_transfer_tree_cell_renderer_text_init(
+    FileTransferTreeCellRendererText *) {}
+
+struct FileTransferTreeRowMetrics {
+  int height = 0;
+  int vertical_padding = 0;
+  float vertical_alignment = 0.5F;
+};
+
+static FileTransferTreeRowMetrics get_file_transfer_tree_row_metrics(
+    GtkWidget *tree) {
+  static constexpr char row_height_sample[] = "AgÁgjあ漢Ⅳ";
+  GtkCellRenderer *renderer = gtk_cell_renderer_text_new();
+  g_object_ref_sink(renderer);
+  g_object_set(renderer, "text", row_height_sample, nullptr);
+  int minimum_height = 0;
+  int natural_height = 0;
+  gtk_cell_renderer_get_preferred_height(
+      renderer, tree, &minimum_height, &natural_height);
+  int vertical_padding = 0;
+  gtk_cell_renderer_get_padding(
+      renderer, nullptr, &vertical_padding);
+  g_object_unref(renderer);
+
+  PangoLayout *layout =
+      gtk_widget_create_pango_layout(tree, row_height_sample);
+  PangoRectangle ink_rect = {};
+  PangoRectangle logical_rect = {};
+  pango_layout_get_pixel_extents(
+      layout, &ink_rect, &logical_rect);
+  g_object_unref(layout);
+  const int ink_center_twice =
+      ink_rect.y * 2 + ink_rect.height;
+  const int logical_center_twice =
+      logical_rect.y * 2 + logical_rect.height;
+  const int ink_center_offset =
+      (ink_center_twice - logical_center_twice) / 2;
+  const int requested_padding_correction =
+      ink_center_offset >= 0
+          ? ink_center_offset
+          : -ink_center_offset;
+  const int padding_correction = std::min(
+      vertical_padding, requested_padding_correction);
+  // GtkCellRendererText centers the logical rectangle, whose baseline can
+  // leave the visible ink low or high. Keep one spare pixel on the opposite
+  // side instead of enlarging the row with symmetric blank padding.
+  const float vertical_alignment =
+      padding_correction == 0
+          ? 0.5F
+          : (ink_center_offset > 0 ? 0.0F : 1.0F);
+
+  int expander_size = 0;
+  int horizontal_separator = 0;
+  gtk_widget_style_get(
+      tree, "expander-size", &expander_size,
+      "horizontal-separator", &horizontal_separator, nullptr);
+  const int effective_expander_size =
+      expander_size + horizontal_separator / 2;
+  return {
+      .height = std::max(
+          natural_height - padding_correction,
+          effective_expander_size),
+      .vertical_padding =
+          vertical_padding - padding_correction,
+      .vertical_alignment = vertical_alignment,
+  };
+}
+
+static std::shared_ptr<cairo_surface_t> create_file_transfer_node_icon(
+    const std::string &icon, int scale) {
+  // Bundled white glyphs include a black outline for light and selected rows.
+  // Their connection-icon margins would shrink the visible tree glyph, so fit
+  // the nontransparent bounds, including the outline, into the 16px row slot.
+  const auto source = connection_icon_preset_thumbnail("material:white:" + icon, 256);
+  if (!source) return {};
+  const int width = gdk_pixbuf_get_width(source.get());
+  const int height = gdk_pixbuf_get_height(source.get());
+  const int stride = gdk_pixbuf_get_rowstride(source.get());
+  const auto *pixels = gdk_pixbuf_read_pixels(source.get());
+  int left = width, top = height, right = -1, bottom = -1;
+  for (int y = 0; y < height; ++y) {
+    for (int x = 0; x < width; ++x) {
+      // The preset API guarantees RGBA pixels.
+      if (pixels[y * stride + x * 4 + 3] == 0) continue;
+      left = std::min(left, x);
+      right = std::max(right, x);
+      top = std::min(top, y);
+      bottom = std::max(bottom, y);
+    }
+  }
+  if (right < left || bottom < top) return {};
+  const int glyph_width = right - left + 1;
+  const int glyph_height = bottom - top + 1;
+  const int longest_side = std::max(glyph_width, glyph_height);
+  const int size = 16 * scale;
+  const int fitted_width = std::max(1, (glyph_width * size + longest_side / 2) / longest_side);
+  const int fitted_height = std::max(1, (glyph_height * size + longest_side / 2) / longest_side);
+  FileTransferGObjectPtr<GdkPixbuf> cropped(gdk_pixbuf_new_subpixbuf(
+      source.get(), left, top, glyph_width, glyph_height));
+  if (!cropped) return {};
+  FileTransferGObjectPtr<GdkPixbuf> fitted(gdk_pixbuf_scale_simple(
+      cropped.get(), fitted_width, fitted_height, GDK_INTERP_BILINEAR));
+  FileTransferGObjectPtr<GdkPixbuf> canvas(gdk_pixbuf_new(
+      GDK_COLORSPACE_RGB, TRUE, 8, size, size));
+  if (!fitted || !canvas) return {};
+  gdk_pixbuf_fill(canvas.get(), 0);
+  gdk_pixbuf_copy_area(fitted.get(), 0, 0, fitted_width, fitted_height,
+      canvas.get(), (size - fitted_width) / 2, (size - fitted_height) / 2);
+  return {gdk_cairo_surface_create_from_pixbuf(canvas.get(), scale, nullptr), cairo_surface_destroy};
+}
+
+static void render_file_transfer_node_icon(GtkTreeViewColumn *, GtkCellRenderer *renderer,
+    GtkTreeModel *model, GtkTreeIter *iterator, gpointer data) {
+  auto *tree = GTK_WIDGET(data);
+  using Surfaces = std::map<std::pair<std::string, int>, std::shared_ptr<cairo_surface_t>>;
+  auto *cache = static_cast<Surfaces *>(g_object_get_data(G_OBJECT(tree), "node-icons"));
+  if (!cache) {
+    cache = new Surfaces;
+    g_object_set_data_full(G_OBJECT(tree), "node-icons", cache,
+        +[](gpointer value) { delete static_cast<Surfaces *>(value); });
+  }
+  gchar *name = nullptr;
+  gtk_tree_model_get(model, iterator, file_transfer_tree_icon_column, &name, -1);
+  const std::string icon = name ? name : "editor/insert_drive_file";
+  g_free(name);
+  const int scale = gtk_widget_get_scale_factor(tree);
+  auto &surface = (*cache)[{icon, scale}];
+  if (!surface) {
+    surface = create_file_transfer_node_icon(icon, scale);
+  }
+  g_object_set_data_full(G_OBJECT(renderer), "node-icon",
+      surface ? cairo_surface_reference(surface.get()) : nullptr,
+      +[](gpointer value) { cairo_surface_destroy(static_cast<cairo_surface_t *>(value)); });
+}
+
+static void append_file_transfer_tree_column(
+    GtkWidget *tree, const char *title, int model_column,
+    bool expand, const char *width_sample,
+    const FileTransferTreeRowMetrics &row_metrics) {
+  GtkCellRenderer *renderer = GTK_CELL_RENDERER(g_object_new(
+      file_transfer_tree_cell_renderer_text_get_type(), nullptr));
+  int horizontal_padding = 0;
+  gtk_cell_renderer_get_padding(
+      renderer, &horizontal_padding, nullptr);
+  gtk_cell_renderer_set_padding(
+      renderer, horizontal_padding,
+      row_metrics.vertical_padding);
+  float horizontal_alignment = 0.0F;
+  gtk_cell_renderer_get_alignment(
+      renderer, &horizontal_alignment, nullptr);
+  gtk_cell_renderer_set_alignment(
+      renderer, horizontal_alignment,
+      row_metrics.vertical_alignment);
+  gtk_cell_renderer_set_fixed_size(
+      renderer, -1, row_metrics.height);
+  int fixed_width = 1;
+  if (!expand) {
+    g_object_set(renderer, "text", width_sample, nullptr);
+    int minimum_width = 0;
+    gtk_cell_renderer_get_preferred_width(
+        renderer, tree, &minimum_width, &fixed_width);
+    g_object_set(renderer, "text", "", nullptr);
+  }
+  GtkTreeViewColumn *column = gtk_tree_view_column_new();
+  gtk_tree_view_column_set_title(column, title);
+  gtk_tree_view_column_pack_start(column, renderer, TRUE);
+  if (model_column == file_transfer_tree_name_column) {
+    // Keep one accessible text cell: GTK's multi-renderer container has no name.
+    gtk_tree_view_column_set_cell_data_func(column, renderer, render_file_transfer_node_icon, tree, nullptr);
+  }
+  gtk_tree_view_column_add_attribute(column, renderer, "text", model_column);
+  gtk_tree_view_column_set_sizing(
+      column, GTK_TREE_VIEW_COLUMN_FIXED);
+  // The name column receives the remaining width. Explicit widths keep long
+  // names loaded later from pushing the metadata columns outside the pane.
+  gtk_tree_view_column_set_fixed_width(column, fixed_width);
+  gtk_tree_view_column_set_resizable(column, TRUE);
+  gtk_tree_view_column_set_expand(column, expand ? TRUE : FALSE);
+  gtk_tree_view_append_column(GTK_TREE_VIEW(tree), column);
+}
+
+static GtkWidget *create_file_transfer_tree(FileTransferPaneState *pane,
+                                   const char *accessible_id) {
+  pane->store = gtk_tree_store_new(
+      file_transfer_tree_column_count, G_TYPE_STRING, G_TYPE_STRING,
+      G_TYPE_STRING, G_TYPE_STRING, G_TYPE_INT, G_TYPE_BOOLEAN,
+      G_TYPE_BOOLEAN, G_TYPE_STRING);
+  GtkWidget *tree = gtk_tree_view_new_with_model(
+      GTK_TREE_MODEL(pane->store));
+  gestament_gtk_assign_accessible_id(tree, accessible_id);
+  gtk_tree_view_set_enable_tree_lines(GTK_TREE_VIEW(tree), TRUE);
+  gtk_tree_view_set_rubber_banding(GTK_TREE_VIEW(tree), TRUE);
+  gtk_tree_view_set_search_column(
+      GTK_TREE_VIEW(tree), file_transfer_tree_name_column);
+  const FileTransferTreeRowMetrics row_metrics =
+      get_file_transfer_tree_row_metrics(tree);
+  append_file_transfer_tree_column(
+      tree, _("Name"), file_transfer_tree_name_column, true, "", row_metrics);
+  append_file_transfer_tree_column(
+      tree, _("Size"), file_transfer_tree_size_column, false,
+      "999.9 EiB", row_metrics);
+  append_file_transfer_tree_column(
+      tree, _("Modified"), file_transfer_tree_modified_column, false,
+      "0000-00-00 00:00", row_metrics);
+  GtkTreeSelection *selection = gtk_tree_view_get_selection(
+      GTK_TREE_VIEW(tree));
+  gtk_tree_selection_set_mode(selection, GTK_SELECTION_MULTIPLE);
+  g_signal_connect(tree, "row-expanded",
+                   G_CALLBACK(on_file_transfer_row_expanded), pane);
+  g_signal_connect(tree, "row-activated",
+                   G_CALLBACK(on_file_transfer_row_activated), pane);
+  g_signal_connect(tree, "button-press-event",
+                   G_CALLBACK(on_file_transfer_tree_button_press), pane);
+  return tree;
+}
+
+static GtkWidget *create_file_transfer_pane(
+    FileTransferWindow *window, FileTransferPaneState *pane, bool remote) {
+  pane->window = window;
+  pane->remote = remote;
+  pane->frame = gtk_frame_new(remote ? _("Remote") : _("Local"));
+  gestament_gtk_assign_accessible_id(
+      pane->frame,
+      remote ? "file_transfer_remote_group" : "file_transfer_local_group");
+  gtk_widget_set_hexpand(pane->frame, TRUE);
+  gtk_widget_set_vexpand(pane->frame, TRUE);
+  gtk_widget_set_margin_start(
+      pane->frame,
+      remote ? file_transfer_pane_spacing / 2 : file_transfer_content_padding);
+  gtk_widget_set_margin_end(
+      pane->frame,
+      remote ? file_transfer_content_padding : file_transfer_pane_spacing / 2);
+  gtk_widget_set_margin_top(pane->frame, file_transfer_content_padding);
+  gtk_widget_set_margin_bottom(pane->frame, file_transfer_content_padding);
+
+  GtkWidget *box =
+      gtk_box_new(GTK_ORIENTATION_VERTICAL, file_transfer_control_spacing);
+  gtk_container_set_border_width(
+      GTK_CONTAINER(box), file_transfer_content_padding);
+  gtk_container_add(GTK_CONTAINER(pane->frame), box);
+
+  GtkWidget *toolbar =
+      gtk_box_new(GTK_ORIENTATION_HORIZONTAL, file_transfer_control_spacing);
+  gtk_box_pack_start(GTK_BOX(box), toolbar, FALSE, TRUE, 0);
+  pane->path_entry = gtk_entry_new();
+  gestament_gtk_assign_accessible_id(
+      pane->path_entry,
+      remote ? "file_transfer_remote_path_entry"
+             : "file_transfer_local_path_entry");
+  gtk_widget_set_hexpand(pane->path_entry, TRUE);
+  gtk_box_pack_start(GTK_BOX(toolbar), pane->path_entry, TRUE, TRUE, 0);
+  pane->up_button = create_toolbar_button(
+      _("Up"), remote ? "file_transfer_remote_up_button"
+                    : "file_transfer_local_up_button");
+  gtk_box_pack_start(GTK_BOX(toolbar), pane->up_button, FALSE, TRUE, 0);
+  pane->refresh_button = create_toolbar_button(
+      _("Refresh"), remote ? "file_transfer_remote_refresh_button"
+                         : "file_transfer_local_refresh_button");
+  gtk_box_pack_start(
+      GTK_BOX(toolbar), pane->refresh_button, FALSE, TRUE, 0);
+
+  GtkWidget *scroller = gtk_scrolled_window_new(nullptr, nullptr);
+  gtk_scrolled_window_set_policy(
+      GTK_SCROLLED_WINDOW(scroller), GTK_POLICY_AUTOMATIC,
+      GTK_POLICY_AUTOMATIC);
+  gestament_gtk_assign_accessible_id(
+      gtk_scrolled_window_get_vscrollbar(
+          GTK_SCROLLED_WINDOW(scroller)),
+      remote ? "file_transfer_remote_vertical_scrollbar"
+             : "file_transfer_local_vertical_scrollbar");
+  gtk_widget_set_hexpand(scroller, TRUE);
+  gtk_widget_set_vexpand(scroller, TRUE);
+  gtk_box_pack_start(GTK_BOX(box), scroller, TRUE, TRUE, 0);
+  pane->tree = create_file_transfer_tree(
+      pane, remote ? "file_transfer_remote_tree" : "file_transfer_local_tree");
+  gtk_container_add(GTK_CONTAINER(scroller), pane->tree);
+
+  pane->menu = gtk_menu_new();
+  gtk_menu_attach_to_widget(
+      GTK_MENU(pane->menu), pane->tree, nullptr);
+  pane->transfer_item = gtk_menu_item_new_with_label(
+      remote ? _("Receive") : _("Send"));
+  gestament_gtk_assign_accessible_id(
+      pane->transfer_item,
+      remote ? "file_transfer_receive_item" : "file_transfer_send_item");
+  gtk_menu_shell_append(GTK_MENU_SHELL(pane->menu),
+                        pane->transfer_item);
+  g_signal_connect(
+      pane->transfer_item, "activate",
+      G_CALLBACK(on_file_transfer_item_activate), pane);
+  if (remote) {
+    pane->receive_file_item = gtk_menu_item_new_with_label(_("Receive as file"));
+    gestament_gtk_assign_accessible_id(pane->receive_file_item, "file_transfer_receive_file_item");
+    gtk_menu_shell_append(GTK_MENU_SHELL(pane->menu), pane->receive_file_item);
+    g_signal_connect(pane->receive_file_item, "activate", G_CALLBACK(on_http_receive_file), pane);
+    pane->expand_html_item = gtk_menu_item_new_with_label(_("Expand as HTML"));
+    gestament_gtk_assign_accessible_id(pane->expand_html_item, "file_transfer_expand_html_item");
+    gtk_menu_shell_append(GTK_MENU_SHELL(pane->menu), pane->expand_html_item);
+    g_signal_connect(pane->expand_html_item, "activate", G_CALLBACK(on_http_expand_html), pane);
+  }
+  if (!remote || window->remote_file_hash) {
+    pane->hash_item =
+        gtk_menu_item_new_with_label(_("Calculate Hash Values"));
+    gestament_gtk_assign_accessible_id(
+        pane->hash_item,
+        remote ? "file_transfer_remote_hash_item"
+               : "file_transfer_local_hash_item");
+    gtk_menu_shell_append(GTK_MENU_SHELL(pane->menu), pane->hash_item);
+    g_signal_connect(
+        pane->hash_item, "activate",
+        G_CALLBACK(on_file_transfer_hash_item_activate), pane);
+  }
+  if (!remote) {
+    pane->open_directory_item =
+        gtk_menu_item_new_with_label(_("Open containing directory"));
+    gestament_gtk_assign_accessible_id(
+        pane->open_directory_item, "file_transfer_local_open_directory_item");
+    gtk_menu_shell_append(GTK_MENU_SHELL(pane->menu), pane->open_directory_item);
+    g_signal_connect(pane->open_directory_item, "activate",
+        G_CALLBACK(on_file_transfer_open_directory_item_activate), pane);
+  }
+  gtk_menu_shell_append(GTK_MENU_SHELL(pane->menu),
+                        gtk_separator_menu_item_new());
+  pane->new_directory_item = gtk_menu_item_new_with_label(_("New folder"));
+  gestament_gtk_assign_accessible_id(pane->new_directory_item,
+      remote ? "file_transfer_remote_new_directory_item" : "file_transfer_local_new_directory_item");
+  gtk_menu_shell_append(GTK_MENU_SHELL(pane->menu), pane->new_directory_item);
+  g_signal_connect(pane->new_directory_item, "activate",
+      G_CALLBACK(on_file_transfer_new_directory_item_activate), pane);
+  pane->rename_item = gtk_menu_item_new_with_label(_("Rename"));
+  gestament_gtk_assign_accessible_id(
+      pane->rename_item,
+      remote ? "file_transfer_remote_rename_item"
+             : "file_transfer_local_rename_item");
+  gtk_menu_shell_append(GTK_MENU_SHELL(pane->menu), pane->rename_item);
+  g_signal_connect(
+      pane->rename_item, "activate",
+      G_CALLBACK(on_file_transfer_rename_item_activate), pane);
+  pane->delete_item = gtk_menu_item_new_with_label(_("Delete"));
+  gestament_gtk_assign_accessible_id(
+      pane->delete_item,
+      remote ? "file_transfer_remote_delete_item"
+             : "file_transfer_local_delete_item");
+  gtk_menu_shell_append(GTK_MENU_SHELL(pane->menu), pane->delete_item);
+  g_signal_connect(
+      pane->delete_item, "activate",
+      G_CALLBACK(on_file_transfer_delete_item_activate), pane);
+  gtk_widget_show_all(pane->menu);
+
+  g_signal_connect(
+      pane->path_entry, "activate",
+      G_CALLBACK(on_file_transfer_path_activate), pane);
+  g_signal_connect(
+      pane->up_button, "clicked",
+      G_CALLBACK(on_file_transfer_up_clicked), pane);
+  g_signal_connect(
+      pane->refresh_button, "clicked",
+      G_CALLBACK(on_file_transfer_refresh_clicked), pane);
+  return pane->frame;
+}
+
+static void apply_file_transfer_window_style(FileTransferWindow *window) {
+  static constexpr char css[] =
+      ".file-transfer-dim { background-color: rgba(0, 0, 0, 0.42); }"
+      ".file-transfer-progress { background-color: @theme_bg_color; "
+      "padding: 10px; }";
+  GtkCssProvider *provider = gtk_css_provider_new();
+  gtk_css_provider_load_from_data(provider, css, -1, nullptr);
+  GtkStyleContext *dim_context =
+      gtk_widget_get_style_context(window->dim_overlay);
+  gtk_style_context_add_class(dim_context, "file-transfer-dim");
+  gtk_style_context_add_provider(
+      dim_context, GTK_STYLE_PROVIDER(provider),
+      GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+  GtkStyleContext *progress_context =
+      gtk_widget_get_style_context(window->action_overlay);
+  gtk_style_context_add_class(progress_context, "file-transfer-progress");
+  gtk_style_context_add_provider(
+      progress_context, GTK_STYLE_PROVIDER(provider),
+      GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+  g_object_unref(provider);
+}
+
+static void clear_file_transfer_window_colors(FileTransferWindow *window) {
+  if (window == nullptr) {
+    return;
+  }
+  if (window->exterior_background_provider != nullptr) {
+    remove_widget_tree_background_provider(
+        window->header_bar, window->exterior_background_provider);
+    remove_widget_tree_background_provider(
+        window->status_bar, window->exterior_background_provider);
+    for (GtkWidget *border : {window->frame_start_border,
+                              window->frame_end_border,
+                              window->frame_bottom_border}) {
+      remove_widget_tree_background_provider(
+          border, window->exterior_background_provider);
+    }
+    g_clear_object(&window->exterior_background_provider);
+  }
+  if (window->exterior_component_background_provider != nullptr) {
+    GdkScreen *screen = gtk_widget_get_screen(window->window);
+    if (screen != nullptr) {
+      gtk_style_context_remove_provider_for_screen(
+          screen,
+          GTK_STYLE_PROVIDER(
+              window->exterior_component_background_provider));
+    }
+    g_clear_object(
+        &window->exterior_component_background_provider);
+  }
+  gtk_style_context_remove_class(
+      gtk_widget_get_style_context(window->header_bar),
+      file_transfer_exterior_component_style_class);
+  gtk_style_context_remove_class(
+      gtk_widget_get_style_context(window->status_bar),
+      file_transfer_exterior_component_style_class);
+  if (window->background_provider != nullptr) {
+    remove_widget_tree_background_provider(
+        window->vertical_paned, window->background_provider);
+    remove_widget_tree_background_provider(
+        window->action_overlay,
+        window->background_provider);
+    remove_widget_tree_background_provider(
+        window->prompt_panel, window->background_provider);
+    g_clear_object(&window->background_provider);
+  }
+  if (window->component_background_provider != nullptr) {
+    remove_widget_tree_background_provider(
+        window->vertical_paned, window->component_background_provider);
+    remove_widget_tree_background_provider(
+        window->action_overlay,
+        window->component_background_provider);
+    remove_widget_tree_background_provider(
+        window->prompt_panel, window->component_background_provider);
+    g_clear_object(&window->component_background_provider);
+  }
+  if (window->popup_component_background_provider != nullptr) {
+    GdkScreen *screen = gtk_widget_get_screen(window->window);
+    if (screen != nullptr) {
+      gtk_style_context_remove_provider_for_screen(
+          screen,
+          GTK_STYLE_PROVIDER(
+              window->popup_component_background_provider));
+    }
+    g_clear_object(
+        &window->popup_component_background_provider);
+  }
+}
+
+static void schedule_file_settings_close(FileTransferWindow *window) {
+  if (window->settings_close_idle != 0) return;
+  window->settings_close_idle = g_idle_add(+[](gpointer data) -> gboolean {
+    auto *owner = static_cast<FileTransferWindow *>(data);
+    owner->settings_close_idle = 0;
+    if (owner->settings_dialog != nullptr) {
+      gtk_widget_destroy(owner->settings_dialog);
+    }
+    return G_SOURCE_REMOVE;
+  }, window);
+}
+
+static void apply_file_transfer_compact_mode(FileTransferWindow *window,
+                                             bool compact_mode) {
+  GtkWidget *new_parent = compact_mode ? window->title_box
+                                      : window->status_content;
+  if (gtk_widget_get_parent(window->indicator_bar) != new_parent) {
+    GtkWidget *old_parent = gtk_widget_get_parent(window->indicator_bar);
+    g_object_ref(window->indicator_bar);
+    gtk_container_remove(GTK_CONTAINER(old_parent), window->indicator_bar);
+    gtk_box_pack_start(GTK_BOX(new_parent), window->indicator_bar,
+                       FALSE, FALSE, 0);
+    g_object_unref(window->indicator_bar);
+    gtk_widget_show_all(window->indicator_bar);
+  }
+  set_compact_header_enabled(window->header_bar, window->header_provider,
+      file_transfer_header_style_class, compact_mode);
+  gtk_image_set_pixel_size(GTK_IMAGE(window->application_menu_button_image),
+                           compact_mode ? 16 : 20);
+  set_connection_window_icon(GTK_WINDOW(window->window),
+      GTK_IMAGE(window->header_connection_icon),
+      general_connection_icon(window->settings), compact_mode ? 18 : 24);
+  // Match GTK's centered window controls without stretching the menu button.
+  gtk_widget_set_valign(window->application_menu_button,
+                         compact_mode ? GTK_ALIGN_CENTER : GTK_ALIGN_FILL);
+  gtk_widget_set_no_show_all(window->status_bar,
+                             compact_mode ? TRUE : FALSE);
+  gtk_widget_set_visible(window->status_bar,
+                         compact_mode ? FALSE : TRUE);
+}
+
+static void apply_file_transfer_border(FileTransferWindow *window) {
+  const bool visible = general_show_border(window->settings);
+  const int width = general_border_width(window->settings);
+  for (GtkWidget *border : {window->frame_start_border,
+                            window->frame_end_border}) {
+    // Set the new request after showing it so GTK recalculates a smaller border.
+    gtk_widget_set_no_show_all(border, !visible);
+    gtk_widget_set_visible(border, visible);
+    gtk_widget_set_size_request(border, width, -1);
+  }
+  const bool show_bottom = visible && general_compact_mode(window->settings);
+  gtk_widget_set_no_show_all(window->frame_bottom_border, !show_bottom);
+  gtk_widget_set_visible(window->frame_bottom_border, show_bottom);
+  gtk_widget_set_size_request(window->frame_bottom_border, -1, width);
+}
+
+void set_file_transfer_window_indicator_colors(
+    const std::shared_ptr<FileTransferWindow> &window,
+    const std::optional<RgbColor> &color,
+    const std::optional<RgbColor> &off_color) {
+  if (window == nullptr || window->destroyed ||
+      window->indicator_default_on == nullptr ||
+      window->indicator_default_off == nullptr) return;
+  auto *on = color.has_value()
+      ? create_colored_indicator_pixbuf(window->indicator_default_on, *color)
+      : GDK_PIXBUF(g_object_ref(window->indicator_default_on));
+  // Custom inactive colors share the active lamp's shading range. Defaults
+  // retain the original gray lamp, independently of the active color.
+  auto *off = off_color.has_value()
+      ? create_colored_indicator_pixbuf(window->indicator_default_on, *off_color)
+      : GDK_PIXBUF(g_object_ref(window->indicator_default_off));
+  if (on == nullptr || off == nullptr) {
+    g_clear_object(&on);
+    g_clear_object(&off);
+    g_warning("Could not allocate colored indicator images");
+    return;
+  }
+  for (auto &indicator : window->indicators) {
+    replace_activity_indicator_widget_images(&indicator, on, off);
+  }
+  g_clear_object(&window->indicator_on);
+  g_clear_object(&window->indicator_off);
+  window->indicator_on = on;
+  window->indicator_off = off;
+}
+
+static void open_file_settings(GtkMenuItem *, gpointer data) {
+  auto *window = static_cast<FileTransferWindow *>(data);
+  if (window->settings_dialog != nullptr) {
+    present_modal_dialog(window->settings_dialog);
+    return;
+  }
+  GtkWidget *dialog = gtk_dialog_new();
+  window->settings_dialog = dialog;
+  gestament_gtk_assign_accessible_id(dialog, "settings_dialog");
+  gtk_window_set_title(GTK_WINDOW(dialog), _("Settings"));
+  gtk_window_set_default_size(GTK_WINDOW(dialog), 720, 495);
+  GtkWidget *header = gtk_header_bar_new();
+  gestament_gtk_assign_accessible_id(header, "settings_dialog_header_bar");
+  gtk_header_bar_set_title(GTK_HEADER_BAR(header), _("Settings"));
+  gtk_header_bar_set_show_close_button(GTK_HEADER_BAR(header), TRUE);
+  gtk_window_set_titlebar(GTK_WINDOW(dialog), header);
+  SettingsWidgetCallbacks callbacks;
+  callbacks.apply = [window](const SettingsStore &settings, SettingsWidgetAction action) {
+    window->settings = settings;
+    update_connection_desktop_session(window->settings);
+    set_file_transfer_window_connection_icon(
+        window->self.lock(), general_connection_icon(settings));
+    set_file_transfer_window_colors(
+        window->self.lock(), general_color_settings(settings));
+    set_file_transfer_window_indicator_colors(window->self.lock(),
+        general_indicator_color(settings), general_indicator_off_color(settings));
+    apply_file_transfer_compact_mode(window, general_compact_mode(settings));
+    apply_file_transfer_border(window);
+    action.complete(true, {});
+  };
+  if (window->config_path) {
+    callbacks.save = [window, apply = callbacks.apply](
+                         const SettingsStore &settings, SettingsWidgetAction action) {
+      const auto result = save_settings(settings, *window->config_path);
+      if (!result.saved) {
+        set_file_transfer_status(window, _("Failed to save connection"));
+      }
+      if (result.saved) {
+        apply(settings, action);
+        schedule_file_settings_close(window);
+      } else {
+        action.complete(false, _("Failed to save connection"));
+      }
+    };
+  }
+  callbacks.cancel = [window] { schedule_file_settings_close(window); };
+  window->settings_widget = create_settings_widget({
+      .store = window->settings,
+      .is_runtime = true,
+      .callbacks = std::move(callbacks)});
+  gtk_container_add(GTK_CONTAINER(gtk_dialog_get_content_area(GTK_DIALOG(dialog))),
+                    settings_widget_root(window->settings_widget));
+  set_settings_dialog_colors(dialog, settings_widget_root(window->settings_widget),
+      general_color_settings(window->settings));
+  g_signal_connect(dialog, "destroy", G_CALLBACK(+[](GtkWidget *, gpointer data) {
+    auto *owner = static_cast<FileTransferWindow *>(data);
+    if (owner->settings_close_idle != 0) {
+      g_source_remove(owner->settings_close_idle);
+      owner->settings_close_idle = 0;
+    }
+    destroy_settings_widget(owner->settings_widget);
+    owner->settings_widget = nullptr;
+    owner->settings_dialog = nullptr;
+  }), window);
+  show_modal_dialog(dialog, GTK_WINDOW(window->window));
+}
+
+static void open_file_about(GtkMenuItem *, gpointer data) {
+  auto *window = static_cast<FileTransferWindow *>(data);
+  const char *configured = g_getenv("ELDER_TERMS_LAUNCHER_PATH");
+  std::string launcher = configured == nullptr ? "" : configured;
+  if (launcher.empty()) {
+    const auto root = std::filesystem::read_symlink("/proc/self/exe")
+                          .parent_path().parent_path();
+    for (const char *directory : {"launcher", "elder-terms"}) {
+      const auto candidate = root / directory / "elder-terms";
+      if (g_file_test(candidate.c_str(), G_FILE_TEST_IS_EXECUTABLE)) {
+        launcher = candidate.string();
+        break;
+      }
+    }
+    if (launcher.empty()) {
+      launcher = "elder-terms";
+    }
+  }
+  std::string argument = "--about";
+  gchar *argv[] = {launcher.data(), argument.data(), nullptr};
+  GError *error = nullptr;
+  if (!g_spawn_async(nullptr, argv, nullptr, G_SPAWN_SEARCH_PATH,
+                     nullptr, nullptr, nullptr, &error)) {
+    set_file_transfer_status(
+        window, error == nullptr ? _("Failed to open elder-terms") : error->message);
+    g_clear_error(&error);
+  }
+}
+
+static void create_file_settings_menu(FileTransferWindow *window) {
+  GtkWidget *button = gtk_menu_button_new();
+  window->application_menu_button = button;
+  gestament_gtk_assign_accessible_id(button, "application_menu_button");
+  gtk_widget_set_tooltip_text(button, _("Application"));
+  window->application_menu_button_image =
+      gtk_image_new_from_icon_name("open-menu-symbolic", GTK_ICON_SIZE_BUTTON);
+  gtk_image_set_pixel_size(GTK_IMAGE(window->application_menu_button_image), 20);
+  gtk_container_add(GTK_CONTAINER(button), window->application_menu_button_image);
+  GtkWidget *menu = gtk_menu_new();
+  GtkWidget *settings = gtk_menu_item_new_with_label(_("Settings"));
+  GtkWidget *about = gtk_menu_item_new_with_label(_("About elder-terms"));
+  gestament_gtk_assign_accessible_id(settings, "settings_menu_item");
+  gestament_gtk_assign_accessible_id(about, "about_menu_item");
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), settings);
+  gtk_menu_shell_append(GTK_MENU_SHELL(menu), about);
+  g_signal_connect(settings, "activate", G_CALLBACK(open_file_settings), window);
+  g_signal_connect(about, "activate", G_CALLBACK(open_file_about), window);
+  gtk_widget_show_all(menu);
+  gtk_menu_button_set_popup(GTK_MENU_BUTTON(button), menu);
+  gtk_header_bar_pack_end(GTK_HEADER_BAR(window->header_bar), button);
+}
+
+std::shared_ptr<FileTransferWindow>
+create_file_transfer_window(FileTransferWindowOptions options) {
+  if (options.protocol_name.empty()) {
+    throw std::invalid_argument("File transfer protocol name is required");
+  }
+  auto state = std::make_shared<FileTransferWindow>();
+  state->self = state;
+  state->protocol_name = options.protocol_name;
+  FileTransferGCharPtr identity(g_uuid_string_random());
+  state->connection_id = identity.get();
+  state->jobs = create_file_transfer_queue(state->connection_id,
+      [weak = state->self](const FileTransferJobSnapshot &job) {
+        if (const auto owner = weak.lock()) file_transfer_job_changed(owner.get(), job);
+      });
+  state->job_view = create_file_transfer_job_view(
+      [weak = state->self](const FileTransferJobSnapshot &job) {
+        if (const auto owner = weak.lock()) {
+          FileTransferRequest request;
+          request.direction = job.direction;
+          request.source_paths = job.source_paths;
+          request.receive_as_file = job.receive_as_file;
+          request.destination_directory = job.destination_directory;
+          submit_file_transfer_request(owner.get(), std::move(request));
+        }
+      }, [weak = state->self] {
+        if (const auto owner = weak.lock(); owner && !owner->destroyed) {
+          clear_finished_file_transfer_jobs(owner->jobs);
+          update_file_transfer_job_view(owner->job_view, file_transfer_jobs(owner->jobs), owner->connection_available);
+        }
+      }, [weak = state->self](GtkWidget *row) {
+        if (const auto owner = weak.lock(); owner && !owner->destroyed) {
+          add_widget_tree_background_provider(row, owner->background_provider);
+          add_widget_tree_background_provider_at_priority(row, owner->component_background_provider,
+              GTK_STYLE_PROVIDER_PRIORITY_APPLICATION + 2);
+        }
+      });
+  state->remote_file_hash = std::move(options.remote_file_hash);
+  state->closed = std::move(options.closed);
+  state->reconnect = std::move(options.reconnect);
+  state->settings = std::move(options.settings);
+  state->config_path = std::move(options.config_path);
+  state->local.current_directory =
+      std::move(options.local_directory);
+  state->remote.current_directory =
+      std::move(options.remote_directory);
+
+  state->window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+  gestament_gtk_assign_accessible_id(
+      state->window, "file_transfer_window");
+  const std::string title =
+      options.connection_name.empty()
+          ? options.protocol_name
+          : options.connection_name + " — " + options.protocol_name;
+  gtk_window_set_title(GTK_WINDOW(state->window), title.c_str());
+  gtk_window_set_default_size(GTK_WINDOW(state->window), 1040, 640);
+
+  state->header_bar = gtk_header_bar_new();
+  gestament_gtk_assign_accessible_id(
+      state->header_bar, "file_transfer_header_bar");
+  gtk_header_bar_set_title(
+      GTK_HEADER_BAR(state->header_bar), title.c_str());
+  gtk_header_bar_set_show_close_button(
+      GTK_HEADER_BAR(state->header_bar), TRUE);
+  state->header_connection_icon = gtk_image_new();
+  gestament_gtk_assign_accessible_id(
+      state->header_connection_icon, "file_transfer_connection_icon");
+  gtk_header_bar_pack_start(GTK_HEADER_BAR(state->header_bar),
+                            state->header_connection_icon);
+  set_connection_window_icon(GTK_WINDOW(state->window),
+      GTK_IMAGE(state->header_connection_icon),
+      general_connection_icon(state->settings), 24);
+  state->title_box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
+  state->title_label = gtk_label_new(title.c_str());
+  gestament_gtk_assign_accessible_id(
+      state->title_label, "file_transfer_title_label");
+  gtk_widget_set_hexpand(state->title_box, TRUE);
+  gtk_widget_set_hexpand(state->title_label, TRUE);
+  gtk_widget_set_halign(state->title_box, GTK_ALIGN_FILL);
+  gtk_widget_set_halign(state->title_label, GTK_ALIGN_FILL);
+  gtk_label_set_xalign(GTK_LABEL(state->title_label), 0.5F);
+  gtk_label_set_single_line_mode(GTK_LABEL(state->title_label), TRUE);
+  gtk_label_set_ellipsize(GTK_LABEL(state->title_label), PANGO_ELLIPSIZE_END);
+  gtk_style_context_add_class(
+      gtk_widget_get_style_context(state->title_label), "title");
+  gtk_box_pack_start(GTK_BOX(state->title_box), state->title_label,
+                     TRUE, TRUE, 0);
+  gtk_header_bar_set_custom_title(GTK_HEADER_BAR(state->header_bar),
+                                  state->title_box);
+  gtk_window_set_titlebar(
+      GTK_WINDOW(state->window), state->header_bar);
+  create_file_settings_menu(state.get());
+  state->header_provider = create_compact_header_provider(
+      state->header_bar, file_transfer_header_style_class);
+
+  state->root_overlay = gtk_overlay_new();
+  gtk_container_add(GTK_CONTAINER(state->window),
+                    state->root_overlay);
+  GtkWidget *root = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+  gtk_container_add(GTK_CONTAINER(state->root_overlay), root);
+  state->frame_start_border = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  state->frame_end_border = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  state->frame_bottom_border = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+  for (GtkWidget *border : {state->frame_start_border,
+                            state->frame_end_border,
+                            state->frame_bottom_border}) {
+    gtk_style_context_add_class(gtk_widget_get_style_context(border),
+                                "terminal-window-frame-border");
+  }
+  gestament_gtk_assign_accessible_id(
+      state->frame_start_border, "file_transfer_frame_start_border");
+  gestament_gtk_assign_accessible_id(
+      state->frame_end_border, "file_transfer_frame_end_border");
+  gestament_gtk_assign_accessible_id(
+      state->frame_bottom_border, "file_transfer_frame_bottom_border");
+  gtk_box_pack_start(GTK_BOX(root), state->frame_start_border,
+                     FALSE, TRUE, 0);
+  GtkWidget *content =
+      gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  gtk_box_pack_start(GTK_BOX(root), content, TRUE, TRUE, 0);
+  gtk_box_pack_start(GTK_BOX(root), state->frame_end_border,
+                     FALSE, TRUE, 0);
+
+  state->paned = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
+  gestament_gtk_assign_accessible_id(
+      state->paned, "file_transfer_root_paned");
+  gtk_widget_set_hexpand(state->paned, TRUE);
+  gtk_widget_set_vexpand(state->paned, TRUE);
+  state->vertical_paned = gtk_paned_new(GTK_ORIENTATION_VERTICAL);
+  gestament_gtk_assign_accessible_id(state->vertical_paned, "file_transfer_jobs_paned");
+  gtk_box_pack_start(GTK_BOX(content), state->vertical_paned, TRUE, TRUE, 0);
+  gtk_paned_pack1(GTK_PANED(state->vertical_paned), state->paned, TRUE, FALSE);
+  gtk_paned_pack2(GTK_PANED(state->vertical_paned), file_transfer_job_view_widget(state->job_view), FALSE, FALSE);
+  g_signal_connect(file_transfer_job_view_expander(state->job_view), "notify::expanded",
+      G_CALLBACK(+[](GtkExpander *expander, GParamSpec *, gpointer data) {
+        auto *window = static_cast<FileTransferWindow *>(data);
+        if (window->destroyed) return;
+        const auto height = gtk_widget_get_allocated_height(window->vertical_paned);
+        gtk_paned_set_position(GTK_PANED(window->vertical_paned),
+            std::max(120, height - (gtk_expander_get_expanded(expander) ? 180 : 28)));
+      }), state.get());
+  GtkWidget *local =
+      create_file_transfer_pane(state.get(), &state->local, false);
+  GtkWidget *remote =
+      create_file_transfer_pane(state.get(), &state->remote, true);
+  gtk_paned_pack1(GTK_PANED(state->paned), local, TRUE, FALSE);
+  gtk_paned_pack2(GTK_PANED(state->paned), remote, TRUE, FALSE);
+  gtk_paned_set_position(GTK_PANED(state->paned), 520);
+
+  state->status_bar = gtk_event_box_new();
+  gtk_event_box_set_visible_window(
+      GTK_EVENT_BOX(state->status_bar), TRUE);
+  gestament_gtk_assign_accessible_id(
+      state->status_bar, "file_transfer_status_bar");
+  state->status_content =
+      gtk_box_new(
+          GTK_ORIENTATION_HORIZONTAL, file_transfer_control_spacing);
+  gtk_widget_set_margin_start(
+      state->status_content, file_transfer_content_padding);
+  gtk_widget_set_margin_end(
+      state->status_content, file_transfer_content_padding);
+  gtk_widget_set_margin_top(
+      state->status_content, 2);
+  gtk_widget_set_margin_bottom(
+      state->status_content, 2);
+  gtk_container_add(
+      GTK_CONTAINER(state->status_bar), state->status_content);
+  gtk_box_pack_start(
+      GTK_BOX(content), state->status_bar, FALSE, TRUE, 0);
+  gtk_box_pack_start(GTK_BOX(content), state->frame_bottom_border,
+                     FALSE, TRUE, 0);
+  state->status_label = gtk_label_new(_("Connecting"));
+  gestament_gtk_assign_accessible_id(
+      state->status_label, "file_transfer_status_label");
+  gtk_label_set_xalign(GTK_LABEL(state->status_label), 0.0F);
+  gtk_box_pack_start(
+      GTK_BOX(state->status_content), state->status_label, TRUE, TRUE, 0);
+  state->indicator_bar =
+      gtk_box_new(GTK_ORIENTATION_HORIZONTAL, file_transfer_control_spacing);
+  gtk_box_pack_start(GTK_BOX(state->status_content), state->indicator_bar,
+                     FALSE, FALSE, 0);
+
+  const auto icon_directory =
+      std::filesystem::read_symlink("/proc/self/exe").parent_path();
+  state->indicator_on = gdk_pixbuf_new_from_file_at_scale(
+      (icon_directory / "green-on.png").c_str(), 18, 18, TRUE, nullptr);
+  state->indicator_off = gdk_pixbuf_new_from_file_at_scale(
+      (icon_directory / "green-off.png").c_str(), 18, 18, TRUE, nullptr);
+  state->indicator_default_on = state->indicator_on == nullptr
+      ? nullptr : GDK_PIXBUF(g_object_ref(state->indicator_on));
+  state->indicator_default_off = state->indicator_off == nullptr
+      ? nullptr : GDK_PIXBUF(g_object_ref(state->indicator_off));
+  const std::array ids{ActivityIndicatorId::conn, ActivityIndicatorId::sd,
+                       ActivityIndicatorId::rd};
+  for (std::size_t index = 0; index < ids.size(); ++index) {
+    GtkWidget *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_widget_set_size_request(box, 20, -1);
+    GtkWidget *image = gtk_image_new();
+    const std::string prefix = std::string(activity_indicator_token(ids[index])) + "_indicator_";
+    gestament_gtk_assign_accessible_id(image, (prefix + "image").c_str());
+    GtkWidget *label = gtk_label_new(activity_indicator_label(ids[index]));
+    gestament_gtk_assign_accessible_id(label, (prefix + "label").c_str());
+    PangoAttrList *attributes = pango_attr_list_new();
+    pango_attr_list_insert(attributes, pango_attr_scale_new(0.75));
+    gtk_label_set_attributes(GTK_LABEL(label), attributes);
+    pango_attr_list_unref(attributes);
+    gtk_box_pack_start(GTK_BOX(box), image, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(box), label, FALSE, FALSE, 0);
+    gtk_box_pack_start(GTK_BOX(state->indicator_bar), box, FALSE, FALSE, 0);
+    initialize_activity_indicator_widget(&state->indicators[index], image,
+        state->indicator_on, state->indicator_off,
+        index == 0 ? ActivityIndicatorMode::steady : ActivityIndicatorMode::blink);
+  }
+  set_file_transfer_window_indicator_colors(state,
+      general_indicator_color(state->settings),
+      general_indicator_off_color(state->settings));
+  // Programmatically built widgets must be visible for GTK to measure the
+  // themed header height before compact mode is applied at startup.
+  gtk_widget_show_all(state->header_bar);
+  apply_file_transfer_compact_mode(
+      state.get(), general_compact_mode(state->settings));
+  apply_file_transfer_border(state.get());
+
+  state->dim_overlay = gtk_event_box_new();
+  gestament_gtk_assign_accessible_id(
+      state->dim_overlay, "file_transfer_dim_overlay");
+  gtk_widget_set_no_show_all(state->dim_overlay, TRUE);
+  gtk_widget_set_visible(state->dim_overlay, FALSE);
+  gtk_widget_set_halign(state->dim_overlay, GTK_ALIGN_FILL);
+  gtk_widget_set_valign(state->dim_overlay, GTK_ALIGN_FILL);
+  gtk_overlay_add_overlay(GTK_OVERLAY(state->root_overlay),
+                          state->dim_overlay);
+
+  state->reconnect_button = gtk_button_new_with_label(_("Reconnect"));
+  gestament_gtk_assign_accessible_id(state->reconnect_button, "file_transfer_reconnect_button");
+  gtk_widget_set_no_show_all(state->reconnect_button, TRUE);
+  gtk_widget_set_halign(state->reconnect_button, GTK_ALIGN_CENTER);
+  gtk_widget_set_valign(state->reconnect_button, GTK_ALIGN_CENTER);
+  gtk_overlay_add_overlay(GTK_OVERLAY(state->root_overlay), state->reconnect_button);
+  g_signal_connect(state->reconnect_button, "clicked",
+                   G_CALLBACK(on_file_transfer_reconnect_clicked), state.get());
+
+  state->action_overlay =
+      gtk_frame_new(nullptr);
+  gestament_gtk_assign_accessible_id(
+      state->action_overlay, "file_transfer_action_overlay");
+  gtk_widget_set_no_show_all(state->action_overlay, TRUE);
+  gtk_widget_set_visible(state->action_overlay, FALSE);
+  gtk_widget_set_halign(state->action_overlay, GTK_ALIGN_CENTER);
+  gtk_widget_set_valign(state->action_overlay, GTK_ALIGN_START);
+  gtk_widget_set_margin_top(state->action_overlay, 18);
+  GtkWidget *transfer_box =
+      gtk_box_new(
+          GTK_ORIENTATION_VERTICAL, file_transfer_control_spacing);
+  gtk_container_set_border_width(
+      GTK_CONTAINER(transfer_box), file_transfer_content_padding);
+  gtk_container_add(GTK_CONTAINER(state->action_overlay),
+                    transfer_box);
+  state->action_label = gtk_label_new(_("Preparing transfer…"));
+  gestament_gtk_assign_accessible_id(
+      state->action_label, "file_transfer_action_label");
+  gtk_label_set_xalign(GTK_LABEL(state->action_label), 0.0F);
+  gtk_box_pack_start(
+      GTK_BOX(transfer_box), state->action_label, FALSE, TRUE, 0);
+  state->action_progress = gtk_progress_bar_new();
+  gestament_gtk_assign_accessible_id(
+      state->action_progress, "file_transfer_action_progress");
+  gtk_widget_set_size_request(state->action_progress, 280, -1);
+  gtk_box_pack_start(
+      GTK_BOX(transfer_box), state->action_progress, FALSE, TRUE, 0);
+  state->action_cancel_button =
+      gtk_button_new_with_label(_("Cancel"));
+  gestament_gtk_assign_accessible_id(
+      state->action_cancel_button,
+      "file_transfer_action_cancel_button");
+  gtk_widget_set_halign(
+      state->action_cancel_button, GTK_ALIGN_END);
+  gtk_box_pack_start(
+      GTK_BOX(transfer_box), state->action_cancel_button,
+      FALSE, TRUE, 0);
+  gtk_overlay_add_overlay(GTK_OVERLAY(state->root_overlay),
+                          state->action_overlay);
+
+  const InlinePromptWidgets prompt_widgets =
+      create_inline_prompt_widgets("file_transfer_prompt");
+  state->prompt_panel = prompt_widgets.panel;
+  state->prompt_background = prompt_widgets.background;
+  state->prompt = create_inline_prompt_controller(prompt_widgets);
+  gtk_overlay_add_overlay(GTK_OVERLAY(state->root_overlay),
+                          state->prompt_panel);
+
+  apply_file_transfer_window_style(state.get());
+  set_file_transfer_window_colors(state, options.colors);
+  g_signal_connect(
+      state->action_cancel_button, "clicked",
+      G_CALLBACK(on_file_transfer_cancel_clicked), state.get());
+  g_signal_connect(state->window, "destroy",
+                   G_CALLBACK(on_file_transfer_window_destroy), state.get());
+  update_file_transfer_sensitivity(state.get());
+  return state;
+}
+
+GtkWidget *file_transfer_window_widget(
+    const std::shared_ptr<FileTransferWindow> &window) noexcept {
+  return window == nullptr ? nullptr : window->window;
+}
+
+void show_file_transfer_window(const std::shared_ptr<FileTransferWindow> &window) {
+  if (window == nullptr || window->window == nullptr ||
+      window->destroyed) {
+    return;
+  }
+  const bool first_show = !window->shown;
+  window->shown = true;
+  gtk_widget_show_all(window->window);
+  if (first_show) attach_tracked_window(window->window, present_tracked_window);
+  update_file_action_overlay_presentation(window.get());
+  if (!window->local_load_started) {
+    window->local_load_started = true;
+    start_file_transfer_pane_navigation(
+        &window->local, window->local.current_directory);
+  }
+  if (window->connection_state == FileTransferConnectionState::ready &&
+      !window->remote_load_started) {
+    window->remote_load_started = true;
+    start_file_transfer_pane_navigation(
+        &window->remote, window->remote.current_directory);
+  }
+}
+
+void attach_file_transfer_window_client(
+    const std::shared_ptr<FileTransferWindow> &window,
+    std::shared_ptr<RemoteFileClient> client, std::string initial_directory) {
+  if (window == nullptr || window->destroyed) {
+    return;
+  }
+  if (client == nullptr) {
+    throw std::invalid_argument("Remote file client is required");
+  }
+  if (window->client != nullptr) {
+    throw std::logic_error("Remote file client is already attached");
+  }
+  if (!initial_directory.empty()) window->remote.current_directory = std::move(initial_directory);
+  gtk_editable_set_editable(GTK_EDITABLE(window->remote.path_entry), client->path_input_editable());
+  gtk_widget_set_tooltip_text(window->remote.path_entry, client->path_input_editable() ? nullptr :
+      _("Use the folder list and Up button to navigate this server."));
+  window->client = create_activity_file_client(std::move(client),
+      [weak = std::weak_ptr<FileTransferWindow>(window)](ActivityIndicatorId id) {
+        const auto owner = weak.lock();
+        if (owner && !owner->destroyed && owner->connection_available) {
+          note_activity_indicator_widget(&owner->indicators[id == ActivityIndicatorId::sd ? 1 : 2]);
+        }
+      }, [weak = std::weak_ptr<FileTransferWindow>(window)] {
+        if (const auto owner = weak.lock()) {
+          set_file_transfer_window_connection_available(owner, false);
+        }
+      });
+  attach_file_transfer_queue(window->jobs, window->client, window->protocol_name);
+  window->connection_available = true;
+  update_file_transfer_job_view(window->job_view, file_transfer_jobs(window->jobs), true);
+  window->connection_state = FileTransferConnectionState::ready;
+  set_file_transfer_status(window.get(), _("Ready"));
+  update_file_action_overlay_presentation(window.get());
+  update_file_transfer_sensitivity(window.get());
+  if (window->shown && !window->remote_load_started) {
+    window->remote_load_started = true;
+    start_file_transfer_pane_navigation(
+        &window->remote, window->remote.current_directory);
+  }
+}
+
+cardio::promise<InlinePromptResponse> prompt_file_transfer_window_async(
+    const std::shared_ptr<FileTransferWindow> &window,
+    InlinePromptRequest request, cardio::cancellation cancellation) {
+  if (window == nullptr || window->destroyed || window->prompt == nullptr ||
+      cancellation.is_cancellation_requested()) {
+    co_return InlinePromptResponse{};
+  }
+  window->connection_state = FileTransferConnectionState::authenticating;
+  set_file_transfer_status(window.get(), _("Authenticating"));
+  update_file_action_overlay_presentation(window.get());
+  InlinePromptResponse response = co_await prompt_inline_async(
+      window->prompt, std::move(request), std::move(cancellation));
+  if (!window->destroyed &&
+      window->connection_state ==
+          FileTransferConnectionState::authenticating) {
+    window->connection_state = FileTransferConnectionState::connecting;
+    set_file_transfer_status(window.get(), _("Connecting"));
+    update_file_action_overlay_presentation(window.get());
+  }
+  co_return response;
+}
+
+cardio::promise<InlinePromptResponse> confirm_file_transfer_window_async(
+    const std::shared_ptr<FileTransferWindow> &window,
+    InlinePromptRequest request, cardio::cancellation cancellation) {
+  if (!window || window->destroyed || !window->prompt || cancellation.is_cancellation_requested()) co_return InlinePromptResponse{};
+  const auto previous_status = window->status_text;
+  window->certificate_confirmation = true;
+  set_file_transfer_status(window.get(), _("Awaiting certificate confirmation"));
+  update_file_transfer_sensitivity(window.get());
+  update_file_action_overlay_presentation(window.get());
+  InlinePromptResponse response;
+  std::exception_ptr failure;
+  try {
+    response = co_await prompt_inline_async(window->prompt, std::move(request), cancellation);
+  } catch (...) {
+    failure = std::current_exception();
+  }
+  if (!window->destroyed) {
+    window->certificate_confirmation = false;
+    set_file_transfer_status(window.get(), previous_status);
+    update_file_transfer_sensitivity(window.get());
+    update_file_action_overlay_presentation(window.get());
+  }
+  if (failure) std::rethrow_exception(failure);
+  co_return response;
+}
+
+void mark_file_transfer_certificate_exception(const std::shared_ptr<FileTransferWindow> &window) {
+  if (!window || window->destroyed) return;
+  window->certificate_exception = true;
+  set_file_transfer_status(window.get(), window->status_text);
+}
+
+cardio::promise<void> show_file_transfer_window_connection_error_async(
+    const std::shared_ptr<FileTransferWindow> &window, std::string title,
+    std::string message, cardio::cancellation cancellation) {
+  if (window == nullptr || window->destroyed || window->prompt == nullptr ||
+      cancellation.is_cancellation_requested()) {
+    co_return;
+  }
+  window->connection_available = false;
+  window->connection_state = FileTransferConnectionState::failed;
+  set_file_transfer_status(window.get(), _("Connection failed"));
+  update_file_transfer_sensitivity(window.get());
+  update_file_action_overlay_presentation(window.get());
+  InlinePromptRequest request{
+      .title = std::move(title),
+      .message = std::move(message),
+      .accept_label = window->reconnect ? _("OK") : _("Close"),
+      .cancel_label = _("Cancel"),
+      .input_required = false,
+      .echo = false,
+      .cancel_visible = false,
+  };
+  auto pending = prompt_inline_async(
+      window->prompt, std::move(request), std::move(cancellation));
+  const InlinePromptResponse response = co_await pending;
+  if (response.accepted && !window->destroyed && window->window != nullptr) {
+    if (window->reconnect) {
+      // Initial failures and failed retries both leave the connection available
+      // for a new attempt, even when successful sessions would auto-close.
+      window->connection_state = FileTransferConnectionState::disconnected;
+      set_file_transfer_status(window.get(), _("Disconnected"));
+      update_file_action_overlay_presentation(window.get());
+    } else {
+      gtk_widget_destroy(window->window);
+    }
+  }
+}
+
+void set_file_transfer_window_connection_available(
+    const std::shared_ptr<FileTransferWindow> &window, bool available) {
+  if (window == nullptr || window->destroyed ||
+      window->connection_available == available) {
+    return;
+  }
+  window->connection_available = available;
+  window->connection_state = available
+                                 ? FileTransferConnectionState::ready
+                                 : FileTransferConnectionState::disconnected;
+  if (!available) {
+    disconnect_file_transfer_queue(window->jobs, false);
+    if (window->transfer_cancel_source.has_value()) {
+      (void)window->transfer_cancel_source->cancel();
+    }
+    if (general_auto_close(window->settings)) {
+      gtk_widget_destroy(window->window);
+      return;
+    }
+    set_file_transfer_status(window.get(), _("Disconnected"));
+  } else {
+    if (window->client) attach_file_transfer_queue(window->jobs, window->client, window->protocol_name);
+    set_file_transfer_status(window.get(), _("Ready"));
+  }
+  update_file_transfer_job_view(window->job_view, file_transfer_jobs(window->jobs), available);
+  update_file_action_overlay_presentation(window.get());
+  update_file_transfer_sensitivity(window.get());
+}
+
+void set_file_transfer_window_colors(
+    const std::shared_ptr<FileTransferWindow> &window,
+    const GeneralColorSettings &settings) {
+  if (window == nullptr || window->destroyed) {
+    return;
+  }
+
+  clear_file_transfer_window_colors(window.get());
+  if (window->settings_dialog && window->settings_widget)
+    set_settings_dialog_colors(window->settings_dialog,
+        settings_widget_root(window->settings_widget), settings);
+  if (settings.exterior_background.has_value()) {
+    window->exterior_background_provider =
+        create_widget_background_provider(
+            settings.exterior_background.value(),
+            "File transfer exterior");
+    add_widget_tree_background_provider(
+        window->header_bar, window->exterior_background_provider);
+    add_widget_tree_background_provider(
+        window->status_bar, window->exterior_background_provider);
+    for (GtkWidget *border : {window->frame_start_border,
+                              window->frame_end_border,
+                              window->frame_bottom_border}) {
+      add_widget_tree_background_provider(
+          border, window->exterior_background_provider);
+    }
+    window->exterior_component_background_provider =
+        create_scoped_widget_component_background_provider(
+            settings.exterior_background.value(),
+            file_transfer_exterior_component_style_class,
+            "File transfer exterior controls");
+    GdkScreen *screen = gtk_widget_get_screen(window->window);
+    if (window->exterior_component_background_provider != nullptr &&
+        screen != nullptr) {
+      gtk_style_context_add_class(
+          gtk_widget_get_style_context(window->header_bar),
+          file_transfer_exterior_component_style_class);
+      gtk_style_context_add_class(
+          gtk_widget_get_style_context(window->status_bar),
+          file_transfer_exterior_component_style_class);
+      gtk_style_context_add_provider_for_screen(
+          screen,
+          GTK_STYLE_PROVIDER(
+              window->exterior_component_background_provider),
+          GTK_STYLE_PROVIDER_PRIORITY_APPLICATION + 3);
+    } else {
+      g_clear_object(
+          &window->exterior_component_background_provider);
+    }
+  }
+  if (settings.background.has_value()) {
+    window->background_provider =
+        create_widget_background_provider(
+            settings.background.value(), "File transfer browser");
+    add_widget_tree_background_provider(
+        window->vertical_paned, window->background_provider);
+    add_widget_tree_background_provider_at_priority(
+        window->action_overlay,
+        window->background_provider,
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
+    add_widget_tree_background_provider_at_priority(
+        window->prompt_panel, window->background_provider,
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION + 1);
+    window->component_background_provider =
+        create_widget_component_background_provider(
+            settings.background.value(), "File transfer controls");
+    add_widget_tree_background_provider_at_priority(
+        window->vertical_paned, window->component_background_provider,
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION + 2);
+    add_widget_tree_background_provider_at_priority(
+        window->action_overlay,
+        window->component_background_provider,
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION + 2);
+    add_widget_tree_background_provider_at_priority(
+        window->prompt_panel, window->component_background_provider,
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION + 2);
+    window->popup_component_background_provider =
+        create_widget_popup_component_background_provider(
+            settings.background.value(), "File transfer popups");
+    GdkScreen *screen = gtk_widget_get_screen(window->window);
+    if (window->popup_component_background_provider != nullptr &&
+        screen != nullptr) {
+      gtk_style_context_add_provider_for_screen(
+          screen,
+          GTK_STYLE_PROVIDER(
+              window->popup_component_background_provider),
+          GTK_STYLE_PROVIDER_PRIORITY_APPLICATION + 2);
+    } else {
+      g_clear_object(
+          &window->popup_component_background_provider);
+    }
+  }
+}
+
+void set_file_transfer_window_connection_icon(
+    const std::shared_ptr<FileTransferWindow> &window,
+    const std::string &specification) {
+  if (window == nullptr || window->destroyed ||
+      window->header_connection_icon == nullptr) return;
+  if (general_connection_icon(window->settings) != specification) {
+    set_explicit_setting_value(
+        &window->settings, general_icon_setting_key(), specification);
+  }
+  set_connection_window_icon(GTK_WINDOW(window->window),
+      GTK_IMAGE(window->header_connection_icon), specification,
+      general_compact_mode(window->settings) ? 18 : 24);
+}
+
+void present_file_transfer_window(
+    const std::shared_ptr<FileTransferWindow> &window) {
+  if (window == nullptr || window->window == nullptr ||
+      window->destroyed) {
+    return;
+  }
+  elder_terms::present_modal_dialog(window->window);
+}
+
+cardio::promise<void> close_file_transfer_window_async(
+    std::shared_ptr<FileTransferWindow> window) {
+  if (!window) co_return;
+  if (window->window && !window->destroyed) gtk_widget_destroy(window->window);
+  // Destroy prevents new operations and cancels existing ones. Their cleanup
+  // may start fresh asynchronous I/O, so a dispatcher shutdown alone cannot
+  // guarantee that these tasks have stopped using the window's state.
+  std::exception_ptr failure;
+  for (auto *task : {&window->reconnect_task, &window->transfer_task, &window->browser_action_task,
+                    &window->local.task, &window->remote.task}) {
+    if (!task->has_value()) continue;
+    try {
+      co_await **task;
+    } catch (...) {
+      if (!failure) failure = std::current_exception();
+    }
+  }
+  if (failure) std::rethrow_exception(failure);
+}
+
+cardio::promise<SshUserPromptResponse> prompt_file_transfer_ssh_async(
+    std::shared_ptr<FileTransferWindow> window, const SshUserPrompt &prompt,
+    cardio::cancellation cancellation) {
+  InlinePromptRequest request{
+      .title = prompt.title, .message = prompt.message,
+      .monospace_message = prompt.monospace_message,
+      .accept_label = prompt.kind == SshUserPromptKind::host_key ? _("Accept") : _("Connect"),
+      .cancel_label = _("Cancel"), .initial_text = prompt.initial_text,
+      .input_required = prompt.input_required, .echo = prompt.echo,
+      .cancel_visible = true, .accept_visible = prompt.accept_visible,
+      .alternative_label = _("Reset and Connect"), .alternative_visible = prompt.host_key_reset_available};
+  auto response = co_await prompt_file_transfer_window_async(window, std::move(request), cancellation);
+  if (!response.accepted && !response.alternative) throw cardio::canceled_exception();
+  co_return SshUserPromptResponse{.accepted = response.accepted, .text = std::move(response.text), .reset_host_key = response.alternative};
+}
+
+} // namespace elder_terms

@@ -13,11 +13,13 @@ import { expect, it } from 'vitest';
 import { waitForResult } from 'gestament/testing';
 import {
   runGtkTest,
-  withTemporaryDirectory,
   readTerminalGridLayout,
   pressKeyWithModifiers,
 } from './gtk-test-helpers';
-import { expectElementKind } from './test-helpers';
+import {
+  withTemporaryDirectory,
+  expectElementKind,
+} from '../../shared/tests/connection-test-helpers.ts';
 
 const exec = promisify(execFile);
 const samples = ['①のフォントサイズ', 'A①B', '①①', '①界'];

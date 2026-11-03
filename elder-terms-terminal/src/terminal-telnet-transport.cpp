@@ -5,7 +5,7 @@
 
 #include "terminal-transports.h"
 #include "terminal-socket-read.h"
-#include "terminal-sessions/ssh-session/ssh-proxy.h"
+#include "../../shared/src/connection-runtime/ssh/ssh-proxy.h"
 #include "terminal-sessions/telnet-session/telnet-protocol.h"
 
 #include <algorithm>

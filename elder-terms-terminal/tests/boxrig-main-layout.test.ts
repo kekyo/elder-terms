@@ -3,6 +3,7 @@
 // Under MIT.
 // https://github.com/kekyo/elder-terms/
 
+import { withTemporaryDirectory } from '../../shared/tests/connection-test-helpers.ts';
 import { spawn } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
@@ -15,7 +16,6 @@ import {
   runGtkTest,
   scrollWheelBurstWithControl,
   scrollWheelWithControl,
-  withTemporaryDirectory,
 } from './gtk-test-helpers';
 
 const require = createRequire(import.meta.url);

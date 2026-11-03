@@ -322,40 +322,42 @@ interface SiblingTerminalLayout extends FakeTerminalContext {
   readonly launcher: string;
 }
 
-const createSiblingTerminalLayout =
-  async (): Promise<SiblingTerminalLayout> => {
-    const directory = await mkdtemp(
-      join(tmpdir(), 'elder-terms-sibling-terminal-')
-    );
-    const launcherDirectory = join(directory, 'elder-terms');
-    const terminalDirectory = join(directory, 'elder-terms-terminal');
-    await Promise.all([
-      mkdir(launcherDirectory, { recursive: true }),
-      mkdir(terminalDirectory, { recursive: true }),
-    ]);
-    await symlink(
-      fileURLToPath(
-        new URL('../../.build/elder-terms/elder-terms', import.meta.url)
-      ),
-      join(launcherDirectory, 'elder-terms')
-    );
-    const executable = join(terminalDirectory, 'elder-terms-terminal');
-    const capture = join(directory, 'capture.json');
-    await writeFile(
-      executable,
-      `#!/usr/bin/env node
+const createSiblingTerminalLayout = async (
+  executableName: 'elder-terms-terminal' | 'elder-terms-file-transfer',
+  launcherDirectoryName: 'elder-terms' | 'launcher'
+): Promise<SiblingTerminalLayout> => {
+  const directory = await mkdtemp(
+    join(tmpdir(), 'elder-terms-sibling-terminal-')
+  );
+  const launcherDirectory = join(directory, launcherDirectoryName);
+  const terminalDirectory = join(directory, executableName);
+  await Promise.all([
+    mkdir(launcherDirectory, { recursive: true }),
+    mkdir(terminalDirectory, { recursive: true }),
+  ]);
+  await symlink(
+    fileURLToPath(
+      new URL('../../.build/elder-terms/elder-terms', import.meta.url)
+    ),
+    join(launcherDirectory, 'elder-terms')
+  );
+  const executable = join(terminalDirectory, executableName);
+  const capture = join(directory, 'capture.json');
+  await writeFile(
+    executable,
+    `#!/usr/bin/env node
 import { writeFile } from 'node:fs/promises';
 await writeFile(process.env.ELDER_TERMS_TEST_CAPTURE, JSON.stringify({ args: process.argv.slice(2), startupContent: null }));
 `
-    );
-    await chmod(executable, 0o755);
-    return {
-      launcher: `${launcherDirectory}/./elder-terms`,
-      executable,
-      capture,
-      release: async () => rm(directory, { recursive: true, force: true }),
-    };
+  );
+  await chmod(executable, 0o755);
+  return {
+    launcher: `${launcherDirectory}/./elder-terms`,
+    executable,
+    capture,
+    release: async () => rm(directory, { recursive: true, force: true }),
   };
+};
 
 interface LaunchCapture {
   readonly args: readonly string[];
@@ -3056,7 +3058,7 @@ ${mode === 'clean' ? "await writeFile(args[0], '[terminal]\\nwidth=95\\n');" : '
           server = spawn(
             fileURLToPath(
               new URL(
-                '../../.build/elder-terms-terminal/ftp-test-server',
+                '../../.build/elder-terms-file-transfer/ftp-test-server',
                 import.meta.url
               )
             ),
@@ -3415,7 +3417,7 @@ ${mode === 'clean' ? "await writeFile(args[0], '[terminal]\\nwidth=95\\n');" : '
                   process.env.ELDER_TERMS_TEST_FTP_APP ??
                   fileURLToPath(
                     new URL(
-                      '../../.build/elder-terms-terminal/elder-terms-file-transfer',
+                      '../../.build/elder-terms-file-transfer/elder-terms-file-transfer',
                       import.meta.url
                     )
                   ),
@@ -3488,7 +3490,10 @@ ${mode === 'clean' ? "await writeFile(args[0], '[terminal]\\nwidth=95\\n');" : '
   });
 
   it('finds the sibling terminal when launched through a dot path', async (context) => {
-    const layout = await createSiblingTerminalLayout();
+    const layout = await createSiblingTerminalLayout(
+      'elder-terms-terminal',
+      'elder-terms'
+    );
     try {
       await runLauncherGtkTest(
         context,
@@ -3520,6 +3525,53 @@ ${mode === 'clean' ? "await writeFile(args[0], '[terminal]\\nwidth=95\\n');" : '
       await layout.release();
     }
   });
+
+  for (const launcherDirectory of ['elder-terms', 'launcher'] as const) {
+    it(`finds the sibling file transfer application from ${launcherDirectory}`, async (context) => {
+      const layout = await createSiblingTerminalLayout(
+        'elder-terms-file-transfer',
+        launcherDirectory
+      );
+      try {
+        await runLauncherGtkTest(
+          context,
+          async (connections) => {
+            await writeFile(
+              join(connections, 'Files.ini'),
+              '[general]\ntype=sftp\n[ssh]\naddress=files.example\n'
+            );
+          },
+          async ({ app, connections }) => {
+            await selectConnectionRow(
+              app,
+              await app.getById('connection_list'),
+              0
+            );
+            await expectElementKind(
+              await app.getById('connect_button'),
+              'button'
+            ).click();
+            await waitForResult(async () => {
+              expect((await readLaunchCapture(layout.capture)).args).toEqual([
+                '-c',
+                join(connections, 'Files.ini'),
+              ]);
+            });
+          },
+          {
+            appPath: layout.launcher,
+            args: [],
+            env: {
+              ELDER_TERMS_TEST_CAPTURE: layout.capture,
+              ELDER_TERMS_FILE_TRANSFER_PATH: '',
+            },
+          }
+        );
+      } finally {
+        await layout.release();
+      }
+    });
+  }
 
   it('connects with dirty settings without saving the profile', async (context) => {
     const fakeTerminal = await createFakeTerminal();

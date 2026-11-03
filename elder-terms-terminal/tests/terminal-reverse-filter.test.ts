@@ -8,8 +8,11 @@ import { join } from 'node:path';
 import { PNG } from 'pngjs';
 import { expect, it } from 'vitest';
 import { waitForResult } from 'gestament/testing';
-import { runGtkTest, withTemporaryDirectory } from './gtk-test-helpers';
-import { expectElementKind } from './test-helpers';
+import { runGtkTest } from './gtk-test-helpers';
+import {
+  withTemporaryDirectory,
+  expectElementKind,
+} from '../../shared/tests/connection-test-helpers.ts';
 
 const samples = [
   ['000080', 'NAVY'],

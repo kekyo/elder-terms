@@ -11,9 +11,12 @@ import {
   readWindowCellLayout,
   runGtkTest,
   scrollWheelWithControl,
-  withTemporaryDirectory,
 } from './gtk-test-helpers';
-import { capturePixel, expectElementKind } from './test-helpers';
+import {
+  withTemporaryDirectory,
+  capturePixel,
+  expectElementKind,
+} from '../../shared/tests/connection-test-helpers.ts';
 
 describe('terminal zoom limits', () => {
   for (const backend of ['cairo', 'opengl']) {

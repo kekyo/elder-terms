@@ -92,7 +92,7 @@ calculate_shlibdeps() {
 			"$private_dir/libsmb2.so.7" \
 			"$private_dir/launcher/elder-terms" \
 			"$private_dir/elder-terms-terminal/elder-terms-terminal" \
-			"$private_dir/elder-terms-terminal/elder-terms-file-transfer" |
+			"$private_dir/elder-terms-file-transfer/elder-terms-file-transfer" |
 			sed -n 's/^shlibs:Depends=//p'
 	)
 	rm -rf "$tmp_dir"
@@ -105,7 +105,7 @@ validate_dynamic_links() {
 	for executable_path in \
 		/usr/lib/elder-terms/launcher/elder-terms \
 		/usr/lib/elder-terms/elder-terms-terminal/elder-terms-terminal \
-		/usr/lib/elder-terms/elder-terms-terminal/elder-terms-file-transfer; do
+		/usr/lib/elder-terms/elder-terms-file-transfer/elder-terms-file-transfer; do
 		link_report=$(ldd "$executable_path")
 		case $link_report in
 		*'not found'*)
@@ -150,10 +150,12 @@ validate_installed_package() {
 		/usr/lib/elder-terms/launcher/elder-terms \
 		/usr/lib/elder-terms/launcher/main-window.ui \
 		/usr/lib/elder-terms/elder-terms-terminal/elder-terms-terminal \
-		/usr/lib/elder-terms/elder-terms-terminal/elder-terms-file-transfer \
+		/usr/lib/elder-terms/elder-terms-file-transfer/elder-terms-file-transfer \
 		/usr/lib/elder-terms/elder-terms-terminal/main-window.ui \
 		/usr/lib/elder-terms/elder-terms-terminal/green-on.png \
 		/usr/lib/elder-terms/elder-terms-terminal/green-off.png \
+		/usr/lib/elder-terms/elder-terms-file-transfer/green-on.png \
+		/usr/lib/elder-terms/elder-terms-file-transfer/green-off.png \
 		/usr/share/applications/net.kekyo.elder-terms.desktop \
 		/usr/share/applications/net.kekyo.elder-terms-terminal.desktop \
 		/etc/xdg/autostart/net.kekyo.elder-terms.desktop \
@@ -189,7 +191,7 @@ validate_installed_package() {
 	assert_symlink /usr/bin/elder-terms-terminal \
 		'../lib/elder-terms/elder-terms-terminal/elder-terms-terminal'
 	assert_symlink /usr/bin/elder-terms-file-transfer \
-		'../lib/elder-terms/elder-terms-terminal/elder-terms-file-transfer'
+		'../lib/elder-terms/elder-terms-file-transfer/elder-terms-file-transfer'
 	validate_dynamic_links
 	printf '%s\n' "Installed package validated: $package_path"
 }
@@ -301,10 +303,12 @@ for staged_file in \
 	usr/lib/elder-terms/launcher/elder-terms \
 	usr/lib/elder-terms/launcher/main-window.ui \
 	usr/lib/elder-terms/elder-terms-terminal/elder-terms-terminal \
-	usr/lib/elder-terms/elder-terms-terminal/elder-terms-file-transfer \
+	usr/lib/elder-terms/elder-terms-file-transfer/elder-terms-file-transfer \
 	usr/lib/elder-terms/elder-terms-terminal/main-window.ui \
 	usr/lib/elder-terms/elder-terms-terminal/green-on.png \
 	usr/lib/elder-terms/elder-terms-terminal/green-off.png \
+	usr/lib/elder-terms/elder-terms-file-transfer/green-on.png \
+	usr/lib/elder-terms/elder-terms-file-transfer/green-off.png \
 	usr/share/applications/net.kekyo.elder-terms.desktop \
 	usr/share/applications/net.kekyo.elder-terms-terminal.desktop \
 	etc/xdg/autostart/net.kekyo.elder-terms.desktop \
@@ -340,4 +344,4 @@ assert_symlink "$stage_dir/usr/bin/elder-terms" \
 assert_symlink "$stage_dir/usr/bin/elder-terms-terminal" \
 	'../lib/elder-terms/elder-terms-terminal/elder-terms-terminal'
 assert_symlink "$stage_dir/usr/bin/elder-terms-file-transfer" \
-	'../lib/elder-terms/elder-terms-terminal/elder-terms-file-transfer'
+	'../lib/elder-terms/elder-terms-file-transfer/elder-terms-file-transfer'

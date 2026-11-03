@@ -24,10 +24,10 @@
 #include <glib/gi18n-lib.h>
 
 #include "main-window.h"
-#include "compact-header.h"
-#include "indicator-color.h"
-#include "inline-prompt.h"
-#include "widget-background.h"
+#include "../../shared/src/connection-runtime/compact-header.h"
+#include "../../shared/src/connection-runtime/indicator-color.h"
+#include "../../shared/src/connection-runtime/inline-prompt.h"
+#include "../../shared/src/connection-runtime/widget-background.h"
 
 namespace elder_terms {
 

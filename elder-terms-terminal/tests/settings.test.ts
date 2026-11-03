@@ -25,7 +25,11 @@ import { describe, expect, it } from 'vitest';
 import { waitForResult, toPass } from 'gestament/testing';
 import type { PNG as PngImage } from 'pngjs';
 import { waitForActivityIndicatorImageState } from './activity-indicator-test-helpers';
-import { expectCaptureToMatchFixture, expectElementKind } from './test-helpers';
+import {
+  withTemporaryDirectory,
+  expectCaptureToMatchFixture,
+  expectElementKind,
+} from '../../shared/tests/connection-test-helpers.ts';
 import {
   assertTerminalTextGridMatches,
   defaultColumns,
@@ -50,7 +54,6 @@ import {
   terminalTextGrid81x25Path,
   terminalFont145ConfigPath,
   telnetLocalhostConfigPath,
-  withTemporaryDirectory,
 } from './gtk-test-helpers';
 
 const require = createRequire(import.meta.url);

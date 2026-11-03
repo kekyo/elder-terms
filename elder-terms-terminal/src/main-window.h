@@ -19,10 +19,10 @@
 
 #include <elder-terms/settings.h>
 
-#include "activity-indicator.h"
-#include "activity-indicator-id.h"
-#include "terminal-connection-phase.h"
-#include "terminal-sessions/ssh-session/ssh-user-prompt.h"
+#include "../../shared/src/connection-runtime/activity-indicator.h"
+#include "../../shared/src/connection-runtime/activity-indicator-id.h"
+#include "../../shared/src/connection-runtime/terminal-connection-phase.h"
+#include "../../shared/src/connection-runtime/ssh/ssh-user-prompt.h"
 #include "terminal-transfer.h"
 
 namespace elder_terms {

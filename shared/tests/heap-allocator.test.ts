@@ -26,7 +26,7 @@ describe('the bundled heap allocator', () => {
   it.each([
     'elder-terms/elder-terms',
     'elder-terms-terminal/elder-terms-terminal',
-    'elder-terms-terminal/elder-terms-file-transfer',
+    'elder-terms-file-transfer/elder-terms-file-transfer',
   ])(
     'uses jemalloc for %s and its shared libraries without preloading',
     (path) => {

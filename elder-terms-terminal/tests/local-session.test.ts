@@ -27,13 +27,13 @@ import {
   localTerminalDisconnectedDimPath,
   pressKeyWithModifiers,
   runGtkTest,
-  withTemporaryDirectory,
 } from './gtk-test-helpers';
 import {
+  withTemporaryDirectory,
   capturePixel,
   expectCaptureToMatchFixture,
   expectElementKind,
-} from './test-helpers';
+} from '../../shared/tests/connection-test-helpers.ts';
 import {
   activateTextSend,
   cancelTextSend,

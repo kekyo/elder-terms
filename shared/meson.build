@@ -218,6 +218,88 @@ elder_terms_dep = declare_dependency(
   ],
 )
 
+# Private connection support shared by the terminal and file-transfer applications.
+libssh_dep = dependency('libssh')
+ssh_transport_library = static_library('elder-terms-ssh-transport',
+  ['src/connection-runtime/ssh/ssh-channel-connection.cpp',
+   'src/connection-runtime/ssh/ssh-proxy.cpp',
+   'src/connection-runtime/ssh/ssh-socks-proxy.cpp',
+   'src/connection-runtime/tcp-connector.cpp'],
+  dependencies: [cardio_dep, elder_terms_dep, elder_terms_shared_gio_dep, libssh_dep, cardio_liburing_dep])
+ssh_transport_dep = declare_dependency(link_with: ssh_transport_library,
+  dependencies: [cardio_dep, elder_terms_dep, elder_terms_shared_gio_dep, libssh_dep, cardio_liburing_dep])
+
+connection_ui_library = static_library('elder-terms-connection-ui',
+  ['src/connection-runtime/activity-indicator.cpp',
+   'src/connection-runtime/compact-header.cpp',
+   'src/connection-runtime/indicator-color.cpp',
+   'src/connection-runtime/inline-prompt.cpp',
+   'src/connection-runtime/launch-options.cpp',
+   'src/connection-runtime/widget-background.cpp',
+   'src/connection-runtime/terminal-connection-phase.cpp'],
+  cpp_args: ['-I' + gestament_include_dir],
+  dependencies: [cardio_dep, elder_terms_dep])
+connection_ui_dep = declare_dependency(link_with: connection_ui_library,
+  dependencies: [cardio_dep, elder_terms_dep])
+
+if get_option('build_tests')
+xvfb_run = find_program('xvfb-run')
+widget_background_test = executable(
+  'widget-background-test',
+  ['tests/widget-background-test.cpp', 'src/connection-runtime/widget-background.cpp'],
+  dependencies: [elder_terms_dep, elder_terms_shared_gtk_dep],
+)
+test('widget-background-test', xvfb_run,
+  args: ['-a', widget_background_test], timeout: 120)
+
+cardio_lifetime_test = executable(
+  'cardio-lifetime-test',
+  'tests/cardio-lifetime-test.cpp',
+  dependencies: [
+    cardio_dep,
+    elder_terms_shared_gio_dep,
+  ],
+)
+
+test('cardio-lifetime-test', cardio_lifetime_test)
+
+activity_indicator_test = executable(
+  'activity-indicator-test',
+  [
+    'tests/activity-indicator-test.cpp',
+    'src/connection-runtime/activity-indicator.cpp',
+    'src/connection-runtime/indicator-color.cpp',
+  ],
+  dependencies: [
+    elder_terms_shared_gtk_dep,
+    elder_terms_dep,
+  ],
+)
+
+test('activity-indicator-test', xvfb_run,
+  args: ['-a', activity_indicator_test], timeout: 120)
+
+terminal_connection_phase_test = executable(
+  'terminal-connection-phase-test',
+  [
+    'tests/terminal-connection-phase-test.cpp',
+    'src/connection-runtime/terminal-connection-phase.cpp',
+  ],
+  include_directories: include_directories('src/connection-runtime'),
+  dependencies: [elder_terms_dep],
+)
+
+test('terminal-connection-phase-test', terminal_connection_phase_test)
+
+ssh_channel_write_batch_test = executable(
+  'ssh-channel-write-batch-test',
+  'tests/ssh-channel-write-batch-test.cpp',
+)
+
+test('ssh-channel-write-batch-test', ssh_channel_write_batch_test)
+
+endif
+
 if get_option('build_tests')
 native_xdg_shell_server_header = custom_target('native-xdg-shell-server-header',
   input: elder_terms_xdg_shell_xml, output: 'native-xdg-shell-server-protocol.h',
@@ -420,4 +502,10 @@ test('nfs-settings-test', find_program('xvfb-run'), args: ['-a', nfs_settings_te
   env: ['GSETTINGS_BACKEND=memory', 'NO_AT_BRIDGE=1'])
 test('http-settings-test', find_program('xvfb-run'), args: ['-a', http_settings_test],
   env: ['NO_AT_BRIDGE=1', 'G_DEBUG=fatal-criticals'])
+endif
+
+if get_option('build_tests')
+ssh_proxy_test_server = executable('ssh-proxy-test-server',
+  'tests/ssh-proxy-test-server.cpp', dependencies: [libssh_dep])
+
 endif
