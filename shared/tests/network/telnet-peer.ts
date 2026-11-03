@@ -28,7 +28,7 @@ const server = createServer((socket) => {
   });
 });
 // These peers accept TCP only: a scan must not require TLS or authentication.
-for (const port of [80, 443, 445, 990]) {
+for (const port of [80, 443, 445, 990, 2049]) {
   const peer = createServer((socket) => {
     socket.on('error', () => {});
     socket.end();

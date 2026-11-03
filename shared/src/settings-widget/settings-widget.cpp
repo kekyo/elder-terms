@@ -299,6 +299,7 @@ enum IpScanResultColumn {
   ip_scan_webdav_https_column,
   ip_scan_webdav_http_column,
   ip_scan_smb_column,
+  ip_scan_nfs_column,
   ip_scan_result_column_count,
 };
 
@@ -5576,7 +5577,9 @@ static void update_ip_scan_result(
                      ip_scan_webdav_http_column,
                      ip_scan_check_mark_for_port(entry.open_ports, 80),
                      ip_scan_smb_column,
-                     ip_scan_check_mark_for_port(entry.open_ports, 445), -1);
+                     ip_scan_check_mark_for_port(entry.open_ports, 445),
+                     ip_scan_nfs_column,
+                     ip_scan_check_mark_for_port(entry.open_ports, 2049), -1);
 }
 
 static void update_ip_scan_progress(
@@ -5760,7 +5763,7 @@ create_ip_scan_dialog(SettingsWidgetState *state, GtkWidget *target_entry) {
   GtkListStore *result_store = gtk_list_store_new(
       ip_scan_result_column_count, G_TYPE_STRING, G_TYPE_STRING,
       G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING,
-      G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING);
+      G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING);
   GtkWidget *results =
       gtk_tree_view_new_with_model(GTK_TREE_MODEL(result_store));
   dialog_state->results = results;
@@ -5797,6 +5800,9 @@ create_ip_scan_dialog(SettingsWidgetState *state, GtkWidget *target_entry) {
   append_ip_scan_column(GTK_TREE_VIEW(results),
                         settings_ui_text(SettingsUiText::smb_port_column),
                         ip_scan_smb_column, false);
+  append_ip_scan_column(GTK_TREE_VIEW(results),
+                        settings_ui_text(SettingsUiText::nfs_port_column),
+                        ip_scan_nfs_column, false);
   g_signal_connect(results, "row-activated",
                    G_CALLBACK(on_ip_scan_result_activated),
                    dialog_state.get());

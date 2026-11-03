@@ -2820,6 +2820,10 @@ msgid "SMB(445)"
 msgstr "SMB(445)"
 
 #: shared/src/settings-widget/settings-presentation.cpp
+msgid "NFS(2049)"
+msgstr "NFS(2049)"
+
+#: shared/src/settings-widget/settings-presentation.cpp
 msgid "Shows TCP port responses. Service support and authentication are not verified."
 msgstr "TCPポートの応答を表示します。各サービスへの対応や認証の成功は確認しません。"
 

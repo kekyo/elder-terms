@@ -81,6 +81,7 @@ enum class SettingsUiText {
   webdav_https_port_column,
   webdav_http_port_column,
   smb_port_column,
+  nfs_port_column,
   ip_scan_description,
   scanning,
   scan_complete,

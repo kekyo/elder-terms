@@ -38,7 +38,7 @@ static cardio::promise<void> run_async(cardio::dispatcher_group_glib *group,
                                        std::exception_ptr *error) {
   GtkWidget *window = nullptr;
   try {
-    for (const auto *type : {"webdav", "smb"}) {
+    for (const auto *type : {"webdav", "smb", "nfs"}) {
       cardio::promise_source<void> started;
       auto response = std::make_shared<cardio::promise_source<std::string>>();
       std::weak_ptr<bool> lookup_lifetime;
@@ -55,7 +55,8 @@ static cardio::promise<void> run_async(cardio::dispatcher_group_glib *group,
             .probe_port = [&](std::uint32_t, std::uint16_t port,
                               cardio::cancellation signal) {
               scan_signal = signal;
-              return cardio::resolved(port == 80 || port == 445);
+              return cardio::resolved(port == (std::string(type) == "webdav" ? 80 :
+                  std::string(type) == "smb" ? 445 : 2049));
             },
             .reverse_lookup = [&](std::uint32_t, cardio::cancellation) {
               auto lifetime = std::make_shared<bool>(true);

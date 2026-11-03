@@ -188,9 +188,9 @@ static void scan_reports_open_standard_ports_and_reverse_names() {
   dispatcher.park();
   task.unsafe_result();
 
-  const std::vector<std::uint16_t> expected_ports = {21, 22, 23, 80, 443, 445, 990};
+  const std::vector<std::uint16_t> expected_ports = {21, 22, 23, 80, 443, 445, 990, 2049};
   expect(completed, "successful scan did not report completion");
-  expect(probes.size() == 28, "scan did not probe seven ports on every host");
+  expect(probes.size() == 32, "scan did not probe eight ports on every host");
   for (std::size_t index = 0; index < probes.size(); ++index) {
     expect(probes[index].second == expected_ports[index % expected_ports.size()],
            "scan probed a non-standard or incorrectly ordered port");
@@ -225,9 +225,9 @@ static void scan_reports_open_standard_ports_and_reverse_names() {
 static cardio::promise<void> scan_transfer_port_cases_async(
     cardio::dispatcher_group_glib *group, std::exception_ptr *error) {
   try {
-    const std::vector<std::uint16_t> standard_ports{21, 22, 23, 80, 443, 445, 990};
+    const std::vector<std::uint16_t> standard_ports{21, 22, 23, 80, 443, 445, 990, 2049};
     const std::vector<std::vector<std::uint16_t>> cases{
-        {80}, {443}, {445}, {990}, standard_ports, {21, 443, 990}, {}};
+        {2049}, {80}, {443}, {445}, {990}, standard_ports, {21, 443, 990, 2049}, {}};
     for (const auto &open_ports : cases) {
       std::vector<std::uint16_t> probed;
       std::vector<elder_terms::IpScanEntry> entries;
@@ -255,11 +255,11 @@ static cardio::promise<void> scan_transfer_port_cases_async(
       co_await elder_terms::scan_ipv4_hosts_async(
           std::move(dependencies), std::move(callbacks), cancellation.get_cancellation());
       expect(completed, "transfer port scan did not complete");
+      expect(entries.size() == (open_ports.empty() ? 0U : 2U), "transfer-only host must be reported before and after lookup");
       expect(probed == standard_ports, "scan must probe every standard port exactly once");
       expect(progress.size() == 2 && progress.back().completed_addresses == 1 &&
                  progress.back().total_addresses == 1, "scan progress must count hosts");
       expect(name_lookups == (open_ports.empty() ? 0U : 1U), "only discovered hosts need a name lookup");
-      expect(entries.size() == (open_ports.empty() ? 0U : 2U), "transfer-only host must be reported before and after lookup");
       if (!open_ports.empty()) {
         expect(entries.front().resolved_name.empty(), "initial result must precede name lookup");
         expect(entries.back().resolved_name == "files.example.test", "resolved name was lost");
@@ -300,7 +300,7 @@ static cardio::promise<bool> controlled_port_probe_async(
       [source] { (void)source->try_cancel(); });
   ++state->active_hosts[address];
   state->pending.push_back(source);
-  if (state->pending.size() == 14) state->started.resolve();
+  if (state->pending.size() == 16) state->started.resolve();
   bool open = false;
   std::exception_ptr error;
   try {
@@ -344,13 +344,13 @@ static cardio::promise<void> scan_controlled_ports_async(
              "scan must wait for every concurrent probe");
       for (const auto &[address, active] : probes.active_hosts) {
         (void)address;
-        expect(active == 7, "all seven ports must start concurrently per host");
+        expect(active == 8, "all eight ports must start concurrently per host");
       }
       if (outcome == 1) {
         (void)cancellation.cancel();
       } else {
         for (std::size_t index = 0; index < probes.pending.size(); ++index) {
-          if (outcome == 2 && index == 6)
+          if (outcome == 2 && index == 7)
             probes.pending[index]->reject(std::runtime_error("controlled probe failure"));
           else probes.pending[index]->resolve(false);
         }
@@ -367,7 +367,7 @@ static cardio::promise<void> scan_controlled_ports_async(
       }
       expect(completed == (outcome == 0) && canceled == (outcome == 1) && failed == (outcome == 2),
              "scan completion must match the probe outcome");
-      expect(probes.finished == 14 && probes.active_hosts.empty(),
+      expect(probes.finished == 16 && probes.active_hosts.empty(),
              "success, cancellation and errors must drain all started probes");
     }
   } catch (...) {
@@ -448,7 +448,7 @@ static void scan_limits_concurrent_hosts() {
   task.unsafe_result();
 
   expect(completed, "bounded scan did not complete");
-  expect(state.probe_count == 56, "bounded scan skipped a host or port");
+  expect(state.probe_count == 64, "bounded scan skipped a host or port");
   expect(state.maximum_active_hosts == 2,
          "scan exceeded its configured host concurrency");
 }
@@ -862,9 +862,9 @@ int main() {
         scan_plan_limits_wide_networks_to_the_first_eight_host_bits();
     elder_terms_ip_scanner_test::
         scan_plan_uses_only_assigned_loopback_addresses();
+    elder_terms_ip_scanner_test::scan_detects_transfer_only_hosts();
     elder_terms_ip_scanner_test::
         scan_reports_open_standard_ports_and_reverse_names();
-    elder_terms_ip_scanner_test::scan_detects_transfer_only_hosts();
     elder_terms_ip_scanner_test::scan_drains_controlled_ports();
     elder_terms_ip_scanner_test::scan_limits_concurrent_hosts();
     elder_terms_ip_scanner_test::

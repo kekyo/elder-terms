@@ -164,14 +164,14 @@ ELDER_TERMS_API Ipv4ScanPlan
 create_ipv4_scan_plan(const std::vector<Ipv4InterfaceAddress> &interfaces);
 
 /**
- * Asynchronously scans standard FTP/FTPS, SSH, TELNET, WebDAV, and SMB TCP ports.
+ * Asynchronously scans standard FTP/FTPS, SSH, TELNET, WebDAV, SMB, and NFS TCP ports.
  *
  * @param dependencies Interface data, concurrency, and asynchronous services.
  * @param callbacks Incremental result, progress, and completion callbacks.
  * @param cancellation Cancellation signal for every pending operation.
  * @return Promise resolved after all hosts finish.
  *
- * @remarks Ports 21, 22, 23, 80, 443, 445, and 990 are probed concurrently.
+ * @remarks Ports 21, 22, 23, 80, 443, 445, 990, and 2049 are probed concurrently.
  * Results indicate TCP acceptance, not verified service or TLS support. Name
  * lookup is attempted only for hosts with at least one open port. A discovered
  * host is reported before its name lookups complete.

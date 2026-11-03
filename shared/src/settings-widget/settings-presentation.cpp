@@ -459,6 +459,8 @@ const char *settings_ui_text(SettingsUiText text) {
     return _("WebDAV(80)");
   case SettingsUiText::smb_port_column:
     return _("SMB(445)");
+  case SettingsUiText::nfs_port_column:
+    return _("NFS(2049)");
   case SettingsUiText::ip_scan_description:
     return _("Shows TCP port responses. Service support and authentication are not verified.");
   case SettingsUiText::scanning:

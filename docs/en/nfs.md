@@ -6,6 +6,8 @@ NFS connects to directories published by a server, called exports. elder-terms s
 
 Choose "NFS" as the connection type in the launcher, then specify the server address and version on the NFS tab. The default is v3. Select a version accepted by the server; a failed connection never falls back to another version.
 
+Use "IP scan" beside the address field to find a server. A check mark under "NFS(2049)" identifies a candidate that accepted a TCP connection on port 2049. Verify the supported version and access to public paths by connecting. Selecting a candidate preserves the version, NFS and MOUNT ports, and authentication settings. Enter the address and port manually for servers using a port other than 2049.
+
 Authentication uses AUTH_SYS with numeric user and group IDs. No password is requested. UID and GID default to the current process's IDs and can be set to match server permissions. Up to 16 supplementary groups are supported. UDP, RPCSEC_GSS, NFS v4.1/v4.2, and SSH proxy are outside the supported scope.
 
 For v2 and v3, `/` on the remote side lists exports. Register known export paths when the server does not allow enumeration. Registered paths remain usable when enumeration fails.
