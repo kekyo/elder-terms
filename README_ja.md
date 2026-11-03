@@ -300,7 +300,7 @@ SSH proxyを設定していても、探索はこのマシンから行います�
 
 ![SSHとSFTPの接続設定](./images/ssh-sftp-settings.png)
 
-SSH、SFTP、TELNET、WebDAV、パッシブFTP／FTPSはSSH踏み台を経由して接続できます。
+SSH、SFTP、TELNET、HTTP/HTTPS、WebDAV、パッシブFTP／FTPS、SMB、NFSはSSH踏み台を経由して接続できます。
 独立した「SSH proxy」タブに踏み台を設定し、最終接続先は各プロトコルのタブで指定します。
 設定の継承、認証、対応範囲は[SSH proxyの使用](./docs/ja/ssh-proxy.md)を参照して下さい。
 

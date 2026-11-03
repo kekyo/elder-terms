@@ -8,7 +8,7 @@ Choose "NFS" as the connection type in the launcher, then specify the server add
 
 Use "IP scan" beside the address field to find a server. A check mark under "NFS(2049)" identifies a candidate that accepted a TCP connection on port 2049. Verify the supported version and access to public paths by connecting. Selecting a candidate preserves the version, NFS and MOUNT ports, and authentication settings. Enter the address and port manually for servers using a port other than 2049.
 
-Authentication uses AUTH_SYS with numeric user and group IDs. No password is requested. UID and GID default to the current process's IDs and can be set to match server permissions. Up to 16 supplementary groups are supported. UDP, RPCSEC_GSS, NFS v4.1/v4.2, and SSH proxy are outside the supported scope.
+Authentication uses AUTH_SYS with numeric user and group IDs. No password is requested. UID and GID default to the current process's IDs and can be set to match server permissions. Up to 16 supplementary groups are supported. UDP, RPCSEC_GSS, and NFS v4.1/v4.2 are outside the supported scope.
 
 For v2 and v3, the application requests the server's export list. Register known export paths when the server does not allow enumeration. Registered paths remain usable when enumeration fails.
 
@@ -21,6 +21,18 @@ When `/` itself is published, its contents appear at the remote root. Otherwise,
 Open a public root to browse its contents. "Up" returns to its parent in the tree. The path field displays an absolute path such as `/srv/public/Documents`. Enter a path and press Enter to navigate there. `.` and `..` components and consecutive slashes within the path are not accepted. Trailing slashes are omitted from the display except for the root.
 
 When public paths are nested, navigation uses the deepest known public path containing the entered location. For example, if `/srv/public` and `/srv/public/archive` are known, `/srv/public/archive/Documents` uses the latter. You can navigate directly to a known public path even when its parents cannot be listed.
+
+## Connect through SSH proxy
+
+Enable the gateway on the SSH proxy tab and keep the final server on the NFS tab. The gateway resolves the destination hostname. Browsing multiple exports shares the same SSH connection.
+
+For v2/v3, both NFS and MOUNT traffic pass through the gateway. A port set to 0 is discovered through the server's TCP port 111. Specifying both ports avoids discovery. For v4.0, the configured NFS port is used, or TCP 2049 when it is 0; MOUNT and port discovery are not needed. See [libnfs port settings](https://github.com/sahlberg/libnfs#readme).
+
+SSH proxy cannot be combined with Require reserved source port. Enabling both produces an error in settings and before connecting, without changing either setting. Standard SSH forwarding cannot request a source port below 1024 on the gateway. See the [SSH TCP forwarding specification](https://www.rfc-editor.org/rfc/rfc4254.html#section-7.2).
+
+The NFS server sees connections from the gateway. Allow that host in exports and, if the server requires reserved source ports, specify `insecure` for that connection. File access continues to use the UID and GID from the NFS tab, independently of the SSH login user. Follow the [exports specification](https://man7.org/linux/man-pages/man5/exports.5.html).
+
+SSH encrypts traffic between this machine and the gateway. If the gateway is a separate machine from the NFS server, SSH does not encrypt that final segment. Connection or forwarding failure never switches to a direct connection. See [Using SSH proxy](ssh-proxy.md) for authentication and inheritance.
 
 ## Transfers and file operations
 

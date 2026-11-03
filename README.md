@@ -349,7 +349,7 @@ See the [systemd resolver API documentation](https://github.com/systemd/systemd/
 
 ![SSH and SFTP connection settings](./images/ssh-sftp-settings.png)
 
-SSH, SFTP, TELNET, WebDAV and passive FTP/FTPS can use an SSH gateway.
+SSH, SFTP, TELNET, HTTP/HTTPS, WebDAV, passive FTP/FTPS, SMB and NFS can use an SSH gateway.
 Configure it in the separate "SSH proxy" tab, keeping the final destination in
 its protocol tab. See [Using SSH proxy](./docs/en/ssh-proxy.md) for inheritance,
 authentication and supported connection modes.
