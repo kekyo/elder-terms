@@ -27,6 +27,10 @@ import {
 import { waitForResult } from 'gestament/testing';
 import { expect, it } from 'vitest';
 import {
+  openTransferDirectory,
+  selectCurrentTransferDirectory,
+} from './file-transfer-destination-helpers.ts';
+import {
   createTestEvidence,
   expectElementKind,
 } from '../../shared/tests/connection-test-helpers.ts';
@@ -83,6 +87,12 @@ it.for([2, 3, 4])(
         'address=127.0.0.1',
         'require_reserved_port=true',
         `version=${version === 4 ? '4.0' : version}`,
+        ...(version === 2
+          ? [
+              'discover_exports=false',
+              'known_exports=/srv/public;/srv/public/deep;/srv/other/public;/srv/readonly;/srv/restricted;',
+            ]
+          : []),
         'known_namespace_paths=/other/public;/public/deep;',
         'filename_encoding=CP932',
         `local_directory=${local}`,
@@ -217,6 +227,15 @@ it.for([2, 3, 4])(
           );
         }
       };
+      if (version === 2) {
+        // The common parent only groups exports; it cannot accept uploads.
+        await select(remote, '/srv', 'left');
+        await select(localTree, '送信表', 'right');
+        expect(
+          (await (await app.getById('file_transfer_send_item')).info()).states
+        ).not.toContain('sensitive');
+        await app.input.pressKey('Escape');
+      }
       await showExportParent();
       await rowFor(remote, 'other');
       await select(remote, publicName, 'right');
@@ -234,7 +253,7 @@ it.for([2, 3, 4])(
             await app.getById('file_transfer_remote_new_directory_item')
           ).info()
         ).states.includes('sensitive')
-      ).toBe(true);
+      ).toBe(version !== 2);
       await evidence.captureEvidence('nfs-export-roots', async () =>
         app.capture()
       );
@@ -385,6 +404,8 @@ it.for([2, 3, 4])(
           })
         ).ok
       ).toBe(true);
+      await selectCurrentTransferDirectory(app, true);
+      expect(await remotePath.text()).toBe(prefix || '/');
       await select(localTree, '送信表', 'right');
       await menu('file_transfer_send_item');
       const state = expectElementKind(
@@ -412,10 +433,11 @@ it.for([2, 3, 4])(
           })
         ).ok
       ).toBe(true);
-      await rowFor(remote, '送信表');
       await waitForResult(async () =>
         expect(await state.text()).toBe('Completed')
       );
+      await openTransferDirectory(app, true, `${prefix}/public`);
+      await rowFor(remote, '送信表');
       await observeVideo('completed');
       expect(observed[1]!.frame).toBeGreaterThan(observed[0]!.frame);
       expect(new Set(observed.map((item) => item.pixels)).size).toBe(2);
@@ -439,6 +461,7 @@ it.for([2, 3, 4])(
       ).click();
       await rowFor(remote, '変更表');
       await rename(join(local, '送信表'), join(directory, 'original'));
+      await selectCurrentTransferDirectory(app, false);
       await select(remote, '変更表', 'right');
       await menu('file_transfer_receive_item');
       await waitForResult(
@@ -448,11 +471,14 @@ it.for([2, 3, 4])(
           ).toEqual(content),
         { timeoutMs: 45000 }
       );
+      await openTransferDirectory(app, false, local);
+      await selectCurrentTransferDirectory(app, false);
       await select(remote, '日本語表', 'right');
       await menu('file_transfer_receive_item');
       await waitForResult(async () =>
         expect(await readFile(join(local, '日本語表'), 'utf8')).toBe('CP932\n')
       );
+      await openTransferDirectory(app, false, local);
       await rowFor(localTree, '日本語表');
       expect(
         (await (await app.getById('file_transfer_job_2_row')).info()).name
@@ -503,6 +529,7 @@ it.for([2, 3, 4])(
       };
       let nextJapaneseJob = 4;
       const receiveJapanese = async (expected: string): Promise<void> => {
+        await selectCurrentTransferDirectory(app, false);
         await select(remote, '日本語表', 'right');
         await menu('file_transfer_receive_item');
         const overwrite = expectElementKind(
@@ -523,6 +550,7 @@ it.for([2, 3, 4])(
         await waitForResult(async () =>
           expect(await readFile(join(local, '日本語表'), 'utf8')).toBe(expected)
         );
+        await openTransferDirectory(app, false, local);
         await rowFor(localTree, '日本語表');
       };
       await enterPublic();
@@ -588,6 +616,7 @@ it.for([2, 3, 4])(
           })
         ).ok
       ).toBe(true);
+      await selectCurrentTransferDirectory(app, true);
       await select(localTree, '変更表', 'right');
       await menu('file_transfer_send_item');
       await waitForResult(async () => {

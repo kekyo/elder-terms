@@ -15,6 +15,7 @@ import { createRequire } from 'node:module';
 import { createGtkAppLauncher, type GtkWidgetElement } from 'gestament';
 import { waitForResult } from 'gestament/testing';
 import { expect, it } from 'vitest';
+import { selectCurrentTransferDirectory } from './file-transfer-destination-helpers.ts';
 import {
   createTestEvidence,
   expectElementKind,
@@ -206,6 +207,7 @@ it('records unknown HTTP progress, cancellation cleanup and closing an active ex
       });
     };
 
+    await selectCurrentTransferDirectory(app, false);
     await select('slow.bin');
     await expectElementKind(
       await app.getById('file_transfer_receive_item'),

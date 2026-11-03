@@ -20,6 +20,7 @@ import { createRequire } from 'node:module';
 import { createGtkAppLauncher, type GtkTableElement } from 'gestament';
 import { waitForResult } from 'gestament/testing';
 import { expect, it } from 'vitest';
+import { selectCurrentTransferDirectory } from './file-transfer-destination-helpers.ts';
 import {
   createTestEvidence,
   expectElementKind,
@@ -55,6 +56,7 @@ for (const scale of [1, 2]) {
     try {
       const local = join(directory, 'local');
       await mkdir(local);
+      await mkdir(join(local, 'received'));
       await writeFile(join(local, 'source.txt'), 'upload\n');
       await writeFile(join(local, 'zero.txt'), '');
       const config = join(directory, 'connection.ini');
@@ -76,6 +78,25 @@ for (const scale of [1, 2]) {
       ) as GtkTableElement;
       const submit = async (remote: boolean, name: string) => {
         const tree = remote ? remoteTree : localTree;
+        const destination = remote ? localTree : remoteTree;
+        const target = remote ? 'received' : 'archive';
+        const targetRow = await waitForResult(async () => {
+          expect((await destination.info()).states).toContain('sensitive');
+          for (
+            let index = 0;
+            index < (await destination.getRowCount());
+            index++
+          )
+            if (
+              (await (await destination.cellAt(index, 0))?.info())?.name ===
+              target
+            )
+              return index;
+          throw new Error(`Missing transfer destination: ${target}`);
+        });
+        for (const selected of await destination.selectedRows())
+          await destination.deselectRow(selected);
+        await destination.selectRow(targetRow);
         const row = await waitForResult(async () => {
           expect((await tree.info()).states).toContain('sensitive');
           for (let index = 0; index < (await tree.getRowCount()); index++)
@@ -273,9 +294,9 @@ for (const scale of [1, 2]) {
         expect(await state(2)).toBe('Completed');
         expect(await state(4)).toBe('Completed');
       });
-      expect(await readFile(join(local, 'readme.txt'), 'utf8')).toBe(
-        'hello from remote\n'
-      );
+      expect(
+        await readFile(join(local, 'received', 'readme.txt'), 'utf8')
+      ).toBe('hello from remote\n');
       expect(await summary.text()).toContain('0 active, 0 waiting, 4 finished');
       await expectElementKind(
         await app.getById('file_transfer_job_2_row'),
@@ -379,6 +400,7 @@ it('retains unknown progress and disconnected jobs until explicit retry', async 
         await app.getById(`file_transfer_job_${id}_state`),
         'label'
       ).text();
+    await selectCurrentTransferDirectory(app, false);
     await receive('unknown-held.bin');
     await waitForResult(async () => {
       expect(await state(1)).toBe('Transferring');

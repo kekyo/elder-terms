@@ -19,6 +19,10 @@ import { createGtkAppLauncher, type GtkTableElement } from 'gestament';
 import { waitForResult } from 'gestament/testing';
 import { expect, it } from 'vitest';
 import {
+  openTransferDirectory,
+  selectCurrentTransferDirectory,
+} from './file-transfer-destination-helpers.ts';
+import {
   createTestEvidence,
   expectElementKind,
 } from '../../shared/tests/connection-test-helpers.ts';
@@ -216,6 +220,16 @@ for (const scheme of ['http', 'https', 'https-prompt', 'https-abort'])
       await rowFor('file.bin');
       expect(requests).toEqual(['GET /pub/', 'GET /pub/tree/']);
       await clickRow('document.html', 'right');
+      for (const id of [
+        'file_transfer_receive_item',
+        'file_transfer_receive_file_item',
+      ])
+        expect((await (await app.getById(id)).info()).states).not.toContain(
+          'sensitive'
+        );
+      await app.input.pressKey('Escape');
+      await selectCurrentTransferDirectory(app, false);
+      await clickRow('document.html', 'right');
       for (const id of ['new_directory', 'rename', 'delete'])
         expect(
           (await (await app.getById(`file_transfer_remote_${id}_item`)).info())
@@ -231,6 +245,8 @@ for (const scheme of ['http', 'https', 'https-prompt', 'https-abort'])
         );
       });
       await ready();
+      await openTransferDirectory(app, false, local);
+      await selectCurrentTransferDirectory(app, false);
       await clickRow('tree', 'right');
       await expectElementKind(
         await app.getById('file_transfer_receive_item'),
@@ -264,6 +280,7 @@ for (const scheme of ['http', 'https', 'https-prompt', 'https-abort'])
       expect(
         (await (await app.getById('file_transfer_job_2_row')).info()).name
       ).toContain('tree');
+      await openTransferDirectory(app, false, local);
       await expectElementKind(
         await app.getById('file_transfer_remote_refresh_button'),
         'button'
@@ -334,6 +351,7 @@ for (const scheme of ['http', 'https', 'https-prompt', 'https-abort'])
         'button'
       ).click();
       await ready();
+      await selectCurrentTransferDirectory(app, false);
       await clickRow('first.bin', 'left');
       await tree.selectRow(await rowFor('second.bin'));
       const first = (

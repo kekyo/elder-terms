@@ -27,6 +27,10 @@ import {
 import { waitForResult } from 'gestament/testing';
 import { expect, it } from 'vitest';
 import {
+  openTransferDirectory,
+  selectCurrentTransferDirectory,
+} from './file-transfer-destination-helpers.ts';
+import {
   createTestEvidence,
   expectElementKind,
 } from '../../shared/tests/connection-test-helpers.ts';
@@ -838,6 +842,7 @@ for (const testCase of [
             'entry'
           ).text()
         ).toBe('/home');
+        await selectCurrentTransferDirectory(app, !closingDownload);
         await contextMenu(
           closingDownload ? remoteTree : localTree,
           closingDownload ? 'download.bin' : 'upload.bin'
@@ -1079,7 +1084,9 @@ for (const testCase of [
             );
           });
           expect(await readFile(join(remote, 'upload.bin'))).toEqual(upload);
+          await openTransferDirectory(app, true, '/home');
           await rowFor(remoteTree, 'upload.bin');
+          await selectCurrentTransferDirectory(app, false);
           await contextMenu(remoteTree, 'download.bin');
           await expectElementKind(
             await app.getById('file_transfer_receive_item'),
@@ -1097,6 +1104,7 @@ for (const testCase of [
             );
           });
           expect(await readFile(join(local, 'download.bin'))).toEqual(download);
+          await openTransferDirectory(app, false, local);
           await contextMenu(remoteTree, 'upload.bin');
           await expectElementKind(
             await app.getById('file_transfer_remote_rename_item'),

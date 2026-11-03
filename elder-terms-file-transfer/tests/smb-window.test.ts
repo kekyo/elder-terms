@@ -15,6 +15,10 @@ import { createGtkAppLauncher, type GtkTableElement } from 'gestament';
 import { waitForResult } from 'gestament/testing';
 import { expect, it } from 'vitest';
 import {
+  openTransferDirectory,
+  selectCurrentTransferDirectory,
+} from './file-transfer-destination-helpers.ts';
+import {
   createTestEvidence,
   expectElementKind,
 } from '../../shared/tests/connection-test-helpers.ts';
@@ -245,7 +249,7 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
       );
     expect(
       (await (await app.getById('file_transfer_receive_item')).info()).states
-    ).toContain('sensitive');
+    ).not.toContain('sensitive');
     await evidence.captureEvidence('smb-shares', async () => app.capture());
     await app.input.pressKey('Escape');
     const localTree = expectElementKind(
@@ -265,7 +269,7 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
     await app.input.setMouseButton('right', false);
     expect(
       (await (await app.getById('file_transfer_send_item')).info()).states
-    ).not.toContain('sensitive');
+    ).toContain('sensitive');
     await app.input.pressKey('Escape');
     const treeBounds = (await tree.capture()).bounds;
     await app.input.moveMouseTo(
@@ -336,6 +340,7 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
     expect(await rowFor('single.txt')).toBeGreaterThanOrEqual(0);
     expect(await rowFor('folder')).toBeGreaterThanOrEqual(0);
     for (const name of ['single.txt', 'folder']) {
+      await selectCurrentTransferDirectory(app, false);
       for (const selected of await tree.selectedRows())
         await tree.deselectRow(selected);
       const row = await rowFor(name);
@@ -357,6 +362,7 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
         expect((await receive.info()).states).toContain('showing');
       });
       await receive.click();
+      await openTransferDirectory(app, false, local);
     }
     await waitForResult(
       async () => {
@@ -451,13 +457,16 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
       await app.getById('file_transfer_local_refresh_button'),
       'button'
     ).click();
+    await selectCurrentTransferDirectory(app, true);
     await contextMenu(localTree, 'kept.txt');
     await expectElementKind(
       await app.getById('file_transfer_send_item'),
       'menuItem'
     ).click();
+    await openTransferDirectory(app, true, `/${share}`);
     await rowFor('kept.txt');
     await writeFile(upload, 'replacement upload\n');
+    await selectCurrentTransferDirectory(app, true);
     await contextMenu(localTree, 'kept.txt');
     await expectElementKind(
       await app.getById('file_transfer_send_item'),
@@ -483,11 +492,13 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
         ).text()
       ).toContain('0 active, 0 waiting');
     });
+    await openTransferDirectory(app, true, `/${share}`);
     await rm(upload);
     await expectElementKind(
       await app.getById('file_transfer_local_refresh_button'),
       'button'
     ).click();
+    await selectCurrentTransferDirectory(app, false);
     await contextMenu(tree, 'kept.txt');
     await expectElementKind(
       await app.getById('file_transfer_receive_item'),
@@ -496,11 +507,13 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
     await waitForResult(async () => {
       expect(await readFile(upload, 'utf8')).toBe('first upload\n');
     });
+    await openTransferDirectory(app, false, local);
     await writeFile(upload, 'replacement upload\n');
     await expectElementKind(
       await app.getById('file_transfer_local_refresh_button'),
       'button'
     ).click();
+    await selectCurrentTransferDirectory(app, true);
     await contextMenu(localTree, 'kept.txt');
     await expectElementKind(
       await app.getById('file_transfer_send_item'),
@@ -526,6 +539,7 @@ it('opens an SMB share and downloads a file and folder through the transfer wind
         ).text()
       ).toContain('0 active, 0 waiting');
     });
+    await openTransferDirectory(app, true, `/${share}`);
     if (!externalAddress)
       expect(podman(['exec', container, 'cat', '/share/kept.txt'])).toBe(
         'replacement upload\n'
@@ -897,6 +911,7 @@ it('downloads and uploads over experimental SMB SSH proxy in the transfer window
               });
             }
           }
+          await selectCurrentTransferDirectory(app, false);
           await selectMenu(
             'file_transfer_remote_tree',
             download,
@@ -909,16 +924,19 @@ it('downloads and uploads over experimental SMB SSH proxy in the transfer window
               ),
             { timeoutMs: 30_000 }
           );
+          await openTransferDirectory(app, false, local);
           await writeFile(join(local, 'proxy-upload.txt'), 'proxy upload\n');
           await expectElementKind(
             await app.getById('file_transfer_local_refresh_button'),
             'button'
           ).click();
+          await selectCurrentTransferDirectory(app, true);
           await selectMenu(
             'file_transfer_local_tree',
             'proxy-upload.txt',
             'file_transfer_send_item'
           );
+          await openTransferDirectory(app, true, `/${share}`);
           await waitForResult(async () => {
             expect((await remote.info()).states).toContain('sensitive');
             const names = [];
@@ -927,6 +945,7 @@ it('downloads and uploads over experimental SMB SSH proxy in the transfer window
             expect(names).toContain('proxy-upload.txt');
           });
           await rm(join(local, 'proxy-upload.txt'));
+          await selectCurrentTransferDirectory(app, false);
           await selectMenu(
             'file_transfer_remote_tree',
             'proxy-upload.txt',
@@ -937,6 +956,7 @@ it('downloads and uploads over experimental SMB SSH proxy in the transfer window
               await readFile(join(local, 'proxy-upload.txt'), 'utf8')
             ).toBe('proxy upload\n')
           );
+          await openTransferDirectory(app, false, local);
           await waitForResult(async () =>
             expect((await remote.info()).states).toContain('sensitive')
           );
