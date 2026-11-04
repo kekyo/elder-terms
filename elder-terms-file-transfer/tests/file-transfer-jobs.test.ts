@@ -338,6 +338,7 @@ for (const scale of [1, 2]) {
 
 it('retains unknown progress and disconnected jobs until explicit retry', async (context) => {
   const directory = await mkdtemp(join(tmpdir(), 'elder-plan15-retry-'));
+  const local = join(directory, 'local');
   const evidence = createTestEvidence(context);
   const server = await createWebdavTestServer('none', undefined);
   server.files.set('/dav/unknown-held.bin', {
@@ -362,10 +363,12 @@ it('retains unknown progress and disconnected jobs until explicit retry', async 
     xvfbTrayHost: true,
   });
   try {
+    // Selecting this destination from its parent must browse only our fixture.
+    await mkdir(local);
     const config = join(directory, 'connection.ini');
     await writeFile(
       config,
-      `[general]\ntype=webdav\nauto_close=false\n[webdav]\nscheme=http\nauthentication=none\naddress=127.0.0.1\nport=${server.port}\nbase_path=/dav/\nremote_directory=/\nlocal_directory=${directory}\n`
+      `[general]\ntype=webdav\nauto_close=false\n[webdav]\nscheme=http\nauthentication=none\naddress=127.0.0.1\nport=${server.port}\nbase_path=/dav/\nremote_directory=/\nlocal_directory=${local}\n`
     );
     const app = await launcher.launch(['-c', config], {
       onOutput: evidence.recordAppOutputEvent,
@@ -497,7 +500,7 @@ it('retains unknown progress and disconnected jobs until explicit retry', async 
     ).collapse();
     await retry.click();
     await waitForResult(async () => expect(await state(3)).toBe('Completed'));
-    expect(await readFile(join(directory, 'hello.txt'), 'utf8')).toBe(
+    expect(await readFile(join(local, 'hello.txt'), 'utf8')).toBe(
       'Hello DAV!\r\n'
     );
     expect(await state(2)).toBe('Failed');
@@ -532,9 +535,7 @@ it('retains unknown progress and disconnected jobs until explicit retry', async 
       )
     ).toHaveLength(1);
     expect(
-      (await readdir(directory)).some((name) =>
-        name.includes('.elder-terms-part-')
-      )
+      (await readdir(local)).some((name) => name.includes('.elder-terms-part-'))
     ).toBe(false);
     const jobBounds = (
       await (await app.getById('file_transfer_jobs')).capture()
