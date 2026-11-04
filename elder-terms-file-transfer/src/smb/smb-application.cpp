@@ -122,7 +122,7 @@ static cardio::promise<void> start_application_async(SmbApplication *state) {
   co_await stop_ssh_tcp_proxy_async(state->route);
   if (!state->shutting_down) {
     std::cerr << failure << '\n';
-    co_await show_file_transfer_window_connection_error_async(
+    show_file_transfer_window_connection_error(
         state->window, _("Failed to start SMB"), std::move(failure), cancellation);
   }
 }

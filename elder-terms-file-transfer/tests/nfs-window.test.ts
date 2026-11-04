@@ -142,13 +142,17 @@ it.for([2, 3, 4])(
           await waitForResult(async () => {
             expect(
               await expectElementKind(
-                await rejected.getById('file_transfer_prompt_title_label'),
+                await rejected.getById(
+                  'file_transfer_connection_notice_title_label'
+                ),
                 'label'
               ).text()
             ).toBe('Failed to start NFS');
             expect(
               await expectElementKind(
-                await rejected.getById('file_transfer_prompt_message_label'),
+                await rejected.getById(
+                  'file_transfer_connection_notice_message_label'
+                ),
                 'label'
               ).text()
             ).toContain('requires a reserved source port below 1024');

@@ -233,9 +233,9 @@ static cardio::promise<void> verify_async(
         set_file_transfer_window_connection_available(closing_window, false);
         const bool destroyed = file_transfer_window_widget(closing_window) == nullptr;
         if (!auto_close) {
-          auto *dim = find_widget(file_transfer_window_widget(closing_window), "file_transfer_dim_overlay");
-          expect(dim != nullptr && gtk_widget_get_visible(dim),
-                 "Disconnected file browsers must display the disconnection overlay");
+          auto *notice = find_widget(file_transfer_window_widget(closing_window), "file_transfer_connection_notice_panel");
+          expect(notice != nullptr && gtk_widget_get_visible(notice),
+                 "Disconnected file browsers must display the reason and available actions");
         }
         co_await close_file_transfer_window_async(closing_window);
         expect(destroyed == auto_close, "File transfer disconnection must respect general auto-close");
@@ -269,6 +269,7 @@ static cardio::promise<void> verify_async(
       expect(button && gtk_widget_get_visible(button), "Disconnected FTP must offer reconnect");
       gtk_button_clicked(GTK_BUTTON(button));
       expect(!gtk_widget_get_visible(button), "Reconnect must prevent duplicate attempts");
+      gtk_button_clicked(GTK_BUTTON(button));
       co_await old_client->cleanup_started.wait();
       expect(reconnects == 0, "Reconnect must wait for old operation cleanup");
       std::optional<cardio::promise<void>> reconnect_closing;

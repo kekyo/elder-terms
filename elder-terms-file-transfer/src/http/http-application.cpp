@@ -134,7 +134,7 @@ static cardio::promise<void> start_application_async(HttpApplication *state) {
   co_await stop_ssh_socks_proxy_async(state->route);
   if (!state->shutting_down) {
     std::cerr << failure << '\n';
-    co_await show_file_transfer_window_connection_error_async(
+    show_file_transfer_window_connection_error(
         state->window, _("Failed to start HTTP"), std::move(failure), cancellation);
   }
 }

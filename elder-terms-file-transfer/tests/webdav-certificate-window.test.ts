@@ -250,7 +250,14 @@ describe('WebDAV certificate confirmation', () => {
           legacyVersion !== undefined
         ) {
           await waitForResult(async () => {
-            expect(await title.text()).toBe('Failed to start WebDAV');
+            expect(
+              await expectElementKind(
+                await app.getById(
+                  'file_transfer_connection_notice_title_label'
+                ),
+                'label'
+              ).text()
+            ).toBe('Failed to start WebDAV');
           });
           expect(server.requests).toHaveLength(0);
           return;

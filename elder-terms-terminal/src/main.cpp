@@ -1531,7 +1531,7 @@ static cardio::promise<void> reconnect_shared_sftp_window_async(
     elder_terms::attach_file_transfer_window_client(state->sftp_window, state->sftp_client);
   } catch (const cardio::canceled_exception &) {
   } catch (const std::exception &error) { failure = error.what(); }
-  if (!failure.empty()) co_await elder_terms::show_file_transfer_window_connection_error_async(
+  if (!failure.empty()) elder_terms::show_file_transfer_window_connection_error(
       state->sftp_window, _("Failed to start SFTP"), std::move(failure), cancellation);
   state->sftp_opening = false;
 }
@@ -1614,7 +1614,7 @@ static cardio::promise<void> open_shared_sftp_window_async(
   state->sftp_opening = false;
   state->sftp_client.reset();
   if (!failure.empty() && state->sftp_window != nullptr) {
-    co_await elder_terms::show_file_transfer_window_connection_error_async(
+    elder_terms::show_file_transfer_window_connection_error(
         state->sftp_window, _("Failed to start SFTP"), std::move(failure),
         std::move(cancellation));
   }

@@ -118,19 +118,24 @@ describe('WebDAV window', () => {
           );
           expect((await reconnect.info()).states).toContain('showing');
           expect(
-            (await (await app.getById('file_transfer_dim_overlay')).info())
-              .states
+            (
+              await (
+                await app.getById('file_transfer_connection_notice_panel')
+              ).info()
+            ).states
           ).toContain('showing');
           // A failed attempt must return to the reconnect action.
           await reconnect.click();
-          const accept = expectElementKind(
-            await app.getById('file_transfer_prompt_accept_button'),
-            'button'
-          );
           await waitForResult(async () => {
-            expect((await accept.info()).states).toContain('showing');
+            expect(
+              await expectElementKind(
+                await app.getById(
+                  'file_transfer_connection_notice_title_label'
+                ),
+                'label'
+              ).text()
+            ).toBe('Failed to start WebDAV');
           });
-          await accept.click();
           await waitForResult(async () => {
             expect((await reconnect.info()).states).toContain('showing');
           });

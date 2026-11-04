@@ -100,6 +100,12 @@ InlinePromptWidgets
 create_inline_prompt_widgets(const std::string &accessible_id_prefix);
 
 /**
+ * Applies the common inline panel appearance without installing response handlers.
+ * @param widgets Inline widgets used for a persistent notice or question.
+ */
+void apply_inline_prompt_style(const InlinePromptWidgets &widgets);
+
+/**
  * Binds common asynchronous prompt behavior to an existing widget set.
  *
  * @param widgets Complete inline question widget set.
