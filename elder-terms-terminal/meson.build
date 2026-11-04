@@ -119,6 +119,13 @@ elder_terms_terminal = executable(
 )
 
 if get_option('build_tests')
+titlebar_effect_state_test = executable('titlebar-effect-state-test',
+  ['tests/cpp/titlebar-effect-state-test.cpp', 'src/titlebar-effect-state.cpp'])
+test('titlebar-effect-state-test', titlebar_effect_state_test)
+executable('titlebar-effects-demo',
+  ['tests/cpp/titlebar-effects-demo.cpp', 'src/titlebar-effect-state.cpp', 'src/titlebar-effects.cpp'],
+  dependencies: [connection_ui_dep, gtk_dep])
+
 color_filter_test = executable('terminal-color-filter-test',
   ['tests/cpp/terminal-color-filter-test.cpp'],
   dependencies: [elder_terms_dep, boxrig_deps['boxrig-ui']])
