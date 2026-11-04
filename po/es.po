@@ -2649,3 +2649,11 @@ msgstr "NFS(2049)"
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "Shows TCP port responses. Service support and authentication are not verified."
 msgstr "Muestra las respuestas de los puertos TCP. No se comprueban la compatibilidad con los servicios ni la autenticación."
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Visual BEL notification"
+msgstr "Notificación visual de BEL"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Title change effect"
+msgstr "Efecto de cambio de título"

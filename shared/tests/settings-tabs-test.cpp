@@ -155,6 +155,7 @@ static void verify_tab_structure(const Fixture &fixture, bool terminal_visible) 
       "terminal_background_image_entry", "terminal_background_image_opacity_entry",
       "terminal_background_image_fit_combo", "terminal_color_filter_combo",
       "terminal_color_vision_combo", "terminal_color_vision_strength_entry",
+      "terminal_visual_bell_combo", "terminal_title_change_effect_combo",
       "terminal_link_decoration_combo", "terminal_color_preview"};
   for (const char *field : behavior_fields) {
     const std::string name = id(field);
@@ -177,6 +178,35 @@ static void verify_tab_structure(const Fixture &fixture, bool terminal_visible) 
                           id("terminal_appearance_page_scrollbar").c_str()) == 0 &&
               belongs_to(scrollbar, appearance),
           "Font list scroll surface is not on the appearance tab");
+}
+
+static void verify_titlebar_controls(SettingsWidgetMode mode) {
+  int applied = 0;
+  SettingsWidgetCallbacks callbacks;
+  callbacks.apply = [&](const SettingsStore &store, SettingsWidgetAction action) {
+    const auto effects = terminal_titlebar_effects_settings(store);
+    require(!effects.bell && !effects.title, "Apply lost titlebar preferences");
+    ++applied;
+    action.complete(true, {});
+  };
+  auto fixture = create_fixture("local", mode, std::move(callbacks));
+  auto *bell = GTK_COMBO_BOX(find_widget(fixture.root, (fixture.prefix + "_terminal_visual_bell_combo").c_str()));
+  auto *title = GTK_COMBO_BOX(find_widget(fixture.root, (fixture.prefix + "_terminal_title_change_effect_combo").c_str()));
+  require(bell && title, "Titlebar preference controls are missing");
+  gtk_combo_box_set_active_id(bell, "disabled");
+  const auto draft = terminal_titlebar_effects_settings(settings_widget_draft_store(fixture.state));
+  require(!draft.bell && draft.title, "BEL and title preferences are not independent");
+  gtk_combo_box_set_active_id(title, "disabled");
+  gtk_button_clicked(GTK_BUTTON(find_widget(fixture.root, (fixture.prefix + "_apply_button").c_str())));
+  require(applied == 1, "Titlebar preferences cannot be applied");
+  gtk_combo_box_set_active_id(bell, "inherit");
+  gtk_combo_box_set_active_id(title, "inherit");
+  const auto inherited = terminal_titlebar_effects_settings(settings_widget_draft_store(fixture.state));
+  require(inherited.bell && inherited.title, "Titlebar controls did not restore inheritance");
+  gtk_button_clicked(GTK_BUTTON(find_widget(fixture.root, (fixture.prefix + "_cancel_button").c_str())));
+  const auto restored = terminal_titlebar_effects_settings(settings_widget_draft_store(fixture.state));
+  require(!restored.bell && !restored.title, "Cancel did not restore applied titlebar preferences");
+  destroy_fixture(&fixture);
 }
 
 static void verify_actions() {
@@ -228,6 +258,8 @@ int main(int argc, char **argv) {
   try {
     require(gtk_init_check(&argc, &argv), "GTK initialization failed");
     verify_actions();
+    verify_titlebar_controls(SettingsWidgetMode::connection);
+    verify_titlebar_controls(SettingsWidgetMode::global_defaults);
     for (const char *type : {"sftp", "ftp", "webdav", "smb"}) {
       Fixture transfer = create_fixture(type, SettingsWidgetMode::connection);
       verify_tab_structure(transfer, false);

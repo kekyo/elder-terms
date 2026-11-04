@@ -1238,6 +1238,48 @@ static void test_terminal_font_list_defaults_and_rebase() {
   remove_config(global);
 }
 
+static void test_titlebar_effect_settings() {
+  const auto global = temporary_config_path("titlebar-global");
+  const auto path = temporary_config_path("titlebar-connection");
+  auto store = create_default_settings(default_terminal_display_settings(12), "Effects");
+  for (const char *name : {"visual_bell", "title_change_effect"}) {
+    const auto key = elder_terms::make_setting_key("terminal", name);
+    expect_true(elder_terms::setting_boolean_value_or_default(store, key, false),
+        "titlebar effects must be enabled by default");
+  }
+  write_config(global, "[terminal]\nvisual_bell=false\ntitle_change_effect=false\n");
+  write_config(path, "[terminal]\nvisual_bell=true\n");
+  const SettingsLoadOptions options{.config_path = path, .startup_config_path = std::nullopt,
+      .global_config_path = global};
+  auto loaded = load_settings(options, 12);
+  const auto bell = elder_terms::make_setting_key("terminal", "visual_bell");
+  const auto title = elder_terms::make_setting_key("terminal", "title_change_effect");
+  expect_true(elder_terms::setting_boolean_value_or_default(loaded.store, bell, false) &&
+      !elder_terms::setting_boolean_value_or_default(loaded.store, title, true),
+      "connection overrides and global fallbacks must remain independent");
+  expect_true(setting_value_source(loaded.store, title) == SettingValueSource::global,
+      "title effects must expose their inherited source");
+  expect_true(save_settings(loaded.store, path).saved &&
+      read_config(path).find("visual_bell=true") != std::string::npos &&
+      read_config(path).find("title_change_effect") == std::string::npos,
+      "saving must preserve explicit true and omit the inherited value");
+  loaded = load_settings(options, 12);
+  clear_explicit_setting_value(&loaded.store, bell);
+  expect_true(!elder_terms::setting_boolean_value_or_default(loaded.store, bell, true),
+      "resetting visual BEL must restore global inheritance");
+  expect_true(save_settings(loaded.store, path).saved && read_config(path).empty(),
+      "resetting effects must remove explicit keys from the file");
+  write_config(path, "[terminal]\nvisual_bell=invalid\ntitle_change_effect=invalid\n");
+  loaded = load_settings(options, 12);
+  expect_true(warnings_contain(loaded.warnings, "visual_bell") &&
+      warnings_contain(loaded.warnings, "title_change_effect") &&
+      !elder_terms::setting_boolean_value_or_default(loaded.store, bell, true) &&
+      !elder_terms::setting_boolean_value_or_default(loaded.store, title, true),
+      "invalid effect values must report warnings and inherit the valid fallback");
+  remove_config(path);
+  remove_config(global);
+}
+
 static void test_terminal_bell_sound_validation_and_round_trip() {
   const std::filesystem::path wav_path =
       temporary_config_path("terminal-bell-wav").replace_extension(".wav");
@@ -4975,6 +5017,7 @@ int main() {
         test_terminal_font_list_defaults_and_rebase();
     elder_terms_settings_test::
         test_terminal_bell_sound_validation_and_round_trip();
+    elder_terms_settings_test::test_titlebar_effect_settings();
     elder_terms_settings_test::test_connection_name_settings();
     elder_terms_settings_test::test_general_color_settings();
     elder_terms_settings_test::

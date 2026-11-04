@@ -404,6 +404,19 @@ SettingKey terminal_bell_sound_setting_key() {
   return terminal_key(terminal_bell_sound_key);
 }
 
+SettingKey terminal_visual_bell_setting_key() {
+  return terminal_key("visual_bell");
+}
+
+SettingKey terminal_title_change_effect_setting_key() {
+  return terminal_key("title_change_effect");
+}
+
+TerminalTitlebarEffectsSettings terminal_titlebar_effects_settings(const SettingsStore &store) {
+  return {setting_boolean_value_or_default(store, terminal_visual_bell_setting_key(), true),
+      setting_boolean_value_or_default(store, terminal_title_change_effect_setting_key(), true)};
+}
+
 SettingKey terminal_zoom_in_key_setting_key() {
   return terminal_key(terminal_zoom_in_key_name);
 }
@@ -564,6 +577,16 @@ terminal_setting_definitions(TerminalDisplaySettings terminal_defaults) {
           .default_value =
               SettingValue{std::string(default_terminal_bell_sound)},
           .validate = validate_terminal_bell_sound,
+      },
+      {
+          .key = terminal_visual_bell_setting_key(),
+          .default_value = SettingValue{true},
+          .validate = nullptr,
+      },
+      {
+          .key = terminal_title_change_effect_setting_key(),
+          .default_value = SettingValue{true},
+          .validate = nullptr,
       },
       {
           .key = terminal_zoom_in_key_setting_key(),

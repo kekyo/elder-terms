@@ -5,6 +5,7 @@
 
 #include "../../src/terminal-presentation.h"
 #include "../../src/terminal-runtime.h"
+#include "../../src/titlebar-effects.h"
 
 #include <cassert>
 #include <cstdio>
@@ -179,6 +180,11 @@ static cardio::promise<void> scenarios(Fixture *fixture) {
     expect(boxrig_ui_model_terminal(boxrig_ui_view_model(boxrig_gtk3_terminal_widget_view(terminal_runtime_widget(runtime)))) == core,
         "recovery retains the original terminal core");
     check_appearance(fixture, shape);
+    set_main_window_title(fixture->window, "After terminal replacement");
+    set_main_window_title(fixture->window, "Latest title after replacement");
+    expect(std::string(gtk_label_get_text(GTK_LABEL(fixture->window->header_title_label))).starts_with(
+        "Latest title after replacement") && titlebar_effects_running(fixture->window->header_bar),
+        "title updates and background effects survive native terminal replacement");
     co_await check_selection_pixels(fixture);
     gtk_widget_hide(fixture->window->window);
     gtk_widget_show(fixture->window->window);

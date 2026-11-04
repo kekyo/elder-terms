@@ -143,6 +143,8 @@ static constexpr std::array setting_labels{
     SettingLabelEntry{"general", "border_width",
                       N_("Window side border width (px)")},
     SettingLabelEntry{"terminal", "bell_sound", N_("BEL sound")},
+    SettingLabelEntry{"terminal", "visual_bell", N_("Visual BEL notification")},
+    SettingLabelEntry{"terminal", "title_change_effect", N_("Title change effect")},
     SettingLabelEntry{"terminal", "zoom_in_key", N_("Zoom in shortcut")},
     SettingLabelEntry{"terminal", "zoom_out_key", N_("Zoom out shortcut")},
     SettingLabelEntry{"terminal", "send_break_key",

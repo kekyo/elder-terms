@@ -2627,3 +2627,11 @@ msgstr "NFS(2049)"
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "Shows TCP port responses. Service support and authentication are not verified."
 msgstr "TCP 포트 응답을 표시합니다. 서비스 지원 여부와 인증 성공 여부는 확인하지 않습니다."
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Visual BEL notification"
+msgstr "BEL 시각 알림"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Title change effect"
+msgstr "제목 변경 효과"

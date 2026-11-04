@@ -826,6 +826,29 @@ Supported formats are Ogg Vorbis (`.oga`, with the legacy `.ogg` extension also 
 bell_sound=/home/user/.local/share/sounds/terminal-bell.oga
 ```
 
+## Title-Bar Notifications
+
+When the terminal receives BEL, the title-bar background briefly changes brightness
+and returns to its original color, regardless of the selected sound or playback success.
+Changing the title moves a subtle band from left to right across the background.
+If the title changes again during a cycle, the effect continues for another cycle.
+Each title is displayed immediately; setting the same title again does not start an effect.
+
+Use "Visual BEL notification" and "Title change effect" on the "Terminal appearance"
+tab to enable or disable each effect. Both are enabled initially. Choose the default
+to inherit global settings, or override each preference for a connection.
+This example disables both effects while leaving BEL audio unchanged:
+
+```ini
+[terminal]
+visual_bell=false
+title_change_effect=false
+```
+
+The effects use the connection's exterior color, or the current GTK theme when no
+exterior color is set. Notifications received while minimized or hidden are not
+replayed when the window returns. Disabling GTK animations also stops both effects.
+
 ## Compact Mode
 
 ![Compact mode](./images/compact-mode.png)

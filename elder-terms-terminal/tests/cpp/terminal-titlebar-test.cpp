@@ -6,6 +6,7 @@
 #include "../../src/main-window.h"
 #include "../../src/titlebar-effects.h"
 #include "../../src/terminal-runtime.h"
+#include "../../src/terminal-presentation.h"
 #include <cassert>
 #include <cstdio>
 
@@ -23,6 +24,8 @@ extern "C" int __wrap_main(int argc, char **argv) {
   cardio::dispatcher_host_glib_auto dispatcher(group);
   auto window = load_main_window(TerminalAmbiguousWidth::narrow);
   assert(window);
+  auto *presentation = create_terminal_presentation(&*window, {}, {}, {});
+  auto settings = create_default_settings(default_terminal_display_settings(16), "Effects");
   set_main_window_connection_phase(&*window, TerminalSessionConnectionPhase::connected);
   set_main_window_title(&*window, "Initial");
   gtk_widget_show(window->window);
@@ -49,16 +52,21 @@ extern "C" int __wrap_main(int argc, char **argv) {
   set_main_window_connection_phase(&*window, TerminalSessionConnectionPhase::disconnected);
   check_title(*window, "Hidden (Disconnected)");
   assert(titlebar_effects_running(window->header_bar));
-  set_titlebar_effects_enabled(window->header_bar, false, false);
+  set_setting_value(&settings, terminal_visual_bell_setting_key(), false);
+  set_setting_value(&settings, terminal_title_change_effect_setting_key(), false);
+  assert(apply_terminal_presentation(presentation, settings, nullptr));
   set_main_window_title(&*window, "Disabled");
   check_title(*window, "Disabled (Disconnected)");
   assert(!titlebar_effects_running(window->header_bar));
-  set_titlebar_effects_enabled(window->header_bar, true, true);
+  set_setting_value(&settings, terminal_visual_bell_setting_key(), true);
+  set_setting_value(&settings, terminal_title_change_effect_setting_key(), true);
+  assert(apply_terminal_presentation(presentation, settings, nullptr));
   set_main_window_title(&*window, "Disabled");
   assert(!titlebar_effects_running(window->header_bar));
   set_main_window_connection_phase(&*window, TerminalSessionConnectionPhase::connected);
   check_title(*window, "Disabled");
   assert(titlebar_effects_running(window->header_bar));
+  destroy_terminal_presentation(presentation);
   destroy_terminal_runtime(window->runtime);
   window->runtime = nullptr;
   gtk_widget_destroy(window->window);

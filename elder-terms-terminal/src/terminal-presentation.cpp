@@ -4,6 +4,7 @@
 // https://github.com/kekyo/elder-terms/
 
 #include "terminal-presentation.h"
+#include "titlebar-effects.h"
 #include "terminal-runtime.h"
 #include "terminal-background.h"
 #include <elder-terms/terminal-color-filter.h>
@@ -249,6 +250,8 @@ bool apply_terminal_presentation(TerminalPresentation *presentation, const Setti
   if (!apply_cursor(presentation, terminal_cursor_settings(settings))) return false;
   if (!apply_copy_policy(presentation, terminal_block_copy_trim_trailing_spaces(settings))) return false;
   if (!apply_terminal_background(presentation->background, settings, std::move(image))) return false;
+  const auto effects = terminal_titlebar_effects_settings(settings);
+  set_titlebar_effects_enabled(window->header_bar, effects.bell, effects.title);
   const auto accessibility_status = boxrig_gtk3_terminal_widget_set_accessibility_enabled(
       widget, terminal_accessibility_enabled(settings));
   if (accessibility_status != BOXRIG_UI_OK) {

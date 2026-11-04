@@ -173,6 +173,8 @@ struct SettingsWidgetState {
   GtkWidget *terminal_ambiguous_width_combo = nullptr;
   GtkWidget *terminal_bell_sound_entry = nullptr;
   GtkWidget *terminal_bell_sound_dialog = nullptr;
+  GtkWidget *terminal_visual_bell_combo = nullptr;
+  GtkWidget *terminal_title_change_effect_combo = nullptr;
   GtkWidget *terminal_encoding_combo = nullptr;
   GtkWidget *terminal_encoding_entry = nullptr;
   GtkWidget *terminal_backspace_code_combo = nullptr;
@@ -3460,6 +3462,11 @@ static void sync_widgets_from_draft(SettingsWidgetState *state, bool preserve_in
                            terminal_accessibility_enabled_setting_key(),
                            terminal_accessibility_enabled(state->draft_store));
   }
+  const auto effects = terminal_titlebar_effects_settings(state->draft_store);
+  if (state->terminal_visual_bell_combo) populate_boolean_combo(state->terminal_visual_bell_combo,
+      state->draft_store, terminal_visual_bell_setting_key(), effects.bell);
+  if (state->terminal_title_change_effect_combo) populate_boolean_combo(state->terminal_title_change_effect_combo,
+      state->draft_store, terminal_title_change_effect_setting_key(), effects.title);
   if (state->terminal_block_copy_trim_trailing_spaces_combo != nullptr) {
     populate_boolean_combo(
         state->terminal_block_copy_trim_trailing_spaces_combo,
@@ -3997,6 +4004,17 @@ static void on_terminal_block_copy_trim_trailing_spaces_changed(GtkComboBox *,
   auto *state = static_cast<SettingsWidgetState *>(data);
   if (state->synchronizing) return;
   update_terminal_block_copy_trim_trailing_spaces_from_widget(state);
+  notify_changed(state);
+}
+
+static void on_titlebar_effect_changed(GtkComboBox *combo, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) return;
+  const auto key = GTK_WIDGET(combo) == state->terminal_visual_bell_combo
+      ? terminal_visual_bell_setting_key() : terminal_title_change_effect_setting_key();
+  const auto choice = active_combo_id(GTK_WIDGET(combo), inherit_choice);
+  if (choice == inherit_choice) clear_explicit_setting_value(&state->draft_store, key);
+  else set_explicit_setting_value(&state->draft_store, key, SettingValue{choice == boolean_enabled});
   notify_changed(state);
 }
 
@@ -5543,9 +5561,15 @@ create_terminal_pages(SettingsWidgetState *state) {
     notify_changed(state);
   }), state);
   attach_row(appearance_page, 8, terminal_link_decoration_setting_key(), state->terminal_link_decoration_combo);
+  state->terminal_visual_bell_combo = create_combo_box(widget_id(state, "terminal_visual_bell_combo").c_str());
+  state->terminal_title_change_effect_combo = create_combo_box(widget_id(state, "terminal_title_change_effect_combo").c_str());
+  for (auto *combo : {state->terminal_visual_bell_combo, state->terminal_title_change_effect_combo})
+    g_signal_connect(combo, "changed", G_CALLBACK(on_titlebar_effect_changed), state);
+  attach_row(appearance_page, 9, terminal_visual_bell_setting_key(), state->terminal_visual_bell_combo);
+  attach_row(appearance_page, 10, terminal_title_change_effect_setting_key(), state->terminal_title_change_effect_combo);
   state->terminal_color_preview = create_terminal_color_preview(&state->draft_store, state->id_prefix);
-  gtk_grid_attach(GTK_GRID(appearance_page), terminal_color_preview_root(state->terminal_color_preview), 0, 9, 2, 1);
-  for (int row = 0; row <= 8; row++) {
+  gtk_grid_attach(GTK_GRID(appearance_page), terminal_color_preview_root(state->terminal_color_preview), 0, 11, 2, 1);
+  for (int row = 0; row <= 10; row++) {
     auto *label = gtk_grid_get_child_at(GTK_GRID(appearance_page), 0, row);
     if (GTK_IS_LABEL(label)) gtk_size_group_add_widget(labels, label);
   }

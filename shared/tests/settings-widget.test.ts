@@ -197,7 +197,9 @@ const scrollTerminalFieldIntoView = async (
     ? 'global_settings'
     : 'settings';
   const appearance =
-    /_terminal_(font|cursor_shape|cursor_blink|background|color_)/.test(id);
+    /_terminal_(font|cursor_shape|cursor_blink|background|color_|visual_bell|title_change_effect)/.test(
+      id
+    );
   const pageId = `${prefix}_terminal${appearance ? '_appearance' : ''}_page`;
   await selectSettingsTab(
     app,
@@ -2079,6 +2081,67 @@ describe.concurrent('shared settings widget', () => {
     expect(visualErrors).toEqual([]);
   }, 60_000);
 
+  it('saves independent titlebar notifications from the appearance page', async (context) => {
+    const temporary = await mkdtemp(
+      join(tmpdir(), 'elder-terms-titlebar-settings-')
+    );
+    const path = join(temporary, 'connection.ini');
+    try {
+      await runSharedGtkTest(
+        context,
+        [
+          '--page=terminal_appearance',
+          '--global=terminal.visual_bell=false',
+          '--global=terminal.title_change_effect=false',
+          `--save-file=${path}`,
+        ],
+        async ({ app, directory }) => {
+          await scrollTerminalFieldIntoView(
+            app,
+            'settings_terminal_visual_bell_combo'
+          );
+          const bell = expectElementKind(
+            await app.getById('settings_terminal_visual_bell_combo'),
+            'comboBox'
+          );
+          const title = expectElementKind(
+            await app.getById('settings_terminal_title_change_effect_combo'),
+            'comboBox'
+          );
+          expect((await title.info()).states).toContain('showing');
+          expect(await bell.isChildSelected(0)).toBe(true);
+          expect(await title.isChildSelected(0)).toBe(true);
+          await bell.selectChildAt(1);
+          await title.selectChildAt(2);
+          const save = expectElementKind(
+            await app.getById('settings_save_button'),
+            'button'
+          );
+          await save.click();
+          await waitForResult(async () => {
+            const saved = await readFile(path, 'utf8');
+            expect(saved).toContain('visual_bell=true');
+            expect(saved).toContain('title_change_effect=false');
+          });
+          await title.selectChildAt(0);
+          await save.click();
+          await waitForResult(async () => {
+            const saved = await readFile(path, 'utf8');
+            expect(saved).toContain('visual_bell=true');
+            expect(saved).not.toContain('title_change_effect');
+          });
+          await writeFile(
+            join(directory, 'titlebar-settings.png'),
+            (await app.capture()).image
+          );
+        },
+        { env: japaneseTestEnvironment }
+      );
+    } finally {
+      await rm(temporary, { recursive: true, force: true });
+    }
+  });
+
   it('identifies the font inheritance source in a single option', async (context) => {
     for (const global of [false, true]) {
       await runSharedGtkTest(
@@ -3761,8 +3824,12 @@ describe.concurrent('shared settings widget', () => {
             } else {
               await app.input.pressKey('Escape');
             }
+            // GTK tooltips are also top-level windows. Observe the chooser
+            // itself instead of counting unrelated tooltip windows.
             await waitForResult(async () =>
-              expect(await app.getWindowCount()).toBe(1)
+              expect(
+                await findWindowByName(app, 'Select a PEM CA bundle')
+              ).toBeUndefined()
             );
             await expectSensitive(parent);
             expect(await entry.text()).toBe(accept ? file : '');

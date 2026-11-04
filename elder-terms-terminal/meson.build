@@ -126,10 +126,16 @@ titlebar_effect_state_test = executable('titlebar-effect-state-test',
 test('titlebar-effect-state-test', titlebar_effect_state_test)
 titlebar_effects_gtk_test = executable('titlebar-effects-gtk-test',
   ['tests/cpp/titlebar-effects-gtk-test.cpp', 'src/titlebar-effect-state.cpp', 'src/titlebar-effects.cpp'],
-  dependencies: gtk_dep)
+  dependencies: gtk_dep, link_args: ['-Wl,--wrap=cairo_image_surface_create'])
 test('titlebar-effects-gtk-test', find_program('xvfb-run'),
   args: ['-a', titlebar_effects_gtk_test], timeout: 30,
   env: ['G_DEBUG=fatal-criticals', 'NO_AT_BRIDGE=1'])
+if find_program('kwin_x11', required: false).found()
+  test('titlebar-effects-window-manager-test', find_program('xvfb-run'),
+    args: ['-a', 'dbus-run-session', '--', 'bash',
+      meson.current_source_dir() / 'tests/titlebar-window-manager.sh', titlebar_effects_gtk_test],
+    timeout: 45, env: ['G_DEBUG=fatal-criticals', 'NO_AT_BRIDGE=1'])
+endif
 executable('titlebar-effects-demo',
   ['tests/cpp/titlebar-effects-demo.cpp', 'src/titlebar-effect-state.cpp', 'src/titlebar-effects.cpp'],
   dependencies: [connection_ui_dep, gtk_dep])

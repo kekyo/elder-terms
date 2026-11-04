@@ -55,6 +55,27 @@ static void start(TitlebarEffects &effects) {
   gtk_widget_queue_draw(effects.header);
 }
 
+static std::optional<double> background_extreme(GtkStyleContext *style, int width, int height) {
+  // Sample the rendered background instead of the deprecated GTK background
+  // color getter, which also omits theme background images/gradients.
+  auto *pixel = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 1, 1);
+  auto *probe = cairo_create(pixel);
+  std::optional<double> extreme;
+  if (cairo_status(probe) == CAIRO_STATUS_SUCCESS) {
+    gtk_render_background(style, probe, -width / 2.0, -height / 2.0, width, height);
+    cairo_surface_flush(pixel);
+    const auto *data = cairo_image_surface_get_data(pixel);
+    if (cairo_status(probe) == CAIRO_STATUS_SUCCESS && data) {
+      const auto color = *reinterpret_cast<const guint32 *>(data);
+      const auto lightness = .2126 * ((color >> 16) & 255) + .7152 * ((color >> 8) & 255) + .0722 * (color & 255);
+      extreme = lightness < 128 ? 1 : 0;
+    }
+  }
+  cairo_destroy(probe);
+  cairo_surface_destroy(pixel);
+  return extreme;
+}
+
 void draw_titlebar_effect_frame(GtkWidget *header, cairo_t *cr, const TitlebarEffectFrame &frame) {
   const auto width = gtk_widget_get_allocated_width(header);
   const auto height = gtk_widget_get_allocated_height(header);
@@ -67,26 +88,21 @@ void draw_titlebar_effect_frame(GtkWidget *header, cairo_t *cr, const TitlebarEf
   cairo_set_source(cr, background);
   cairo_paint(cr);
   if (frame.title > 0 || frame.bell > 0) {
-    // Sample the rendered background instead of the deprecated GTK background
-    // color getter, which also omits theme background images/gradients.
-    auto *pixel = cairo_image_surface_create(CAIRO_FORMAT_ARGB32, 1, 1);
-    auto *probe = cairo_create(pixel);
-    gtk_render_background(style, probe, -width / 2.0, -height / 2.0, width, height);
-    cairo_surface_flush(pixel);
-    const auto color = *reinterpret_cast<const guint32 *>(cairo_image_surface_get_data(pixel));
-    const auto lightness = .2126 * ((color >> 16) & 255) + .7152 * ((color >> 8) & 255) + .0722 * (color & 255);
-    const double extreme = lightness < 128 ? 1 : 0;
-    cairo_destroy(probe);
-    cairo_surface_destroy(pixel);
-    auto *band = cairo_pattern_create_linear(0, 0, std::max(1, width), 0);
-    for (int index = 0; index <= 96; ++index) {
-      const double x = index / 96.0;
-      cairo_pattern_add_color_stop_rgba(band, x, extreme, extreme, extreme,
-          titlebar_effect_opacity(frame, x));
+    // A failed allocation skips only the effect. Never pass an error pattern
+    // into GTK's context, which would prevent the title and buttons from drawing.
+    if (const auto extreme = background_extreme(style, width, height)) {
+      auto *band = cairo_pattern_create_linear(0, 0, std::max(1, width), 0);
+      for (int index = 0; index <= 96; ++index) {
+        const double x = index / 96.0;
+        cairo_pattern_add_color_stop_rgba(band, x, *extreme, *extreme, *extreme,
+            titlebar_effect_opacity(frame, x));
+      }
+      if (cairo_pattern_status(band) == CAIRO_STATUS_SUCCESS) {
+        cairo_set_source(cr, band);
+        cairo_mask(cr, background);
+      }
+      cairo_pattern_destroy(band);
     }
-    cairo_set_source(cr, band);
-    cairo_mask(cr, background);
-    cairo_pattern_destroy(band);
   }
   cairo_pattern_destroy(background);
   gtk_render_frame(style, cr, 0, 0, width, height);
