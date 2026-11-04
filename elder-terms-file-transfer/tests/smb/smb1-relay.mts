@@ -33,6 +33,30 @@ const listener = createServer((client) => {
       const size = 4 + pending.readUInt32BE(0);
       let packet = pending.subarray(0, size);
       pending = pending.subarray(size);
+      if (
+        armed &&
+        mode === 'stat-framing' &&
+        packet.length >= 72 &&
+        packet[8] === 0x32 &&
+        packet.readUInt16LE(65) === 5
+      ) {
+        // XP rejects QUERY_PATH_INFORMATION with a short ByteCount or a data
+        // offset beyond the message. Forward valid requests to the real server.
+        if (!reported) console.log('HELD');
+        reported = true;
+        if (
+          packet.readUInt16LE(67) !== packet.length - 69 ||
+          packet.readUInt16LE(61) > packet.length - 4
+        ) {
+          const failure = Buffer.alloc(39);
+          packet.copy(failure, 4, 4, 36);
+          failure.writeUInt32BE(35, 0);
+          failure.writeUInt32LE(0x00010002, 9); // STATUS_INVALID_SMB.
+          failure[13] |= 0x80;
+          client.write(failure);
+          continue;
+        }
+      }
       const operation =
         mode === 'partial-shares'
           ? 0x25

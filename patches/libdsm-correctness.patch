@@ -232,6 +232,16 @@
                      smb_message_destroy(msg);
  
                      if (!files)
+@@ -448,5 +460,7 @@
+-    tr2.data_offset        = 96; // Offset of pattern in packet
++    tr2.data_offset        = 0; // There is no transaction data in this request.
+     tr2.setup_count        = 1;
+     tr2.cmd                = SMB_TR2_QUERY_PATH;
+-    tr2.bct                = sizeof(smb_tr2_query) + utf_path_len + padding;
++    /* ByteCount includes the Name/Pad1 bytes preceding the parameters. */
++    tr2.bct                = sizeof(tr2.padding) + sizeof(smb_tr2_query) +
++                             utf_path_len + padding;
+     SMB_MSG_PUT_PKT(msg, tr2);
 --- a/src/smb_share.c
 +++ b/src/smb_share.c
 @@ -203,8 +203,13 @@

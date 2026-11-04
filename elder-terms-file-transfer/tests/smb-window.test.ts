@@ -31,7 +31,11 @@ it.for(['auto', '1'])(
   async (version, context) => {
     const smb1 = version === '1';
     const fixture = fileURLToPath(new URL('./smb/', import.meta.url));
-    if (smb1 && !process.env.ELDER_SMB1_NAMESPACE) {
+    if (
+      smb1 &&
+      !process.env.ELDER_SMB1_NAMESPACE &&
+      !process.env.ELDER_SMB_UI_ADDRESS
+    ) {
       const child = spawn(
         process.execPath,
         [resolve(fixture, 'run-smb1-window.mts')],
@@ -174,8 +178,10 @@ it.for(['auto', '1'])(
           'auto_close=false',
           'name=SMB files',
           '[smb]',
-          'address=127.0.0.1',
-          `port=${smb1 ? 445 : bridgeAddress.port}`,
+          `address=${smb1 ? (externalAddress ?? '127.0.0.1') : '127.0.0.1'}`,
+          `port=${smb1 ? port : bridgeAddress.port}`,
+          `netbios_name=${process.env.ELDER_SMB_UI_NETBIOS_NAME ?? ''}`,
+          `domain=${process.env.ELDER_SMB_UI_DOMAIN ?? ''}`,
           `version=${version}`,
           `username=${username}`,
           `local_directory=${local}`,
