@@ -2662,3 +2662,15 @@ msgstr "Notification visuelle BEL"
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "Title change effect"
 msgstr "Effet de changement de titre"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Weak"
+msgstr "Faible"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Medium"
+msgstr "Moyen"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Strong"
+msgstr "Fort"

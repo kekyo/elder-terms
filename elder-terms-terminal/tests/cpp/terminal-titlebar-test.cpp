@@ -52,14 +52,14 @@ extern "C" int __wrap_main(int argc, char **argv) {
   set_main_window_connection_phase(&*window, TerminalSessionConnectionPhase::disconnected);
   check_title(*window, "Hidden (Disconnected)");
   assert(titlebar_effects_running(window->header_bar));
-  set_setting_value(&settings, terminal_visual_bell_setting_key(), false);
-  set_setting_value(&settings, terminal_title_change_effect_setting_key(), false);
+  set_setting_value(&settings, terminal_visual_bell_setting_key(), std::string("disabled"));
+  set_setting_value(&settings, terminal_title_change_effect_setting_key(), std::string("disabled"));
   assert(apply_terminal_presentation(presentation, settings, nullptr));
   set_main_window_title(&*window, "Disabled");
   check_title(*window, "Disabled (Disconnected)");
   assert(!titlebar_effects_running(window->header_bar));
-  set_setting_value(&settings, terminal_visual_bell_setting_key(), true);
-  set_setting_value(&settings, terminal_title_change_effect_setting_key(), true);
+  set_setting_value(&settings, terminal_visual_bell_setting_key(), std::string("medium"));
+  set_setting_value(&settings, terminal_title_change_effect_setting_key(), std::string("medium"));
   assert(apply_terminal_presentation(presentation, settings, nullptr));
   set_main_window_title(&*window, "Disabled");
   assert(!titlebar_effects_running(window->header_bar));

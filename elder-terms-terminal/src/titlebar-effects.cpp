@@ -12,8 +12,8 @@ struct TitlebarEffects {
   GtkWidget *header;
   TitlebarEffectState state;
   guint tick = 0;
-  bool bell_enabled = true;
-  bool title_enabled = true;
+  TitlebarEffectStrength bell_strength = TitlebarEffectStrength::medium;
+  TitlebarEffectStrength title_strength = TitlebarEffectStrength::medium;
   bool destroyed = false;
 };
 
@@ -124,7 +124,7 @@ void install_titlebar_effects(GtkWidget *header) {
     auto *clock = gtk_widget_get_frame_clock(header);
     const auto frame = sample_titlebar_effect(effects.state, gdk_frame_clock_get_frame_time(clock));
     if (!frame.active) return FALSE;
-    draw_titlebar_effect_frame(header, cr, frame);
+    draw_titlebar_effect_frame(header, cr, scale_titlebar_effect(frame, effects.bell_strength, effects.title_strength));
     return TRUE;
   }), effects);
   g_signal_connect(header, "unmap", G_CALLBACK(+[](GtkWidget *, gpointer data) {
@@ -147,13 +147,13 @@ void install_titlebar_effects(GtkWidget *header) {
       }), header, G_CONNECT_DEFAULT);
 }
 
-void set_titlebar_effects_enabled(GtkWidget *header, bool bell, bool title) {
+void set_titlebar_effect_strengths(GtkWidget *header, TitlebarEffectStrength bell, TitlebarEffectStrength title) {
   auto *effects = effects_for(header);
   if (!effects || effects->destroyed) return;
-  effects->bell_enabled = bell;
-  effects->title_enabled = title;
-  if (!bell) effects->state.bell_start.reset();
-  if (!title) {
+  effects->bell_strength = bell;
+  effects->title_strength = title;
+  if (bell == TitlebarEffectStrength::disabled) effects->state.bell_start.reset();
+  if (title == TitlebarEffectStrength::disabled) {
     effects->state.cycle_start.reset();
     effects->state.fade_start.reset();
     effects->state.changed = false;
@@ -166,13 +166,13 @@ void notify_titlebar_title(GtkWidget *header, const std::string &title) {
   auto *effects = effects_for(header);
   if (!effects || effects->destroyed) return;
   notify_titlebar_title(effects->state, title, g_get_monotonic_time(),
-      effects->title_enabled && can_animate(*effects));
+      effects->title_strength != TitlebarEffectStrength::disabled && can_animate(*effects));
   start(*effects);
 }
 
 void notify_titlebar_bell(GtkWidget *header) {
   auto *effects = effects_for(header);
-  if (!effects || !effects->bell_enabled || !can_animate(*effects)) return;
+  if (!effects || effects->bell_strength == TitlebarEffectStrength::disabled || !can_animate(*effects)) return;
   notify_titlebar_bell(effects->state, g_get_monotonic_time());
   start(*effects);
 }

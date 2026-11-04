@@ -19,10 +19,10 @@ void install_titlebar_effects(GtkWidget *header);
 /**
  * Applies effective preferences, immediately cancelling disabled effects.
  * @param header Header previously installed with install_titlebar_effects().
- * @param bell Whether visual BEL notifications are enabled.
- * @param title Whether final-title changes animate the background.
+ * @param bell Visual BEL intensity.
+ * @param title Title-change intensity.
  */
-void set_titlebar_effects_enabled(GtkWidget *header, bool bell, bool title);
+void set_titlebar_effect_strengths(GtkWidget *header, TitlebarEffectStrength bell, TitlebarEffectStrength title);
 
 /**
  * Records a final title after synchronously updating the GTK window and label.

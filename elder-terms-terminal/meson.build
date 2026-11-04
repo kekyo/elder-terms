@@ -122,11 +122,11 @@ elder_terms_terminal = executable(
 
 if get_option('build_tests')
 titlebar_effect_state_test = executable('titlebar-effect-state-test',
-  ['tests/cpp/titlebar-effect-state-test.cpp', 'src/titlebar-effect-state.cpp'])
+  ['tests/cpp/titlebar-effect-state-test.cpp', 'src/titlebar-effect-state.cpp'], dependencies: elder_terms_dep)
 test('titlebar-effect-state-test', titlebar_effect_state_test)
 titlebar_effects_gtk_test = executable('titlebar-effects-gtk-test',
   ['tests/cpp/titlebar-effects-gtk-test.cpp', 'src/titlebar-effect-state.cpp', 'src/titlebar-effects.cpp'],
-  dependencies: gtk_dep, link_args: ['-Wl,--wrap=cairo_image_surface_create'])
+  dependencies: [elder_terms_dep, gtk_dep], link_args: ['-Wl,--wrap=cairo_image_surface_create'])
 test('titlebar-effects-gtk-test', find_program('xvfb-run'),
   args: ['-a', titlebar_effects_gtk_test], timeout: 30,
   env: ['G_DEBUG=fatal-criticals', 'NO_AT_BRIDGE=1'])

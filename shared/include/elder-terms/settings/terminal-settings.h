@@ -14,15 +14,16 @@
 #include <elder-terms/key-binding.h>
 #include <elder-terms/settings/settings-store.h>
 #include <elder-terms/settings/general-settings.h>
+#include <elder-terms/settings/titlebar-effects.h>
 
 namespace elder_terms {
 
-/** Independent titlebar notifications, enabled by default. */
+/** Independent titlebar notifications, with medium default strength. */
 struct TerminalTitlebarEffectsSettings {
   /** Flash the titlebar background on BEL, independently of audio playback. */
-  bool bell;
+  TitlebarEffectStrength bell;
   /** Animate the titlebar background when the final displayed title changes. */
-  bool title;
+  TitlebarEffectStrength title;
 };
 /** @returns Key for enabling the visual BEL notification. */
 ELDER_TERMS_API SettingKey terminal_visual_bell_setting_key();

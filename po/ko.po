@@ -2635,3 +2635,15 @@ msgstr "BEL 시각 알림"
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "Title change effect"
 msgstr "제목 변경 효과"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Weak"
+msgstr "약"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Medium"
+msgstr "중"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Strong"
+msgstr "강"

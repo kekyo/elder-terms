@@ -3462,11 +3462,15 @@ static void sync_widgets_from_draft(SettingsWidgetState *state, bool preserve_in
                            terminal_accessibility_enabled_setting_key(),
                            terminal_accessibility_enabled(state->draft_store));
   }
-  const auto effects = terminal_titlebar_effects_settings(state->draft_store);
-  if (state->terminal_visual_bell_combo) populate_boolean_combo(state->terminal_visual_bell_combo,
-      state->draft_store, terminal_visual_bell_setting_key(), effects.bell);
-  if (state->terminal_title_change_effect_combo) populate_boolean_combo(state->terminal_title_change_effect_combo,
-      state->draft_store, terminal_title_change_effect_setting_key(), effects.title);
+  for (const auto &[combo, key] : {std::pair{state->terminal_visual_bell_combo, terminal_visual_bell_setting_key()},
+      std::pair{state->terminal_title_change_effect_combo, terminal_title_change_effect_setting_key()}}) {
+    if (!combo) continue;
+    const auto fallback = std::get<std::string>(setting_fallback_value(state->draft_store, key, std::string("medium")));
+    std::vector<ComboOption> options;
+    for (const auto *strength : {"disabled", "weak", "medium", "strong"}) options.push_back({strength, setting_choice_label(key, strength)});
+    populate_inheritable_combo(combo, state->draft_store, key, setting_choice_label(key, fallback), options,
+        setting_string_value_or_default(state->draft_store, key, "medium"));
+  }
   if (state->terminal_block_copy_trim_trailing_spaces_combo != nullptr) {
     populate_boolean_combo(
         state->terminal_block_copy_trim_trailing_spaces_combo,
@@ -4014,7 +4018,7 @@ static void on_titlebar_effect_changed(GtkComboBox *combo, gpointer data) {
       ? terminal_visual_bell_setting_key() : terminal_title_change_effect_setting_key();
   const auto choice = active_combo_id(GTK_WIDGET(combo), inherit_choice);
   if (choice == inherit_choice) clear_explicit_setting_value(&state->draft_store, key);
-  else set_explicit_setting_value(&state->draft_store, key, SettingValue{choice == boolean_enabled});
+  else set_explicit_setting_value(&state->draft_store, key, SettingValue{choice});
   notify_changed(state);
 }
 

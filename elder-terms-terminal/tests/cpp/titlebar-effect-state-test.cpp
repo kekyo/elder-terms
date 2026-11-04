@@ -11,6 +11,17 @@
 using namespace elder_terms;
 
 int main() {
+  const TitlebarEffectFrame original{.25, .1, .15, true};
+  for (const auto strength : {TitlebarEffectStrength::disabled, TitlebarEffectStrength::weak,
+      TitlebarEffectStrength::medium, TitlebarEffectStrength::strong}) {
+    const auto frame = scale_titlebar_effect(original, strength, strength);
+    const auto multiplier = titlebar_effect_multiplier(strength);
+    assert(frame.phase == original.phase && frame.active == original.active);
+    assert(std::abs(frame.title - .1 * multiplier) < 1e-9 && std::abs(frame.bell - .15 * multiplier) < 1e-9);
+    assert(std::abs(titlebar_effect_opacity(frame, .25) - .2 * multiplier) < 1e-9);
+    const auto independent = scale_titlebar_effect(original, strength, TitlebarEffectStrength::disabled);
+    assert(independent.title == 0 && independent.bell == frame.bell);
+  }
   TitlebarEffectState state;
   notify_titlebar_title(state, "A", 0, true);
   assert(!sample_titlebar_effect(state, 0).active);

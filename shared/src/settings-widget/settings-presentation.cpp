@@ -493,6 +493,12 @@ std::string setting_label(const SettingKey &key) {
 
 std::string setting_choice_label(const SettingKey &key,
                                  const std::string &value) {
+  if (key.section == "terminal" && (key.name == "visual_bell" || key.name == "title_change_effect")) {
+    if (value == "disabled") return _("Disabled");
+    if (value == "weak") return _("Weak");
+    if (value == "medium") return _("Medium");
+    if (value == "strong") return _("Strong");
+  }
   for (const SettingChoiceEntry &entry : setting_choices) {
     if (matches_setting(key, entry.section, entry.name) &&
         value == entry.value) {

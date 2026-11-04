@@ -2091,8 +2091,8 @@ describe.concurrent('shared settings widget', () => {
         context,
         [
           '--page=terminal_appearance',
-          '--global=terminal.visual_bell=false',
-          '--global=terminal.title_change_effect=false',
+          '--global=terminal.visual_bell=disabled',
+          '--global=terminal.title_change_effect=disabled',
           `--save-file=${path}`,
         ],
         async ({ app, directory }) => {
@@ -2111,8 +2111,8 @@ describe.concurrent('shared settings widget', () => {
           expect((await title.info()).states).toContain('showing');
           expect(await bell.isChildSelected(0)).toBe(true);
           expect(await title.isChildSelected(0)).toBe(true);
-          await bell.selectChildAt(1);
-          await title.selectChildAt(2);
+          await bell.selectChildAt(2);
+          await title.selectChildAt(4);
           const save = expectElementKind(
             await app.getById('settings_save_button'),
             'button'
@@ -2120,14 +2120,14 @@ describe.concurrent('shared settings widget', () => {
           await save.click();
           await waitForResult(async () => {
             const saved = await readFile(path, 'utf8');
-            expect(saved).toContain('visual_bell=true');
-            expect(saved).toContain('title_change_effect=false');
+            expect(saved).toContain('visual_bell=weak');
+            expect(saved).toContain('title_change_effect=strong');
           });
           await title.selectChildAt(0);
           await save.click();
           await waitForResult(async () => {
             const saved = await readFile(path, 'utf8');
-            expect(saved).toContain('visual_bell=true');
+            expect(saved).toContain('visual_bell=weak');
             expect(saved).not.toContain('title_change_effect');
           });
           await writeFile(

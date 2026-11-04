@@ -6,6 +6,7 @@
 #pragma once
 
 #include <cstdint>
+#include <elder-terms/settings/titlebar-effects.h>
 #include <optional>
 #include <string>
 
@@ -39,6 +40,8 @@ struct TitlebarEffectFrame {
   double bell = 0;
   /** Whether another frame is needed, including the final fade. */
   bool active = false;
+  /** Maximum combined opacity for the selected strengths. */
+  double limit = .2;
 };
 
 /**
@@ -74,10 +77,20 @@ void notify_titlebar_bell(TitlebarEffectState &state, std::int64_t now);
 void reset_titlebar_effect(TitlebarEffectState &state);
 
 /**
+ * Scales a weak-intensity time sample without changing its phase or duration.
+ * @param frame Original time sample.
+ * @param bell BEL intensity.
+ * @param title Moving-band intensity.
+ * @returns Scaled frame, with the combined limit scaled by the stronger choice.
+ */
+TitlebarEffectFrame scale_titlebar_effect(TitlebarEffectFrame frame,
+    TitlebarEffectStrength bell, TitlebarEffectStrength title);
+
+/**
  * Samples the periodic band and combines it with BEL at a bounded opacity.
  * @param frame Sampled time state.
  * @param position Horizontal position in turns; endpoints have equal values.
- * @returns Opacity in [0, 0.20] toward the contrasting lightness extreme.
+ * @returns Opacity in [0, frame.limit] toward the contrasting lightness extreme.
  */
 double titlebar_effect_opacity(const TitlebarEffectFrame &frame, double position);
 

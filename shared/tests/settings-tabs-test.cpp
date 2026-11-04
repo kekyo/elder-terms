@@ -185,7 +185,7 @@ static void verify_titlebar_controls(SettingsWidgetMode mode) {
   SettingsWidgetCallbacks callbacks;
   callbacks.apply = [&](const SettingsStore &store, SettingsWidgetAction action) {
     const auto effects = terminal_titlebar_effects_settings(store);
-    require(!effects.bell && !effects.title, "Apply lost titlebar preferences");
+    require(effects.bell == TitlebarEffectStrength::disabled && effects.title == TitlebarEffectStrength::disabled, "Apply lost titlebar preferences");
     ++applied;
     action.complete(true, {});
   };
@@ -193,19 +193,25 @@ static void verify_titlebar_controls(SettingsWidgetMode mode) {
   auto *bell = GTK_COMBO_BOX(find_widget(fixture.root, (fixture.prefix + "_terminal_visual_bell_combo").c_str()));
   auto *title = GTK_COMBO_BOX(find_widget(fixture.root, (fixture.prefix + "_terminal_title_change_effect_combo").c_str()));
   require(bell && title, "Titlebar preference controls are missing");
+  for (const auto &[id, strength] : {std::pair{"weak", TitlebarEffectStrength::weak},
+      std::pair{"medium", TitlebarEffectStrength::medium}, std::pair{"strong", TitlebarEffectStrength::strong}}) {
+    require(gtk_combo_box_set_active_id(bell, id), "Missing intensity choice");
+    require(terminal_titlebar_effects_settings(settings_widget_draft_store(fixture.state)).bell == strength,
+        "Intensity selection was not reflected in the draft");
+  }
   gtk_combo_box_set_active_id(bell, "disabled");
   const auto draft = terminal_titlebar_effects_settings(settings_widget_draft_store(fixture.state));
-  require(!draft.bell && draft.title, "BEL and title preferences are not independent");
+  require(draft.bell == TitlebarEffectStrength::disabled && draft.title == TitlebarEffectStrength::medium, "BEL and title preferences are not independent");
   gtk_combo_box_set_active_id(title, "disabled");
   gtk_button_clicked(GTK_BUTTON(find_widget(fixture.root, (fixture.prefix + "_apply_button").c_str())));
   require(applied == 1, "Titlebar preferences cannot be applied");
   gtk_combo_box_set_active_id(bell, "inherit");
   gtk_combo_box_set_active_id(title, "inherit");
   const auto inherited = terminal_titlebar_effects_settings(settings_widget_draft_store(fixture.state));
-  require(inherited.bell && inherited.title, "Titlebar controls did not restore inheritance");
+  require(inherited.bell == TitlebarEffectStrength::medium && inherited.title == TitlebarEffectStrength::medium, "Titlebar controls did not restore inheritance");
   gtk_button_clicked(GTK_BUTTON(find_widget(fixture.root, (fixture.prefix + "_cancel_button").c_str())));
   const auto restored = terminal_titlebar_effects_settings(settings_widget_draft_store(fixture.state));
-  require(!restored.bell && !restored.title, "Cancel did not restore applied titlebar preferences");
+  require(restored.bell == TitlebarEffectStrength::disabled && restored.title == TitlebarEffectStrength::disabled, "Cancel did not restore applied titlebar preferences");
   destroy_fixture(&fixture);
 }
 

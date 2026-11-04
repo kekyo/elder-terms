@@ -2627,3 +2627,15 @@ msgstr "BEL视觉通知"
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "Title change effect"
 msgstr "标题更新效果"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Weak"
+msgstr "弱"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Medium"
+msgstr "中"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Strong"
+msgstr "强"

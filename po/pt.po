@@ -2651,3 +2651,15 @@ msgstr "Notificação visual de BEL"
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "Title change effect"
 msgstr "Efeito de alteração do título"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Weak"
+msgstr "Fraco"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Medium"
+msgstr "Médio"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Strong"
+msgstr "Forte"

@@ -2657,3 +2657,15 @@ msgstr "Визуальное уведомление BEL"
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "Title change effect"
 msgstr "Эффект изменения заголовка"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Weak"
+msgstr "Слабая"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Medium"
+msgstr "Средняя"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Strong"
+msgstr "Сильная"

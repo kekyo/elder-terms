@@ -3246,3 +3246,15 @@ msgstr "セキュリティレベルはTLS互換性の設定で選択してくだ
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "TLS 1.3 cipher suites must encrypt data"
 msgstr "TLS 1.3の暗号スイートはデータの暗号化に対応したものを指定してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Weak"
+msgstr "弱"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Medium"
+msgstr "中"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Strong"
+msgstr "強"

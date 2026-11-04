@@ -81,9 +81,19 @@ void reset_titlebar_effect(TitlebarEffectState &state) {
   state.title = std::move(title);
 }
 
+TitlebarEffectFrame scale_titlebar_effect(TitlebarEffectFrame frame,
+    TitlebarEffectStrength bell, TitlebarEffectStrength title) {
+  const auto bell_scale = titlebar_effect_multiplier(bell);
+  const auto title_scale = titlebar_effect_multiplier(title);
+  frame.bell *= bell_scale;
+  frame.title *= title_scale;
+  frame.limit *= std::max(bell_scale, title_scale);
+  return frame;
+}
+
 double titlebar_effect_opacity(const TitlebarEffectFrame &frame, double position) {
   const auto wave = (1 + std::cos(2 * std::numbers::pi * (position - frame.phase))) / 2;
-  return std::clamp(frame.bell + frame.title * std::pow(wave, 8), 0.0, .2);
+  return std::clamp(frame.bell + frame.title * std::pow(wave, 8), 0.0, frame.limit);
 }
 
 } // namespace elder_terms

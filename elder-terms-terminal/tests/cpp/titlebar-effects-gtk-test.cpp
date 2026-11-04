@@ -79,8 +79,8 @@ int main(int argc, char **argv) {
   notify_titlebar_title(other_header, "Initial");
   assert(!titlebar_effects_running(other_header));
   notify_titlebar_title(header, "Initial");
-  set_titlebar_effects_enabled(header, true, false);
-  set_titlebar_effects_enabled(header, true, true);
+  set_titlebar_effect_strengths(header, TitlebarEffectStrength::medium, TitlebarEffectStrength::disabled);
+  set_titlebar_effect_strengths(header, TitlebarEffectStrength::medium, TitlebarEffectStrength::medium);
   notify_titlebar_title(header, "Changed");
   assert(titlebar_effects_running(header));
   reject_background_probe = true;
@@ -114,11 +114,11 @@ int main(int argc, char **argv) {
   assert(!titlebar_effects_running(header));
   notify_titlebar_bell(header);
   assert(titlebar_effects_running(header));
-  set_titlebar_effects_enabled(header, false, true);
+  set_titlebar_effect_strengths(header, TitlebarEffectStrength::disabled, TitlebarEffectStrength::medium);
   assert(!titlebar_effects_running(header));
   notify_titlebar_title(header, "Title still enabled");
   assert(titlebar_effects_running(header));
-  set_titlebar_effects_enabled(header, true, false);
+  set_titlebar_effect_strengths(header, TitlebarEffectStrength::medium, TitlebarEffectStrength::disabled);
   assert(!titlebar_effects_running(header));
   notify_titlebar_bell(header);
   assert(titlebar_effects_running(header));

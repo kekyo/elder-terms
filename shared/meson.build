@@ -150,6 +150,7 @@ elder_terms_shared_sources = elder_terms_shared_resources + elder_terms_noto_pre
   'src/settings/ssh-proxy-settings.cpp',
   'src/settings/telnet-settings.cpp',
   'src/settings/terminal-settings.cpp',
+  'src/settings/titlebar-effects.cpp',
   'src/settings/transfer-settings.cpp',
   'src/settings-widget/settings-presentation.cpp',
   'src/settings-widget/settings-validation.cpp',
