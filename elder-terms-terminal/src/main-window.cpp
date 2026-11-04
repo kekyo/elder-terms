@@ -24,6 +24,7 @@
 #include <glib/gi18n-lib.h>
 
 #include "main-window.h"
+#include "titlebar-effects.h"
 #include "../../shared/src/connection-runtime/compact-header.h"
 #include "../../shared/src/connection-runtime/indicator-color.h"
 #include "../../shared/src/connection-runtime/inline-prompt.h"
@@ -1167,6 +1168,7 @@ std::optional<MainWindow> load_main_window(TerminalAmbiguousWidth ambiguous_widt
                    G_CALLBACK(on_status_bar_button_press),
                    main_window.window);
   apply_main_window_style(&main_window);
+  install_titlebar_effects(main_window.header_bar);
   create_activity_indicator_widgets(&main_window);
   if (!load_indicator_images(&main_window)) {
     release_main_window(&main_window);

@@ -47,6 +47,7 @@
 #include "../../elder-terms-file-transfer/src/sftp/sftp-fixture-client.h"
 #include "terminal-bell-player.h"
 #include "terminal-bell.h"
+#include "titlebar-effects.h"
 #include "terminal-hyperlink-action.h"
 #include "terminal-presentation.h"
 #include "terminal-renderer-status.h"
@@ -1957,6 +1958,7 @@ int main(int argc, char **argv) {
         update_application_session_identity(&app_state);
       },
       [&app_state] {
+        elder_terms::notify_titlebar_bell(app_state.main_window->header_bar);
         if (app_state.audible_bell) gdk_display_beep(gtk_widget_get_display(app_state.main_window->terminal));
         else elder_terms::ring_terminal_bell(app_state.bell_state);
       },

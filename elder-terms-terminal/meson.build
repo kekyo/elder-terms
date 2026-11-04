@@ -80,6 +80,8 @@ elder_terms_sources = [
   'src/gtk-initialization.cpp',
   'src/main.cpp',
   'src/main-window.cpp',
+  'src/titlebar-effect-state.cpp',
+  'src/titlebar-effects.cpp',
   'src/terminal-background.cpp',
   'src/terminal-background-image.cpp',
   'src/terminal-bell.cpp',
@@ -122,6 +124,12 @@ if get_option('build_tests')
 titlebar_effect_state_test = executable('titlebar-effect-state-test',
   ['tests/cpp/titlebar-effect-state-test.cpp', 'src/titlebar-effect-state.cpp'])
 test('titlebar-effect-state-test', titlebar_effect_state_test)
+titlebar_effects_gtk_test = executable('titlebar-effects-gtk-test',
+  ['tests/cpp/titlebar-effects-gtk-test.cpp', 'src/titlebar-effect-state.cpp', 'src/titlebar-effects.cpp'],
+  dependencies: gtk_dep)
+test('titlebar-effects-gtk-test', find_program('xvfb-run'),
+  args: ['-a', titlebar_effects_gtk_test], timeout: 30,
+  env: ['G_DEBUG=fatal-criticals', 'NO_AT_BRIDGE=1'])
 executable('titlebar-effects-demo',
   ['tests/cpp/titlebar-effects-demo.cpp', 'src/titlebar-effect-state.cpp', 'src/titlebar-effects.cpp'],
   dependencies: [connection_ui_dep, gtk_dep])

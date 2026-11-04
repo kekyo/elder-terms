@@ -26,7 +26,7 @@ struct TerminalRuntimeHostCallbacks {
   std::function<void(BoxrigGtk3TerminalWidget *)> attached;
   /** Receives a copied UTF-8 window title for application-specific composition. */
   std::function<void(std::string)> title;
-  /** Handles one terminal bell request using the application's audio policy. */
+  /** Handles one terminal bell request using the application's visual and audio policies. */
   std::function<void()> bell;
   /** Optional application pointer routing before selection and terminal reporting. */
   std::function<boxrig_input_mouse_route(const boxrig_mouse_event *, const boxrig_ui_hit_test_result *)> mouse = {};
