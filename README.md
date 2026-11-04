@@ -832,7 +832,8 @@ When the terminal receives BEL, the title-bar background briefly changes brightn
 and returns to its original color, regardless of the selected sound or playback success.
 Receiving data moves a subtle band from left to right across the background.
 This works in both terminals and file-transfer windows. Reception during a cycle
-keeps it running for another cycle; when reception stops, the original background returns.
+keeps it running for another cycle; when reception stops, the effect finishes its final cycle
+and fades back to the original background.
 Title text still updates immediately during the effect.
 
 In terminals, BEL-only input does not start or extend the gradient.
