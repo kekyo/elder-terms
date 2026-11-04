@@ -896,6 +896,7 @@ static void apply_main_window_title(MainWindow *main_window) {
     gtk_label_set_text(GTK_LABEL(main_window->header_title_label),
                        title.c_str());
   }
+  notify_titlebar_title(main_window->header_bar, title);
 }
 
 static void set_main_window_disconnected_notice_visible(

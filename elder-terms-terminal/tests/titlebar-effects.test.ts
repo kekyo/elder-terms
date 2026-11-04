@@ -11,7 +11,10 @@ import { PNG } from 'pngjs';
 import { expect, it } from 'vitest';
 import { waitForResult } from 'gestament/testing';
 import { runGtkTest, readTerminalGridLayout } from './gtk-test-helpers.ts';
-import { withTemporaryDirectory } from '../../shared/tests/connection-test-helpers.ts';
+import {
+  withTemporaryDirectory,
+  expectElementKind,
+} from '../../shared/tests/connection-test-helpers.ts';
 
 for (const sound of ['default', 'custom', 'removed']) {
   it(`records a bounded BEL flash with ${sound} audio and preserves terminal geometry`, async (context) => {
@@ -146,3 +149,129 @@ process.stdout.write('READY'); process.stdin.on('data', () => process.stdout.wri
     });
   });
 }
+
+it('records OSC title motion and simultaneous BEL while every final title is immediately visible', async (context) => {
+  await withTemporaryDirectory(async (directory) => {
+    const peer = join(directory, 'titles.mjs');
+    const config = join(directory, 'connection.ini');
+    await writeFile(
+      peer,
+      `import { writeFileSync } from 'node:fs';
+process.stdin.setRawMode(true); process.stdin.resume(); writeFileSync(${JSON.stringify(join(directory, 'ready'))}, 'READY');
+process.stdin.on('data', (data) => { for (const key of data.toString()) {
+  const title = key === 'a' ? 'effect-alpha' : 'effect-beta';
+  process.stdout.write((key === 'b' ? '\\x07' : '') + '\\x1b]0;' + title + '\\x1b\\\\');
+}});`
+    );
+    await writeFile(
+      config,
+      `[general]\nexterior_background=#202020\n[local]\ncommand_line=${process.execPath} ${peer}\n`
+    );
+    await runGtkTest(context, ['-c', config], async (app, evidence) => {
+      await waitForResult(async () =>
+        expect(await readFile(join(directory, 'ready'), 'utf8')).toBe('READY')
+      );
+      const header = await app.getById('header_bar');
+      const label = expectElementKind(
+        await app.getById('header_title_label'),
+        'label'
+      );
+      const capture = await header.capture();
+      const png = PNG.sync.read(capture.image);
+      const env = await app.environment();
+      const recorder = spawn(
+        'ffmpeg',
+        [
+          '-y',
+          '-loglevel',
+          'error',
+          '-f',
+          'x11grab',
+          '-framerate',
+          '60',
+          '-draw_mouse',
+          '0',
+          '-video_size',
+          `${png.width}x${png.height}`,
+          '-i',
+          `${env.DISPLAY}+${capture.bounds.x},${capture.bounds.y}`,
+          '-t',
+          '4',
+          '-c:v',
+          'ffv1',
+          '-threads',
+          '1',
+          join(evidence.directory, 'titles.mkv'),
+          '-t',
+          '4',
+          '-f',
+          'rawvideo',
+          '-pix_fmt',
+          'rgb24',
+          '-threads',
+          '1',
+          'pipe:1',
+        ],
+        { env }
+      );
+      const finished = once(recorder, 'close');
+      let pending = Buffer.alloc(0);
+      const samples: number[][] = [];
+      const updates: { title: string; frame: number }[] = [];
+      let stderr = '';
+      recorder.stderr.on('data', (chunk: Buffer) => {
+        stderr += chunk.toString();
+      });
+      recorder.stdout.on('data', (chunk: Buffer) => {
+        pending = Buffer.concat([pending, chunk]);
+        const size = png.width * png.height * 3;
+        while (pending.length >= size) {
+          samples.push(
+            [0.2, 0.4, 0.6].map(
+              (x) => pending[(3 * png.width + Math.round(png.width * x)) * 3]
+            )
+          );
+          pending = pending.subarray(size);
+        }
+      });
+      try {
+        await waitForResult(async () =>
+          expect(samples.length).toBeGreaterThan(2)
+        );
+        for (const [key, title] of [
+          ['a', 'effect-alpha'],
+          ['b', 'effect-beta'],
+          ['a', 'effect-alpha'],
+        ]) {
+          await app.input.pressKey(key);
+          await waitForResult(async () =>
+            expect(await label.text()).toContain(title)
+          );
+          updates.push({ title, frame: samples.length });
+        }
+        const [status] = await finished;
+        expect(status, stderr).toBe(0);
+      } finally {
+        if (recorder.exitCode === null && recorder.signalCode === null) {
+          recorder.kill('SIGTERM');
+          await finished;
+        }
+      }
+      await evidence.log('Title video samples and observed updates', {
+        samples,
+        updates,
+      });
+      expect(
+        samples.some((frame) => Math.max(...frame) - Math.min(...frame) > 8)
+      ).toBe(true);
+      expect(samples.some((frame) => frame[0] > frame[1] + 5)).toBe(true);
+      expect(samples.some((frame) => frame[2] > frame[1] + 5)).toBe(true);
+      expect(samples.some((frame) => Math.min(...frame) > 50)).toBe(true);
+      expect(samples.slice(-5)).toEqual(
+        Array.from({ length: 5 }, () => [32, 32, 32])
+      );
+      expect(await label.text()).toContain('effect-alpha');
+      await evidence.captureEvidence('title-settled', () => header.capture());
+    });
+  });
+});
