@@ -3262,3 +3262,59 @@ msgstr "強"
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "must be disabled, weak, medium, or strong"
 msgstr "disabled、weak、medium、strongのいずれかを指定してください"
+
+#: elder-terms-file-transfer/src/file-transfer/file-transfer-window.cpp
+msgid "The connection to the remote service was lost."
+msgstr "リモートサービスとの接続が切断されました。"
+
+#: elder-terms-terminal/src/main.cpp
+msgid "The shared SSH connection was lost."
+msgstr "共有しているSSH接続が切断されました。"
+
+#: elder-terms-terminal/src/main-window.cpp
+msgid "Local command failed"
+msgstr "ローカルコマンドの実行に失敗しました"
+
+#: elder-terms-terminal/src/main-window.cpp
+#, c-format
+msgid "Local command failed:\n%s"
+msgstr "ローカルコマンドの実行に失敗しました:\n%s"
+
+#: elder-terms-terminal/src/main-window.cpp
+msgid "Serial connection failed"
+msgstr "シリアル接続に失敗しました"
+
+#: elder-terms-terminal/src/main-window.cpp
+#, c-format
+msgid "Serial connection failed:\n%s"
+msgstr "シリアル接続に失敗しました:\n%s"
+
+#: elder-terms-terminal/src/main.cpp
+msgid "Waiting for the serial carrier signal. The connection will resume automatically."
+msgstr "シリアルのキャリア信号を待っています。信号が戻ると自動的に接続を再開します。"
+
+#: elder-terms-terminal/src/main.cpp
+#, c-format
+msgid "Local command terminated by signal %d."
+msgstr "ローカルコマンドがシグナル%dで終了しました。"
+
+#: elder-terms-terminal/src/main.cpp
+#, c-format
+msgid "Local command exited with status %d."
+msgstr "ローカルコマンドが終了コード%dで終了しました。"
+
+#: elder-terms-terminal/src/main.cpp
+msgid "Local command ended."
+msgstr "ローカルコマンドが終了しました。"
+
+#: elder-terms-terminal/src/main.cpp
+msgid "SSH session ended."
+msgstr "SSHセッションが終了しました。"
+
+#: elder-terms-terminal/src/main.cpp
+msgid "TELNET session ended."
+msgstr "TELNETセッションが終了しました。"
+
+#: elder-terms-terminal/src/main.cpp
+msgid "Serial connection closed. Waiting for the device to become available."
+msgstr "シリアル接続が終了しました。機器が利用可能になるまで待機しています。"

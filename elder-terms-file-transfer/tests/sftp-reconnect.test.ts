@@ -18,7 +18,12 @@ import {
 
 import { startSshLatencyFixture } from '../../shared/tests/ssh-latency-fixture.mts';
 
-for (const [shared, autoClose] of [[false, false], [true, false], [false, true], [true, true]]) {
+for (const [shared, autoClose] of [
+  [false, false],
+  [true, false],
+  [false, true],
+  [true, true],
+]) {
   it(`reconnects SFTP after an established SSH connection drops: shared=${shared}, auto_close=${autoClose}`, async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const remote = join(directory, 'remote');
@@ -176,9 +181,7 @@ for (const [shared, autoClose] of [[false, false], [true, false], [false, true],
         ).toBe('Disconnected');
         expect(
           await expectElementKind(
-            await app.getById(
-              'file_transfer_connection_notice_message_label'
-            ),
+            await app.getById('file_transfer_connection_notice_message_label'),
             'label'
           ).text()
         ).not.toBe('');

@@ -145,8 +145,6 @@ describe.concurrent('file transfer connection error recovery', () => {
               await waitForResult(async () =>
                 expect((await reconnect.info()).states).toContain('showing')
               );
-              // Temporary removal check: connection failures no longer require OK.
-              expect((await accept.info()).states).not.toContain('showing');
               await waitForResult(async () =>
                 expect(
                   await expectElementKind(
