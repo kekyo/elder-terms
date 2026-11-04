@@ -34,7 +34,8 @@ it.for(['auto', '1'])(
     if (
       smb1 &&
       !process.env.ELDER_SMB1_NAMESPACE &&
-      !process.env.ELDER_SMB_UI_ADDRESS
+      (process.env.ELDER_SMB_UI_VERSION !== '1' ||
+        !process.env.ELDER_SMB_UI_ADDRESS)
     ) {
       const child = spawn(
         process.execPath,

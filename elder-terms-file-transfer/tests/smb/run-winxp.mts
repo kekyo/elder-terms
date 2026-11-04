@@ -158,6 +158,7 @@ try {
       ],
       {
         ...env,
+        ELDER_SMB_UI_VERSION: '1',
         ELDER_SMB_UI_ADDRESS: address,
         ELDER_SMB_UI_PORT: port,
         ELDER_SMB_UI_NETBIOS_NAME: netbios,
