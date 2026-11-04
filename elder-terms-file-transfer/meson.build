@@ -338,6 +338,8 @@ file_transfer_window_lifetime_test = executable(
   [
     '../shared/src/connection-runtime/compact-header.cpp',
     'tests/cpp/file-transfer-window-lifetime-test.cpp',
+    '../shared/src/connection-runtime/titlebar-effect-state.cpp',
+    '../shared/src/connection-runtime/titlebar-effects.cpp',
     '../shared/src/connection-runtime/inline-prompt.cpp',
     '../shared/src/connection-runtime/widget-background.cpp',
     'src/sftp/sftp-fixture-client.cpp',

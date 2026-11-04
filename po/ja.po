@@ -216,6 +216,14 @@ msgstr "ウィンドウ左右のボーダー幅（px）"
 msgid "BEL sound"
 msgstr "BELサウンド"
 
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Visual BEL notification"
+msgstr "BELの視覚通知"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Titlebar receive effect"
+msgstr "受信時のタイトルバー演出"
+
 #: shared/src/settings-widget/settings-presentation.cpp:77
 msgid "Zoom in shortcut"
 msgstr "拡大ショートカット"
@@ -3238,3 +3246,19 @@ msgstr "セキュリティレベルはTLS互換性の設定で選択してくだ
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "TLS 1.3 cipher suites must encrypt data"
 msgstr "TLS 1.3の暗号スイートはデータの暗号化に対応したものを指定してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Weak"
+msgstr "弱"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Medium"
+msgstr "中"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Strong"
+msgstr "強"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "must be disabled, weak, medium, or strong"
+msgstr "disabled、weak、medium、strongのいずれかを指定してください"

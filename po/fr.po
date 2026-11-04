@@ -2654,3 +2654,27 @@ msgstr "NFS(2049)"
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "Shows TCP port responses. Service support and authentication are not verified."
 msgstr "Affiche les réponses des ports TCP. La prise en charge des services et l’authentification ne sont pas vérifiées."
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Visual BEL notification"
+msgstr "Notification visuelle BEL"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Titlebar receive effect"
+msgstr "Effet de réception dans la barre de titre"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Weak"
+msgstr "Faible"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Medium"
+msgstr "Moyen"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Strong"
+msgstr "Fort"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "must be disabled, weak, medium, or strong"
+msgstr "doit être disabled, weak, medium ou strong"

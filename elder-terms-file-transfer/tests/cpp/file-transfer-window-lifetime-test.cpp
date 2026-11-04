@@ -5,6 +5,7 @@
 
 #include "file-transfer-window.h"
 #include "activity-file-client.h"
+#include "../../../shared/src/connection-runtime/titlebar-effects.h"
 #include "../sftp/sftp-fixture-client.h"
 
 #include <algorithm>
@@ -459,8 +460,11 @@ static cardio::promise<void> verify_async(
               static_cast<GatedClient *>(data)->pane_enabled.raise();
             }
           }), client.get());
+      auto *header = gtk_window_get_titlebar(GTK_WINDOW(root));
+      expect(!titlebar_effects_running(header), "An unanswered request must not animate the receive effect");
       client->listing_allowed.raise();
       co_await client->pane_enabled.wait();
+      expect(titlebar_effects_running(header), "A remote directory reply must animate the file browser titlebar");
       expect(gtk_widget_is_sensitive(tree) && gtk_widget_is_sensitive(path),
              "The browser must accept input after directory loading completes");
       expect(!gtk_widget_is_sensitive(rename) && !gtk_widget_is_sensitive(remove),
@@ -522,6 +526,16 @@ static cardio::promise<void> verify_async(
       expect(auto_close != nullptr &&
              find_widget(find_widget(settings_dialog, "settings_general_page"), "settings_general_auto_close_combo") == auto_close,
              "File browser auto-close must be editable on General");
+      auto *receive = find_widget(settings_dialog, "settings_general_receive_effect_combo");
+      expect(GTK_IS_COMBO_BOX(receive), "File browser receive intensity must be editable on General");
+      gtk_combo_box_set_active_id(GTK_COMBO_BOX(receive), "disabled");
+      gtk_button_clicked(GTK_BUTTON(find_widget(settings_dialog, "settings_apply_button")));
+      notify_titlebar_receive(header);
+      expect(!titlebar_effects_running(header), "Applying Disabled must suppress file browser receive effects");
+      gtk_combo_box_set_active_id(GTK_COMBO_BOX(receive), "strong");
+      gtk_button_clicked(GTK_BUTTON(find_widget(settings_dialog, "settings_apply_button")));
+      notify_titlebar_receive(header);
+      expect(titlebar_effects_running(header), "Applying Strong must restore file browser receive effects");
       gtk_combo_box_set_active(GTK_COMBO_BOX(auto_close), 1);
       gtk_button_clicked(GTK_BUTTON(find_widget(settings_dialog, "settings_apply_button")));
       set_file_transfer_window_connection_available(window, false);

@@ -2626,3 +2626,27 @@ msgstr "NFS(2049)"
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "Shows TCP port responses. Service support and authentication are not verified."
 msgstr "TCP पोर्ट के जवाब दिखाए जाते हैं। सेवा समर्थन और प्रमाणीकरण की पुष्टि नहीं की जाती।"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Visual BEL notification"
+msgstr "BEL की दृश्य सूचना"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Titlebar receive effect"
+msgstr "डेटा प्राप्ति पर शीर्षक पट्टी प्रभाव"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Weak"
+msgstr "कम"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Medium"
+msgstr "मध्यम"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Strong"
+msgstr "तेज़"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "must be disabled, weak, medium, or strong"
+msgstr "disabled, weak, medium या strong होना चाहिए"

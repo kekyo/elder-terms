@@ -119,6 +119,25 @@ elder_terms_terminal = executable(
 )
 
 if get_option('build_tests')
+titlebar_effect_state_test = executable('titlebar-effect-state-test',
+  ['tests/cpp/titlebar-effect-state-test.cpp', '../shared/src/connection-runtime/titlebar-effect-state.cpp'], dependencies: elder_terms_dep)
+test('titlebar-effect-state-test', titlebar_effect_state_test)
+titlebar_effects_gtk_test = executable('titlebar-effects-gtk-test',
+  ['tests/cpp/titlebar-effects-gtk-test.cpp', '../shared/src/connection-runtime/titlebar-effect-state.cpp', '../shared/src/connection-runtime/titlebar-effects.cpp'],
+  dependencies: [elder_terms_dep, gtk_dep], link_args: ['-Wl,--wrap=cairo_image_surface_create'])
+test('titlebar-effects-gtk-test', find_program('xvfb-run'),
+  args: ['-a', titlebar_effects_gtk_test], timeout: 30,
+  env: ['G_DEBUG=fatal-criticals', 'NO_AT_BRIDGE=1'])
+if find_program('kwin_x11', required: false).found()
+  test('titlebar-effects-window-manager-test', find_program('xvfb-run'),
+    args: ['-a', 'dbus-run-session', '--', 'bash',
+      meson.current_source_dir() / 'tests/titlebar-window-manager.sh', titlebar_effects_gtk_test],
+    timeout: 45, env: ['G_DEBUG=fatal-criticals', 'NO_AT_BRIDGE=1'])
+endif
+executable('titlebar-effects-demo',
+  ['tests/cpp/titlebar-effects-demo.cpp'],
+  dependencies: [connection_ui_dep, gtk_dep])
+
 color_filter_test = executable('terminal-color-filter-test',
   ['tests/cpp/terminal-color-filter-test.cpp'],
   dependencies: [elder_terms_dep, boxrig_deps['boxrig-ui']])
@@ -189,6 +208,15 @@ appearance_state_test = executable('terminal-appearance-state-test',
     liburing_dep, ssh_transport_dep, libudev_dep, boxrig_runtime_dep, boxrig_background_dep],
   link_with: libxyzm_async_static_library,
   link_args: ['-Wl,--wrap=main', '-Wl,--wrap=boxrig_gtk3_terminal_widget_frame'])
+terminal_titlebar_test = executable('terminal-titlebar-test',
+  'tests/cpp/terminal-titlebar-test.cpp',
+  objects: elder_terms_terminal.extract_all_objects(recursive: false),
+  dependencies: [file_transfer_dep, cardio_dep, elder_terms_dep, canberra_dep, gio_dep, gtk_dep,
+    liburing_dep, ssh_transport_dep, libudev_dep, boxrig_runtime_dep, boxrig_background_dep],
+  link_with: libxyzm_async_static_library,
+  link_args: ['-Wl,--wrap=main'])
+test('terminal-titlebar-test', find_program('xvfb-run'), args: ['-a', terminal_titlebar_test],
+  timeout: 30, env: ['G_DEBUG=fatal-criticals', 'GDK_GL=disable', 'NO_AT_BRIDGE=1'])
 cell_width_test = executable('terminal-cell-width-test',
   'tests/cpp/terminal-cell-width-test.cpp',
   objects: elder_terms_terminal.extract_all_objects(recursive: false),

@@ -2619,3 +2619,27 @@ msgstr "NFS(2049)"
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "Shows TCP port responses. Service support and authentication are not verified."
 msgstr "显示 TCP 端口响应。不验证服务支持情况或身份认证是否成功。"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Visual BEL notification"
+msgstr "BEL视觉通知"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Titlebar receive effect"
+msgstr "接收数据时的标题栏效果"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Weak"
+msgstr "弱"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Medium"
+msgstr "中"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Strong"
+msgstr "强"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "must be disabled, weak, medium, or strong"
+msgstr "必须是 disabled、weak、medium 或 strong"

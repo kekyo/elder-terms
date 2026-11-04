@@ -44,6 +44,7 @@
 #include "activity-file-client.h"
 #include "../../../shared/src/connection-runtime/activity-indicator.h"
 #include "../../../shared/src/connection-runtime/compact-header.h"
+#include "../../../shared/src/connection-runtime/titlebar-effects.h"
 #include "../../../shared/src/connection-runtime/indicator-color.h"
 #include "local-file-reveal.h"
 #include "../../../shared/src/connection-runtime/widget-background.h"
@@ -1824,6 +1825,7 @@ static cardio::promise<void> run_file_transfer_hash_async(
           item.path, hash_cancellation);
       if (!window->destroyed) {
         note_activity_indicator_widget(&window->indicators[2]);
+        notify_titlebar_receive(window->header_bar);
       }
     } else {
       hashes = co_await calculate_local_file_hashes_async(
@@ -2746,8 +2748,9 @@ static void clear_file_transfer_window_colors(FileTransferWindow *window) {
     return;
   }
   if (window->exterior_background_provider != nullptr) {
-    remove_widget_tree_background_provider(
-        window->header_bar, window->exterior_background_provider);
+    if (window->header_bar) gtk_style_context_remove_provider(
+        gtk_widget_get_style_context(window->header_bar),
+        GTK_STYLE_PROVIDER(window->exterior_background_provider));
     remove_widget_tree_background_provider(
         window->status_bar, window->exterior_background_provider);
     for (GtkWidget *border : {window->frame_start_border,
@@ -2914,6 +2917,8 @@ static void open_file_settings(GtkMenuItem *, gpointer data) {
   SettingsWidgetCallbacks callbacks;
   callbacks.apply = [window](const SettingsStore &settings, SettingsWidgetAction action) {
     window->settings = settings;
+    set_titlebar_effect_strengths(window->header_bar, TitlebarEffectStrength::disabled,
+        general_receive_effect_strength(settings));
     update_connection_desktop_session(window->settings);
     set_file_transfer_window_connection_icon(
         window->self.lock(), general_connection_icon(settings));
@@ -3104,6 +3109,9 @@ create_file_transfer_window(FileTransferWindowOptions options) {
                                   state->title_box);
   gtk_window_set_titlebar(
       GTK_WINDOW(state->window), state->header_bar);
+  install_titlebar_effects(state->header_bar);
+  set_titlebar_effect_strengths(state->header_bar, TitlebarEffectStrength::disabled,
+      general_receive_effect_strength(state->settings));
   create_file_settings_menu(state.get());
   state->header_provider = create_compact_header_provider(
       state->header_bar, file_transfer_header_style_class);
@@ -3361,6 +3369,7 @@ void attach_file_transfer_window_client(
         const auto owner = weak.lock();
         if (owner && !owner->destroyed && owner->connection_available) {
           note_activity_indicator_widget(&owner->indicators[id == ActivityIndicatorId::sd ? 1 : 2]);
+          if (id == ActivityIndicatorId::rd) notify_titlebar_receive(owner->header_bar);
         }
       }, [weak = std::weak_ptr<FileTransferWindow>(window)] {
         if (const auto owner = weak.lock()) {
@@ -3529,8 +3538,12 @@ void set_file_transfer_window_colors(
         create_widget_background_provider(
             settings.exterior_background.value(),
             "File transfer exterior");
-    add_widget_tree_background_provider(
-        window->header_bar, window->exterior_background_provider);
+    // Paint only the header surface. An opaque custom-title box would cover
+    // the receive gradient; labels inherit the header foreground naturally.
+    if (window->exterior_background_provider) gtk_style_context_add_provider(
+        gtk_widget_get_style_context(window->header_bar),
+        GTK_STYLE_PROVIDER(window->exterior_background_provider),
+        GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
     add_widget_tree_background_provider(
         window->status_bar, window->exterior_background_provider);
     for (GtkWidget *border : {window->frame_start_border,

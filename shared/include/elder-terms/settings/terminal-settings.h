@@ -14,8 +14,26 @@
 #include <elder-terms/key-binding.h>
 #include <elder-terms/settings/settings-store.h>
 #include <elder-terms/settings/general-settings.h>
+#include <elder-terms/settings/titlebar-effects.h>
 
 namespace elder_terms {
+
+/** Independent titlebar notifications, with medium default strength. */
+struct TerminalTitlebarEffectsSettings {
+  /** Flash the titlebar background on BEL, independently of audio playback. */
+  TitlebarEffectStrength bell;
+  /** Animate the titlebar background on received data, using the General preference. */
+  TitlebarEffectStrength receive;
+};
+/** @returns Key for selecting the visual BEL intensity. */
+ELDER_TERMS_API SettingKey terminal_visual_bell_setting_key();
+/**
+ * Reads effective titlebar preferences after global and connection inheritance.
+ * @param store Layered terminal settings.
+ * @returns Independent visual BEL and receive preferences.
+ * @remarks GTK's animation preference can suppress both effects at runtime.
+ */
+ELDER_TERMS_API TerminalTitlebarEffectsSettings terminal_titlebar_effects_settings(const SettingsStore &store);
 
 /** Terminal columns assigned to Unicode East Asian Ambiguous characters. */
 enum class TerminalAmbiguousWidth {

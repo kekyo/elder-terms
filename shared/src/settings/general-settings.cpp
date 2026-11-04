@@ -271,6 +271,14 @@ std::optional<RgbColor> general_indicator_off_color(const SettingsStore &store) 
       store, general_indicator_off_color_setting_key(), "default"));
 }
 
+SettingKey general_receive_effect_setting_key() {
+  return make_setting_key(general_section, "receive_effect");
+}
+
+TitlebarEffectStrength general_receive_effect_strength(const SettingsStore &store) {
+  return titlebar_effect_strength(store, general_receive_effect_setting_key());
+}
+
 SettingKey general_compact_mode_setting_key() {
   return make_setting_key(general_section, general_compact_mode_key);
 }
@@ -283,6 +291,7 @@ bool general_compact_mode(const SettingsStore &store) {
 std::vector<SettingDefinition>
 general_setting_definitions(std::string default_connection_name) {
   return {
+      titlebar_effect_setting_definition(general_receive_effect_setting_key()),
       {
           .key = general_auto_close_setting_key(),
           .default_value = SettingValue{default_general_auto_close},

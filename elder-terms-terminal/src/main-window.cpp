@@ -24,6 +24,7 @@
 #include <glib/gi18n-lib.h>
 
 #include "main-window.h"
+#include "../../shared/src/connection-runtime/titlebar-effects.h"
 #include "../../shared/src/connection-runtime/compact-header.h"
 #include "../../shared/src/connection-runtime/indicator-color.h"
 #include "../../shared/src/connection-runtime/inline-prompt.h"
@@ -1167,6 +1168,7 @@ std::optional<MainWindow> load_main_window(TerminalAmbiguousWidth ambiguous_widt
                    G_CALLBACK(on_status_bar_button_press),
                    main_window.window);
   apply_main_window_style(&main_window);
+  install_titlebar_effects(main_window.header_bar);
   create_activity_indicator_widgets(&main_window);
   if (!load_indicator_images(&main_window)) {
     release_main_window(&main_window);
@@ -1285,11 +1287,22 @@ void note_main_window_activity(MainWindow *main_window,
     return;
   }
 
+  // Binary protocol data bypasses normal output decoding. Its 0x07 bytes are
+  // payload, not terminal BELs, and still count as reception.
+  if (indicator == ActivityIndicatorId::rd && main_window->runtime &&
+      terminal_runtime_connection_state(main_window->runtime).binary_receive)
+    notify_titlebar_receive(main_window->header_bar);
+
   const std::size_t index = activity_indicator_index(indicator);
   if (!main_window->indicator_visible[index]) {
     return;
   }
   note_activity_indicator_widget(&main_window->indicators[index]);
+}
+
+void note_main_window_output(MainWindow *main_window, std::span<const unsigned char> bytes) {
+  if (main_window && std::any_of(bytes.begin(), bytes.end(), [](unsigned char byte) { return byte != 0x07; }))
+    notify_titlebar_receive(main_window->header_bar);
 }
 
 void set_main_window_indicator_state(MainWindow *main_window,

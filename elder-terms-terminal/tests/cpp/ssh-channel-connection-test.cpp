@@ -76,6 +76,7 @@ struct ServerOptions {
   int forward_target_port = 0;
   bool sftp_only = false;
   int window_gate_fd = -1;
+  int forward_open_gate_fd = -1;
   bool forward_open_marker = false;
 };
 
@@ -221,18 +222,21 @@ static bool read_all_fd(int fd, void *data, std::size_t size) {
   return true;
 }
 
-// Arrange for a read to consume WINDOW_ADJUST before the blocked write returns
-// to its caller. The pipe orders the peer; no scheduling delay is assumed.
+// Arrange for a read to consume CHANNEL_OPEN_CONFIRMATION or WINDOW_ADJUST
+// before the pending operation returns to its caller. Pipes order the peer;
+// no scheduling delay or asynchronous completion on a fast peer is assumed.
 static int window_gate_fd = -1;
 static bool restored_window_observed = false;
-static bool consume_forward_open_reply = false;
+static int forward_open_gate_fd = -1;
 static bool forward_open_reply_observed = false;
 
 extern "C" int __real_ssh_channel_open_forward(ssh_channel, const char *, int, const char *, int);
 extern "C" int __wrap_ssh_channel_open_forward(ssh_channel channel, const char *host, int port,
                                                const char *source, int source_port) {
   const auto result = __real_ssh_channel_open_forward(channel, host, port, source, source_port);
-  if (consume_forward_open_reply && !forward_open_reply_observed && result == SSH_AGAIN) {
+  if (forward_open_gate_fd >= 0 && !forward_open_reply_observed && result == SSH_AGAIN) {
+    const char release = 'o';
+    expect_true(write_all_fd(forward_open_gate_fd, &release, 1), "release the channel-open confirmation");
     expect_true(ssh_channel_poll_timeout(channel, 30000, 0) == 1, "receive the channel-open marker");
     char marker = 0;
     expect_true(ssh_channel_read_nonblocking(channel, &marker, 1, 0) == 1 && marker == 'o',
@@ -839,6 +843,11 @@ static int on_forward_message(ssh_session session, ssh_message message, void *us
   state->forward_requested = destination && state->options.forward_host == destination &&
       ssh_message_channel_request_open_destination_port(message) == state->options.forward_port;
   if (!state->forward_requested || state->options.reject_forward) return 1;
+  if (state->options.forward_open_gate_fd >= 0) {
+    char release = 0;
+    if (!read_all_fd(state->options.forward_open_gate_fd, &release, 1) || release != 'o') return 1;
+    close_server_fd(&state->options.forward_open_gate_fd);
+  }
   state->channel = ssh_message_channel_request_open_reply_accept(message);
   if (!state->channel) return 1;
   state->channel_callbacks.userdata = state;
@@ -1616,19 +1625,20 @@ static std::size_t open_socket_count() {
 static void test_forward_readiness(const ServerOptions &options, const std::filesystem::path &known_hosts,
                                     bool test_open_reply) {
   int gate[2] = {-1, -1};
-  if (!test_open_reply) expect_true(::pipe(gate) == 0, "create the receive-window gate");
+  expect_true(::pipe(gate) == 0, "create the peer response gate");
   auto server_options = options;
   server_options.forward_host = "window.proxy-test.invalid";
-  server_options.window_gate_fd = gate[0];
+  server_options.window_gate_fd = test_open_reply ? -1 : gate[0];
+  server_options.forward_open_gate_fd = test_open_reply ? gate[0] : -1;
   server_options.forward_open_marker = test_open_reply;
   server_options.payload.resize(65537);
   for (std::size_t index = 0; index < server_options.payload.size(); ++index)
     server_options.payload[index] = static_cast<char>(index % 256);
   auto server = start_server(server_options);
   if (gate[0] >= 0) ::close(gate[0]);
-  window_gate_fd = gate[1];
+  window_gate_fd = test_open_reply ? -1 : gate[1];
   restored_window_observed = false;
-  consume_forward_open_reply = test_open_reply;
+  forward_open_gate_fd = test_open_reply ? gate[1] : -1;
   forward_open_reply_observed = false;
   cardio::dispatcher_group_glib group;
   cardio::dispatcher_host_glib dispatcher(group);
@@ -1650,7 +1660,8 @@ static void test_forward_readiness(const ServerOptions &options, const std::file
       auto channel = std::move(co_await opening);
       co_await channel->write_all_async(bytes(server_options.payload), {});
       expect_true(test_open_reply ? forward_open_reply_observed : restored_window_observed,
-                  "exercise readiness consumed by a read before the caller waits");
+                  test_open_reply ? "exercise channel-open readiness consumed before the caller waits" :
+                      "exercise window-update readiness consumed before the caller waits");
       std::string received;
       std::array<unsigned char, 16384> buffer{};
       for (;;) {
@@ -1666,7 +1677,7 @@ static void test_forward_readiness(const ServerOptions &options, const std::file
   dispatcher.park();
   task.unsafe_result();
   window_gate_fd = -1;
-  consume_forward_open_reply = false;
+  forward_open_gate_fd = -1;
   if (gate[1] >= 0) ::close(gate[1]);
   const auto result = wait_for_server(&server);
   if (failure) std::rethrow_exception(failure);

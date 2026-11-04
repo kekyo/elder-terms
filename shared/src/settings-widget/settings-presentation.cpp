@@ -143,6 +143,8 @@ static constexpr std::array setting_labels{
     SettingLabelEntry{"general", "border_width",
                       N_("Window side border width (px)")},
     SettingLabelEntry{"terminal", "bell_sound", N_("BEL sound")},
+    SettingLabelEntry{"terminal", "visual_bell", N_("Visual BEL notification")},
+    SettingLabelEntry{"general", "receive_effect", N_("Titlebar receive effect")},
     SettingLabelEntry{"terminal", "zoom_in_key", N_("Zoom in shortcut")},
     SettingLabelEntry{"terminal", "zoom_out_key", N_("Zoom out shortcut")},
     SettingLabelEntry{"terminal", "send_break_key",
@@ -491,6 +493,13 @@ std::string setting_label(const SettingKey &key) {
 
 std::string setting_choice_label(const SettingKey &key,
                                  const std::string &value) {
+  if ((key.section == "terminal" && key.name == "visual_bell") ||
+      (key.section == "general" && key.name == "receive_effect")) {
+    if (value == "disabled") return _("Disabled");
+    if (value == "weak") return _("Weak");
+    if (value == "medium") return _("Medium");
+    if (value == "strong") return _("Strong");
+  }
   for (const SettingChoiceEntry &entry : setting_choices) {
     if (matches_setting(key, entry.section, entry.name) &&
         value == entry.value) {
@@ -655,6 +664,7 @@ std::string settings_validation_message(const std::string &reason) {
       N_("must be between 1 and 86400 seconds"),
       N_("must be an integer between 1 and 86400"),
       N_("must be auto, 1, 2, or 3"),
+      N_("must be disabled, weak, medium, or strong"),
       N_("must select NFS version 2, 3 or 4.0"),
       N_("must be at most 15 ASCII letters, digits, hyphens, or underscores"),
       N_("must be an absolute path without dot segments, colons, trailing dots or spaces, or control characters"),

@@ -2645,3 +2645,27 @@ msgstr "NFS(2049)"
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "Shows TCP port responses. Service support and authentication are not verified."
 msgstr "يعرض استجابات منافذ TCP. لا يتم التحقق من دعم الخدمات أو نجاح المصادقة."
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Visual BEL notification"
+msgstr "إشعار BEL مرئي"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Titlebar receive effect"
+msgstr "تأثير شريط العنوان عند الاستقبال"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Weak"
+msgstr "ضعيف"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Medium"
+msgstr "متوسط"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Strong"
+msgstr "قوي"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "must be disabled, weak, medium, or strong"
+msgstr "يجب أن تكون القيمة disabled أو weak أو medium أو strong"

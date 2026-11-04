@@ -9,6 +9,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -304,6 +305,15 @@ boxrig_input_mouse_route route_main_window_terminal_mouse(MainWindow *main_windo
  */
 void note_main_window_activity(MainWindow *main_window,
                                ActivityIndicatorId indicator);
+
+/**
+ * Records decoded terminal output for the titlebar receive effect.
+ * @param main_window Window receiving normal terminal output.
+ * @param bytes Borrowed UTF-8 bytes, including terminal controls.
+ * @remarks Empty or BEL-only input leaves the current cycle and its remembered
+ * reception untouched. Binary transfers use their separate activity route.
+ */
+void note_main_window_output(MainWindow *main_window, std::span<const unsigned char> bytes);
 
 /**
  * Sets one status-bar activity indicator to an explicit state.

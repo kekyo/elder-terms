@@ -47,6 +47,7 @@
 #include "../../elder-terms-file-transfer/src/sftp/sftp-fixture-client.h"
 #include "terminal-bell-player.h"
 #include "terminal-bell.h"
+#include "../../shared/src/connection-runtime/titlebar-effects.h"
 #include "terminal-hyperlink-action.h"
 #include "terminal-presentation.h"
 #include "terminal-renderer-status.h"
@@ -1957,6 +1958,7 @@ int main(int argc, char **argv) {
         update_application_session_identity(&app_state);
       },
       [&app_state] {
+        elder_terms::notify_titlebar_bell(app_state.main_window->header_bar);
         if (app_state.audible_bell) gdk_display_beep(gtk_widget_get_display(app_state.main_window->terminal));
         else elder_terms::ring_terminal_bell(app_state.bell_state);
       },
@@ -1968,6 +1970,7 @@ int main(int argc, char **argv) {
   elder_terms::terminal_runtime_set_changed_callback(app_state.runtime, application_terminal_changed, &app_state);
   elder_terms::terminal_runtime_set_output_callback(app_state.runtime,
       [&app_state](std::span<const unsigned char> raw, std::span<const unsigned char> cooked) {
+        elder_terms::note_main_window_output(app_state.main_window, cooked);
         // Ready I/O can arrive before the next frame observes the connection.
         // Start logging before accepting its first received chunk.
         if (!app_state.closing && app_state.connection_phase !=
