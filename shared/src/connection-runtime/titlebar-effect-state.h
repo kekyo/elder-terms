@@ -17,7 +17,7 @@ struct TitlebarEffectState {
   std::optional<std::int64_t> cycle_start;
   /** Whether more data arrived anywhere in the current cycle. */
   bool received = false;
-  /** Start of the final 120-millisecond fade, or no fade. */
+  /** Start of the final 300-millisecond fade, or no fade. */
   std::optional<std::int64_t> fade_start;
   /** Initial opacity when starting or resuming a cycle during the final fade. */
   double attack_from = 0;

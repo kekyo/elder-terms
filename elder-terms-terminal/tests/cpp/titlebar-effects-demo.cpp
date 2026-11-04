@@ -104,7 +104,7 @@ int main(int argc, char **argv) {
   auto *box = gtk_box_new(GTK_ORIENTATION_VERTICAL, 8);
   gtk_container_add(GTK_CONTAINER(demo.window), box);
   auto *description = gtk_label_new("Weak: original intensity   Medium: 1.5x (default)   Strong: 2x\n"
-      "Dark, light and connection colors; normal and compact headers. Final fade: 120 ms.");
+      "Dark, light and connection colors; normal and compact headers. Final fade: 300 ms.");
   gtk_box_pack_start(GTK_BOX(box), description, FALSE, FALSE, 8);
   for (int index = 0; index < 9; ++index) {
     auto &row = demo.rows[index];

@@ -89,6 +89,10 @@ it('records and compares weak, medium and strong titlebar motion, BEL merging, c
   const later = await at(start + 1000000);
   const boundaryBefore = await at(start + 1170000);
   const boundaryAfter = await at(start + 1230000);
+  const fadeStart = await at(start + 2400000);
+  const fadeMiddle = await at(start + 2550000);
+  const fadeTail = await at(start + 2640000);
+  const fadeEnd = await at(start + 2730000);
   const ended = await at(4100000);
   const bellStart = frames.find((frame) => frame[3] >= 4)![1];
   const bell = await at(bellStart);
@@ -111,6 +115,15 @@ it('records and compares weak, medium and strong titlebar motion, BEL merging, c
     );
     expect(Math.max(...differences(boundaryBefore, row))).toBeGreaterThan(4);
     expect(Math.max(...differences(boundaryAfter, row))).toBeGreaterThan(4);
+    // Ending retains a visible band while fading, with no abrupt removal.
+    const fading = [fadeStart, fadeMiddle, fadeTail].map((frame) =>
+      Math.max(...differences(frame, row))
+    );
+    expect(fading[1]).toBeGreaterThan(2);
+    expect(fading[0]).toBeGreaterThan(fading[1]);
+    expect(fading[1]).toBeGreaterThan(fading[2]);
+    expect(fading[2]).toBeGreaterThan(0);
+    expect(Math.max(...differences(fadeEnd, row))).toBeLessThanOrEqual(1);
     expect(Math.max(...differences(ended, row))).toBeLessThanOrEqual(1);
     // The minimum across the header excludes the moving band: it isolates BEL.
     expect(Math.min(...differences(bell, row))).toBeGreaterThan(15);

@@ -30,7 +30,11 @@ int main() {
   assert(!state.received);
   assert(sample_titlebar_effect(state, 1200100).receive == 0.1);
   assert(!state.cycle_start && state.fade_start);
-  assert(!sample_titlebar_effect(state, 1320100).active);
+  const auto fading = sample_titlebar_effect(state, 1350100);
+  assert(fading.active && std::abs(fading.receive - 0.05) < 1e-9);
+  const auto fading_tail = sample_titlebar_effect(state, 1440100);
+  assert(fading_tail.active && fading_tail.receive > 0 && fading_tail.receive < fading.receive);
+  assert(!sample_titlebar_effect(state, 1500100).active);
 
   // Every position in a cycle can remember reception; bursts do not queue cycles.
   for (const auto offset : {1, 200000, 600000, 1199999}) {
@@ -46,7 +50,7 @@ int main() {
     notify_titlebar_receive(state, 1200000);
     assert(state.received && sample_titlebar_effect(state, 1800000).phase == 0.5);
     assert(sample_titlebar_effect(state, 2400000).receive == 0.1);
-    assert(!sample_titlebar_effect(state, 3720000).active);
+    assert(!sample_titlebar_effect(state, 3900000).active);
   }
 
   state = {};

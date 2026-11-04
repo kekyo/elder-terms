@@ -11,7 +11,7 @@
 namespace elder_terms {
 
 static constexpr std::int64_t cycle_duration = 1200000;
-static constexpr std::int64_t fade_duration = 120000;
+static constexpr std::int64_t fade_duration = 300000;
 static constexpr std::int64_t attack_duration = 80000;
 static constexpr std::int64_t bell_duration = 260000;
 static constexpr std::int64_t bell_interval = 400000;
