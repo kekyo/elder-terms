@@ -53,6 +53,7 @@ await run(
     join(root, 'scripts/prepare-boxrig.mts'),
     join(root, 'scripts/prepare-jemalloc.mts'),
     join(root, 'scripts/prepare-libsmb2.mts'),
+    join(root, 'scripts/prepare-libdsm.mts'),
     '--module',
     'NodeNext',
     '--target',

@@ -13,12 +13,16 @@
 
 namespace elder_terms {
 
-/** Settings for one direct TCP SMB file transfer connection. */
+/** Settings for one SMB file transfer connection. */
 struct SmbConnectionSettings {
+  /** Protocol family: auto (SMB2/3), 1, 2, or 3. */
+  std::string version = "auto";
   /** Server hostname or numeric address, without a scheme or path. */
   std::string address;
-  /** SMB direct TCP port. */
+  /** TCP port; SMB1 supports only direct 445 or NetBIOS 139. */
   gint64 port = 445;
+  /** Server NetBIOS name, required for SMB1 over port 139. */
+  std::string netbios_name;
   /** Authentication domain, or empty for the server default. */
   std::string domain;
   /** Initial username for the runtime authentication prompt. */

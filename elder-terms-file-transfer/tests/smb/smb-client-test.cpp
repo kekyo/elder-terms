@@ -19,6 +19,23 @@ static cardio::promise<void> test_async(int argc, char **argv) {
   options.connection.username = argv[3];
   options.connection.port = std::stoi(argv[4]);
   options.password = g_getenv("ELDER_SMB_PASSWORD");
+  for (const auto *version : {"auto", "2", "3"}) {
+    auto selected = options;
+    selected.connection.version = version;
+    std::string actual;
+    selected.negotiated = [&](std::string value) { actual = std::move(value); };
+    if (std::string(version) == "2" && std::string(argv[2]) == "encrypted") {
+      bool rejected = false;
+      try { (void)co_await elder_terms::open_smb_client_async(selected, argv[2], {}); }
+      catch (const elder_terms::RemoteFileError &) { rejected = true; }
+      require(rejected && actual.empty(), "SMB2 must not fall back to SMB3 for an encrypted share");
+      continue;
+    }
+    auto connection = co_await elder_terms::open_smb_client_async(selected, argv[2], {});
+    require(actual.starts_with(version == std::string("2") ? "SMB 2." : "SMB 3."),
+            "The negotiated SMB version must match the selected family");
+    co_await elder_terms::stop_smb_client_async(connection);
+  }
   int disconnects = 0;
   options.disconnected = [&] { ++disconnects; };
   auto client = co_await elder_terms::open_smb_client_async(std::move(options), argv[2], {});

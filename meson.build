@@ -18,12 +18,14 @@ if package_build_tools == ''
   boxrig_prepare = files('scripts/prepare-boxrig.mts')
   jemalloc_prepare = files('scripts/prepare-jemalloc.mts')
   libsmb2_prepare = files('scripts/prepare-libsmb2.mts')
+  libdsm_prepare = files('scripts/prepare-libdsm.mts')
   gestament_config = find_program(meson.project_source_root() / 'node_modules/.bin/gestament-config')
   gestament_include_dir = run_command(gestament_config, '--includedir', check: true).stdout().strip()
 else
   boxrig_prepare = package_build_tools / 'prepare-boxrig.mjs'
   jemalloc_prepare = package_build_tools / 'prepare-jemalloc.mjs'
   libsmb2_prepare = package_build_tools / 'prepare-libsmb2.mjs'
+  libdsm_prepare = package_build_tools / 'prepare-libdsm.mjs'
   gestament_include_dir = package_build_tools / 'include'
 endif
 
@@ -183,6 +185,31 @@ custom_target('libsmb2-license-bundle',
   depends: libsmb2_build_target, build_by_default: true,
   install: true,
   install_dir: get_option('datadir') / 'doc/elder-terms/licenses/libsmb2')
+
+libdsm_prepare_args = [boxrig_node, libdsm_prepare,
+  meson.project_source_root(), meson.project_build_root()]
+run_command(libdsm_prepare_args, check: true)
+libdsm_build_target = custom_target('libdsm-build',
+  output: 'libdsm-build.stamp', command: libdsm_prepare_args,
+  build_by_default: true, build_always_stale: true)
+libdsm_sdk = meson.project_build_root() / 'libdsm/sdk'
+libdsm_runtime_target = custom_target('libdsm-private-runtime',
+  output: 'libdsm.so.3',
+  command: [find_program('cp'), libdsm_sdk / 'lib/libdsm.so.3', '@OUTPUT@'],
+  depends: libdsm_build_target, build_by_default: true,
+  install: true, install_dir: elder_terms_private_install_dir)
+libdsm_dep = declare_dependency(
+  compile_args: ['-isystem', libdsm_sdk / 'include'],
+  dependencies: meson.get_compiler('cpp').find_library('dsm',
+    dirs: libdsm_sdk / 'lib', static: false),
+  sources: [libdsm_build_target, libdsm_runtime_target])
+custom_target('libdsm-source-bundle',
+  output: 'libdsm-source.tar.gz',
+  command: [find_program('cp'), libdsm_sdk / 'libdsm-source.tar.gz', '@OUTPUT@'],
+  depends: libdsm_build_target, build_by_default: true,
+  install: true, install_dir: get_option('datadir') / 'doc/elder-terms/licenses/libdsm')
+install_data('deps/libdsm/COPYING', 'patches/libdsm-correctness.patch',
+  install_dir: get_option('datadir') / 'doc/elder-terms/licenses/libdsm')
 
 cardio_root_dir = meson.project_source_root() / 'deps/cardio'
 cardio_include_dir = include_directories('deps/cardio/include')

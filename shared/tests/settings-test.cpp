@@ -4803,6 +4803,49 @@ static void test_webdav_invalid_numeric_settings_remain_invalid_after_save() {
               "Correcting a port must clear the retained malformed input");
 }
 
+static void test_smb_versions_and_security_inheritance() {
+  auto store = create_default_settings(default_terminal_display_settings(1.0), "SMB versions");
+  set_explicit_setting_value(&store, general_type_setting_key(), std::string("smb"));
+  set_explicit_setting_value(&store, elder_terms::smb_setting_key("address"), std::string("server.example"));
+  const auto version = elder_terms::smb_setting_key("version");
+  expect_true(set_explicit_setting_value(&store, version, std::string("1")), "SMB1 must be selectable");
+  expect_true(!elder_terms::smb_connection_settings(store).require_signing &&
+                  elder_terms::smb_connection_settings(store).validation_errors.empty(),
+              "SMB1 built-in defaults must permit a basic direct connection");
+  auto globals = create_default_settings(default_terminal_display_settings(1.0), "Defaults");
+  set_explicit_setting_value(&globals, elder_terms::smb_setting_key("require_signing"), true);
+  elder_terms::rebase_settings_store_fallbacks(&store, globals);
+  expect_true(elder_terms::smb_connection_settings(store).require_signing &&
+                  !elder_terms::smb_connection_settings(store).validation_errors.empty(),
+              "SMB1 must retain and reject an inherited signing requirement");
+  set_explicit_setting_value(&store, elder_terms::smb_setting_key("require_signing"), false);
+  expect_true(elder_terms::smb_connection_settings(store).validation_errors.empty(), "Explicit signing override must work");
+  set_explicit_setting_value(&store, elder_terms::smb_setting_key("port"), gint64{1445});
+  expect_true(!elder_terms::smb_connection_settings(store).validation_errors.empty(), "SMB1 arbitrary ports must be rejected");
+  set_explicit_setting_value(&store, elder_terms::smb_setting_key("port"), gint64{139});
+  expect_true(!elder_terms::smb_connection_settings(store).validation_errors.empty(), "SMB1 NBT requires a NetBIOS name");
+  expect_true(set_explicit_setting_value(&store, elder_terms::smb_setting_key("netbios_name"), std::string("ELDERTEST")),
+              "A NetBIOS name must be configurable");
+  expect_true(elder_terms::smb_connection_settings(store).validation_errors.empty(), "Named NBT must validate");
+  set_explicit_setting_value(&store, elder_terms::ssh_proxy_setting_key("enabled"), true);
+  set_explicit_setting_value(&store, elder_terms::ssh_proxy_setting_key("address"), std::string("gateway"));
+  expect_true(!elder_terms::ssh_proxy_connection_settings(store).validation_errors.empty(), "SMB1 cannot silently bypass SSH proxy");
+  set_explicit_setting_value(&store, elder_terms::ssh_proxy_setting_key("enabled"), false);
+  const auto path = temporary_config_path("smb-versions");
+  for (const auto *value : {"auto", "1", "2", "3"}) {
+    expect_true(set_explicit_setting_value(&store, version, std::string(value)), "All supported SMB versions must be selectable");
+    expect_true(save_settings(store, path).saved, "SMB version must save");
+    const auto loaded = load_settings({.config_path = path, .startup_config_path = std::nullopt}, 1.0);
+    expect_true(elder_terms::setting_string_value_or_default(loaded.store, version, "missing") == value,
+                "SMB version must survive reload");
+  }
+  expect_true(!set_explicit_setting_value(&store, version, std::string("4")), "Unknown SMB versions must be rejected");
+  set_explicit_setting_value(&store, version, std::string("1"));
+  set_explicit_setting_value(&store, elder_terms::smb_setting_key("address"), std::string("::1"));
+  expect_true(!elder_terms::smb_connection_settings(store).validation_errors.empty(), "SMB1 IPv6 must be rejected");
+  remove_config(path);
+}
+
 static void test_smb_settings_round_trip_and_validation() {
   auto store = create_default_settings(default_terminal_display_settings(1.0), "SMB");
   expect_true(set_explicit_setting_value(&store, general_type_setting_key(), std::string("smb")),
@@ -4907,6 +4950,7 @@ int main() {
     elder_terms_settings_test::test_webdav_settings_round_trip();
     elder_terms_settings_test::test_webdav_invalid_numeric_settings_remain_invalid_after_save();
     elder_terms_settings_test::test_smb_settings_round_trip_and_validation();
+    elder_terms_settings_test::test_smb_versions_and_security_inheritance();
     elder_terms_settings_test::test_smb_invalid_numeric_input_remains_invalid_after_save();
     elder_terms_settings_test::test_smb_remote_directory_matches_transfer_paths();
     elder_terms_settings_test::test_independent_inactive_indicator_color();

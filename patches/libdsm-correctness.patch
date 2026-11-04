@@ -1,0 +1,332 @@
+--- a/src/smb_utils.c
++++ b/src/smb_utils.c
+@@ -118,11 +118,11 @@
+ size_t      smb_to_utf16(const char *src, size_t src_len, char **dst)
+ {
+     return (smb_iconv(src, src_len, dst,
+-                      current_encoding(), "UCS-2LE"));
++                      current_encoding(), "UTF-16LE"));
+ }
+ 
+ size_t      smb_from_utf16(const char *src, size_t src_len, char **dst)
+ {
+     return (smb_iconv(src, src_len, dst,
+-                      "UCS-2LE", current_encoding()));
++                      "UTF-16LE", current_encoding()));
+ }
+--- a/src/smb_types.h
++++ b/src/smb_types.h
+@@ -122,7 +122,7 @@
+     smb_srv_info        srv;
+ 
+ 
+-    ASN1_TYPE           spnego_asn1;
++    asn1_node           spnego_asn1;
+     smb_buffer          xsec_target;
+ 
+     smb_creds           creds;
+--- a/src/smb_spnego.c
++++ b/src/smb_spnego.c
+@@ -97,7 +97,7 @@
+     smb_message           *msg = NULL;
+     smb_session_xsec_req  req;
+     smb_buffer            ntlm;
+-    ASN1_TYPE             token;
++    asn1_node             token;
+     int                   res, der_size = 128;
+     char                  der[128], err_desc[ASN1_MAX_ERROR_DESCRIPTION_SIZE];
+ 
+@@ -180,7 +180,7 @@
+     smb_message           msg;
+     smb_session_xsec_resp *resp;
+     smb_ntlmssp_challenge *challenge;
+-    ASN1_TYPE             token;
++    asn1_node             token;
+     int                   res, resp_token_size = sizeof(resp_token);
+ 
+     assert(s != NULL);
+@@ -249,7 +249,7 @@
+     smb_message           *msg = NULL, resp;
+     smb_session_xsec_req  req;
+     smb_buffer            ntlm;
+-    ASN1_TYPE             token;
++    asn1_node             token;
+     int                   res, der_size = 512;
+     char                  der[512], err_desc[ASN1_MAX_ERROR_DESCRIPTION_SIZE];
+ 
+--- a/config.h.meson
++++ b/config.h.meson
+@@ -142,7 +142,9 @@
+ #mesondefine _FILE_OFFSET_BITS
+ 
+ /* Define to 2 to get glibc warnings. */
++#ifndef _FORTIFY_SOURCE
+ #mesondefine _FORTIFY_SOURCE
++#endif
+ 
+ /* Extensions to ISO C89 from ISO C99. */
+ #mesondefine _ISOC99_SOURCE
+--- a/meson.build
++++ b/meson.build
+@@ -5,7 +5,7 @@
+                       'warning_level=2',
+                       'buildtype=release',
+                       'b_ndebug=if-release'],
+-    meson_version: '>= 0.53.0')
++    meson_version: '>= 0.56.0')
+ 
+ #Soname
+ dsm_soname_version = '3.2.0'
+@@ -36,9 +36,7 @@
+ dep_rt = []
+ 
+ optional_arguments = [
+-  '-Wall',
+   '-Wsign-compare',
+-  '-Wextra',
+   '-Wstrict-aliasing',
+   '-Wstrict-overflow' ]
+ 
+--- a/meson_options.txt
++++ b/meson_options.txt
+@@ -1 +1 @@
+-option('binaries', type: 'boolean', value: 'true')
++option('binaries', type: 'boolean', value: true)
+--- a/doc/meson.build
++++ b/doc/meson.build
+@@ -1,7 +1,7 @@
+ doxygen_data = configuration_data()
+ doxygen_data.set('PACKAGE_NAME', 'libdsm')
+ doxygen_data.set('BDSM_PACKAGE_VERSION', meson.project_version())
+-doxygen_data.set('abs_top_srcdir', meson.source_root())
++doxygen_data.set('abs_top_srcdir', meson.project_source_root())
+ 
+ doxyfile = configure_file(
+   input: 'Doxyfile.in',
+--- a/src/smb_message.c
++++ b/src/smb_message.c
+@@ -226,19 +226,22 @@
+ 
+ void            smb_message_flag(smb_message *msg, uint32_t flag, int value)
+ {
+-    uint32_t      *flags;
+-
+     if (msg == NULL || msg->packet == NULL)
+         return;
+ 
+     // flags + flags2 is actually 24 bit long, we have to be cautious
+-    flags = (uint32_t *)&(msg->packet->header.flags);
+     flag &= 0x00FFFFFF;
+ 
+     if (value)
+-        *flags |= flag;
++    {
++        msg->packet->header.flags |= (uint8_t)flag;
++        msg->packet->header.flags2 |= (uint16_t)(flag >> 8);
++    }
+     else
+-        *flags &= ~flag;
++    {
++        msg->packet->header.flags &= (uint8_t)~flag;
++        msg->packet->header.flags2 &= (uint16_t)~(flag >> 8);
++    }
+ }
+ 
+ void            smb_message_set_andx_members(smb_message *msg)
+--- a/src/smb_trans2.c
++++ b/src/smb_trans2.c
+@@ -90,24 +90,28 @@
+  * Find management
+  */
+ 
+-static void smb_tr2_find2_parse_entries(smb_file **files_p, smb_tr2_find2_entry *iter, size_t count, uint8_t *eod)
++static int smb_tr2_find2_parse_entries(smb_file **files_p, smb_tr2_find2_entry *iter, size_t count, uint8_t *eod)
+ {
+     smb_file *tmp = NULL;
+     size_t   i;
+ 
+     for (i = 0; i < count && (uint8_t *)iter < eod; i++)
+     {
++        if ((size_t)(eod - (uint8_t *)iter) < sizeof(*iter) ||
++            iter->name_len > (size_t)(eod - (uint8_t *)iter->name))
++            return 0;
++
+         // Create a smb_file and fill it
+         tmp = calloc(1, sizeof(smb_file));
+         if (!tmp)
+-            return;
++            return 0;
+ 
+         tmp->name_len = smb_from_utf16((const char *)iter->name, iter->name_len,
+                                        &tmp->name);
+         if (tmp->name_len == 0)
+         {
+             free(tmp);
+-            return;
++            return 0;
+         }
+         tmp->name[tmp->name_len] = 0;
+ 
+@@ -126,10 +130,10 @@
+         iter = (smb_tr2_find2_entry *)(((char *)iter) + iter->next_entry);
+     }
+ 
+-    return;
++    return i == count;
+ }
+ 
+-static void smb_find_first_parse(smb_message *msg, smb_file **files_p)
++static int smb_find_first_parse(smb_message *msg, smb_file **files_p)
+ {
+     smb_trans2_resp       *tr2;
+     smb_tr2_findfirst2_params  *params;
+@@ -146,11 +150,10 @@
+     eod     = msg->packet->payload + msg->payload_size;
+     count   = params->count;
+ 
+-    smb_tr2_find2_parse_entries(files_p, iter, count, eod);
+-    return;
++    return smb_tr2_find2_parse_entries(files_p, iter, count, eod);
+ }
+ 
+-static void smb_find_next_parse(smb_message *msg, smb_file **files_p)
++static int smb_find_next_parse(smb_message *msg, smb_file **files_p)
+ {
+     smb_trans2_resp       *tr2;
+     smb_tr2_findnext2_params  *params;
+@@ -166,8 +169,7 @@
+     iter    = (smb_tr2_find2_entry *)(tr2->payload + sizeof(smb_tr2_findnext2_params));
+     eod     = msg->packet->payload + msg->payload_size;
+     count   = params->count;
+-    smb_tr2_find2_parse_entries(files_p, iter, count, eod);
+-    return;
++    return smb_tr2_find2_parse_entries(files_p, iter, count, eod);
+ }
+ 
+ static smb_message  *smb_trans2_find_first (smb_session *s, smb_tid tid, const char *pattern)
+@@ -339,7 +341,12 @@
+     msg = smb_trans2_find_first(s,tid,pattern);
+     if (msg)
+     {
+-        smb_find_first_parse(msg,&files);
++        if (!smb_find_first_parse(msg, &files))
++        {
++            smb_stat_list_destroy(files);
++            smb_message_destroy(msg);
++            return NULL;
++        }
+         if (files)
+         {
+             // Check if we shall send a FIND_NEXT request
+@@ -369,7 +376,12 @@
+                     error_offset     = findnext2_params->ea_error_offset;
+ 
+                     // parse the result for files
+-                    smb_find_next_parse(msg, &files);
++                    if (!smb_find_next_parse(msg, &files))
++                    {
++                        smb_stat_list_destroy(files);
++                        smb_message_destroy(msg);
++                        return NULL;
++                    }
+                     smb_message_destroy(msg);
+ 
+                     if (!files)
+--- a/src/smb_share.c
++++ b/src/smb_share.c
+@@ -203,8 +203,13 @@
+     // Let's skip smb parameters and DCE/RPC stuff until we are at the begginning of
+     // NetShareCtrl
+ 
++    if (msg->payload_size < 72)
++        return -1;
++
+     p_share_count = (uint32_t *)(msg->packet->payload + 60);
+     share_count = *p_share_count;
++    if (share_count > (msg->payload_size - 72) / 12)
++        return -1;
+     data        = msg->packet->payload + 72 + share_count * 12;
+     eod         = msg->packet->payload + msg->payload_size;
+ 
+@@ -216,7 +221,7 @@
+     {
+         uint32_t name_len, com_len;
+ 
+-        if (data + sizeof(uint32_t) > eod)
++        if ((size_t)(eod - data) < 3 * sizeof(uint32_t))
+         {
+             BDSM_dbg("[smb_share_parse_enum]Malformed message\n");
+             break;
+@@ -225,23 +230,38 @@
+         name_len = *((uint32_t *)data);   // Read 'Max Count', make it a multiple of 2
+         data    += 3 * sizeof(uint32_t);  // Move pointer to beginning of Name.
+ 
+-        if (data +  sizeof(uint32_t) + name_len * 2 + sizeof(uint32_t) > eod)
++        if (name_len == 0 || name_len > (size_t)(eod - data) / 2)
+         {
+             BDSM_dbg("[smb_share_parse_enum]Malformed message\n");
+             break;
+         }
+ 
+-        smb_from_utf16((const char *)data, name_len * 2, (*list) + i);
++        if (smb_from_utf16((const char *)data, name_len * 2, (*list) + i) == 0)
++            break;
+ 
+         if (name_len % 2) name_len += 1;  // Align next move
++        if (name_len > (size_t)(eod - data) / 2)
++            break;
+         data    += name_len * 2;          // Move the pointer to Comment 'Max count'
++        if ((size_t)(eod - data) < 3 * sizeof(uint32_t))
++            break;
+ 
+         com_len  = *((uint32_t *)data);
+         data    += 3 * sizeof(uint32_t);  // Move pointer to beginning of Comment.
++        if (com_len > (size_t)(eod - data) / 2)
++            break;
+         if (com_len % 2) com_len += 1;    // Align next move
++        if (com_len > (size_t)(eod - data) / 2)
++            break;
+         data    += com_len * 2;           // Move the pointer to next item
+     }
+ 
++    if (i != share_count)
++    {
++        smb_share_list_destroy(*list);
++        *list = NULL;
++        return -1;
++    }
+     return i;
+ }
+ 
+@@ -366,7 +386,7 @@
+ 
+     // Is the server throwing pile of shit back at me ?
+     res = smb_session_recv_msg(s, &resp);
+-    if (resp.payload_size < 71)
++    if (!res || resp.payload_size < 71)
+     {
+         BDSM_dbg("[smb_share_get_list]Malformed message\n");
+         ret = DSM_ERROR_NETWORK;
+@@ -464,17 +484,19 @@
+ 
+     // Is the server throwing pile of shit back at me ?
+     res = smb_session_recv_msg(s, &resp);
+-    if (resp.payload_size < 4)
++    if (!res || resp.payload_size < 4)
+     {
+         BDSM_dbg("[smb_share_get_list]Malformed message\n");
+         ret = DSM_ERROR_NETWORK;
+         goto error;
+     }
+ 
+-    if (!res && (uint32_t)resp.packet->payload[resp.payload_size - 4])
++    uint32_t status;
++    memcpy(&status, resp.packet->payload + resp.payload_size - 4, sizeof(status));
++    if (status != 0)
+     {
+         BDSM_dbg("NetShareEnumAll call failed.\n");
+-        ret = DSM_ERROR_NETWORK;
++        ret = DSM_ERROR_GENERIC;
+         goto error;
+     }
+ 

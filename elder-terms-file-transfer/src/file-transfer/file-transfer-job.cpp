@@ -189,6 +189,11 @@ void attach_file_transfer_queue(const std::shared_ptr<FileTransferQueue> &queue,
   queue->available = true;
 }
 
+void set_file_transfer_queue_protocol(const std::shared_ptr<FileTransferQueue> &queue,
+    std::string protocol) {
+  queue->protocol = std::move(protocol);
+}
+
 std::shared_ptr<FileTransferJob> enqueue_file_transfer_job(const std::shared_ptr<FileTransferQueue> &queue,
     const FileTransferRequest &request) {
   if (!queue->available) throw std::logic_error("Reconnect before submitting a transfer");

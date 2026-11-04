@@ -62,6 +62,9 @@ static cardio::promise<void> start_application_async(SmbApplication *state) {
     options.disconnected = [window = std::weak_ptr<FileTransferWindow>(state->window)] {
       if (auto current = window.lock()) set_file_transfer_window_connection_available(current, false);
     };
+    options.negotiated = [window = std::weak_ptr<FileTransferWindow>(state->window)](std::string version) {
+      if (auto current = window.lock()) set_file_transfer_window_protocol(current, std::move(version));
+    };
     TerminalSessionCallbacks gateway_callbacks{};
     gateway_callbacks.ssh_prompt = [state](const SshUserPrompt &prompt, cardio::cancellation signal) {
       return prompt_file_transfer_ssh_async(state->window, prompt, signal);

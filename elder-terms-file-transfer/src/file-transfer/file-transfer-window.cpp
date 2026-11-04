@@ -3501,6 +3501,18 @@ void set_file_transfer_window_connection_available(
   update_file_transfer_sensitivity(window.get());
 }
 
+void set_file_transfer_window_protocol(
+    const std::shared_ptr<FileTransferWindow> &window, std::string protocol_name) {
+  if (!window || window->destroyed || protocol_name.empty()) return;
+  window->protocol_name = std::move(protocol_name);
+  const auto name = general_connection_name(window->settings);
+  const auto title = name.empty() ? window->protocol_name : name + " — " + window->protocol_name;
+  gtk_window_set_title(GTK_WINDOW(window->window), title.c_str());
+  gtk_header_bar_set_title(GTK_HEADER_BAR(window->header_bar), title.c_str());
+  gtk_label_set_text(GTK_LABEL(window->title_label), title.c_str());
+  set_file_transfer_queue_protocol(window->jobs, window->protocol_name);
+}
+
 void set_file_transfer_window_colors(
     const std::shared_ptr<FileTransferWindow> &window,
     const GeneralColorSettings &settings) {

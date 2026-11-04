@@ -349,7 +349,7 @@ See the [systemd resolver API documentation](https://github.com/systemd/systemd/
 
 ![SSH and SFTP connection settings](./images/ssh-sftp-settings.png)
 
-SSH, SFTP, TELNET, HTTP/HTTPS, WebDAV, passive FTP/FTPS, SMB and NFS can use an SSH gateway.
+SSH, SFTP, TELNET, HTTP/HTTPS, WebDAV, passive FTP/FTPS, SMB2/3 and NFS can use an SSH gateway.
 Configure it in the separate "SSH proxy" tab, keeping the final destination in
 its protocol tab. See [Using SSH proxy](./docs/en/ssh-proxy.md) for inheritance,
 authentication and supported connection modes.
@@ -491,7 +491,8 @@ See [Using WebDAV](./docs/en/webdav.md) for settings and supported operations.
 ## Using SMB
 
 Create a connection in the launcher, choose "SMB", and save the server address
-on the SMB tab. The default direct TCP port is 445.
+on the SMB tab. The default direct TCP port is 445, with automatic SMB2/3 selection.
+You can also select SMB1, SMB2, or SMB3 explicitly. SMB1 supports direct IPv4 connections.
 The window asks for a username and password when it opens; passwords are not saved.
 
 After connecting, `/` on the remote side lists shares. Open a share or enter a
@@ -1545,7 +1546,7 @@ sudo apt install build-essential git meson ninja-build pkg-config gettext imagem
   libglib2.0-dev libgtk-3-dev libgdk-pixbuf-2.0-dev libcanberra-dev libx11-dev libxfixes-dev \
   libxkbcommon-dev liburing-dev libudev-dev libsystemd-dev libssh-dev libnfs-dev libcurl4-openssl-dev \
   libcairo2-dev libpango1.0-dev libfontconfig1-dev libepoxy-dev libibus-1.0-dev \
-  libwayland-dev libgl-dev libegl-dev libssl-dev libxml2-dev ca-certificates xdg-utils
+  libwayland-dev libgl-dev libegl-dev libssl-dev libxml2-dev libtasn1-6-dev libtasn1-bin doxygen patch ca-certificates xdg-utils
 ```
 
 Node.js 22.18 or later is also required for

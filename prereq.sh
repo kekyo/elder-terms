@@ -33,6 +33,10 @@ binutils
 autoconf
 build-essential
 cmake
+doxygen
+libtasn1-6-dev
+libtasn1-bin
+patch
 ca-certificates
 dbus-user-session
 dpkg-dev

@@ -39,7 +39,7 @@ executable(
     'src/nfs/nfs-application.cpp', 'src/nfs/nfs-client.cpp',
     'src/nfs/nfs-v2.cpp', 'src/nfs/nfs-ssh-proxy.cpp',
     'src/nfs/nfs-name.cpp', 'src/nfs/nfs-rpc.cpp',
-    'src/smb/smb-client.cpp', 'src/smb/smb-share-list.cpp',
+    'src/smb/smb-client.cpp', 'src/smb/smb1-client.cpp', 'src/smb/smb-share-list.cpp',
     'src/main.cpp',
     'src/file-transfer/file-transfer-certificate-prompt.cpp',
   ],
@@ -65,18 +65,43 @@ executable(
   install_rpath: elder_terms_private_install_rpath,
 )
 
+smb1_worker = executable('elder-terms-smb1-worker', 'src/smb/smb1-worker.cpp',
+  dependencies: [cardio_dep, libdsm_dep, dependency('gio-unix-2.0')],
+  install: true, install_dir: elder_terms_private_install_dir / 'elder-terms-file-transfer',
+  install_rpath: elder_terms_private_install_rpath)
+
 if get_option('build_tests')
+smb1_client_test = executable('smb1-client-test',
+  ['tests/smb/smb1-client-test.cpp', 'src/file-transfer/file-transfer-engine.cpp', 'src/smb/smb1-client.cpp',
+   'src/smb/smb-client.cpp', 'src/smb/smb-share-list.cpp'],
+  dependencies: [cardio_dep, elder_terms_dep, libsmb2_dep])
+smb1_library_probe = executable('smb1-library-probe', 'tests/smb/smb1-library-probe.cpp',
+  dependencies: [libdsm_dep])
+test('smb1-library', find_program('node'),
+  args: [files('tests/smb/run-smb1-library.mts'), smb1_library_probe], timeout: 180)
+test('smb1-client', find_program('node'),
+  args: [files('tests/smb/run-smb1-library.mts'), smb1_client_test, '--client'],
+  depends: smb1_worker, timeout: 180)
+test('smb1-fault', find_program('node'),
+  args: [files('tests/smb/run-smb1-fault.mts'), smb1_client_test],
+  depends: smb1_worker, timeout: 180)
+test('smb1-known-share', find_program('node'),
+  args: [files('tests/smb/run-smb1-library.mts'), smb1_client_test, '--client'],
+  env: ['ELDER_SMB_DENY_ENUMERATION=1'], depends: smb1_worker, timeout: 180)
+test('smb1-fragmented-shares', find_program('node'),
+  args: [files('tests/smb/run-smb1-library.mts'), smb1_client_test, '--client'],
+  env: ['ELDER_SMB_SHARE_COUNT=200'], depends: smb1_worker, timeout: 180)
 smb_client_test = executable('smb-client-test',
-  ['tests/smb/smb-client-test.cpp', 'src/smb/smb-client.cpp', 'src/smb/smb-share-list.cpp'],
+  ['tests/smb/smb-client-test.cpp', 'src/smb/smb-client.cpp', 'src/smb/smb1-client.cpp', 'src/smb/smb-share-list.cpp'],
   dependencies: [cardio_dep, elder_terms_dep, libsmb2_dep])
 smb_fault_test = executable('smb-fault-test',
-  ['tests/smb/smb-fault-test.cpp', 'src/smb/smb-client.cpp', 'src/smb/smb-share-list.cpp',
+  ['tests/smb/smb-fault-test.cpp', 'src/smb/smb-client.cpp', 'src/smb/smb1-client.cpp', 'src/smb/smb-share-list.cpp',
    'src/file-transfer/file-transfer-engine.cpp'],
   dependencies: [cardio_dep, elder_terms_dep, libsmb2_dep])
 test('smb-client', find_program('node'),
   args: [files('tests/smb/run-client.mts'), smb_client_test, smb_fault_test], timeout: 180)
 smb_transfer_test = executable('smb-transfer-test',
-  ['tests/smb/smb-transfer-test.cpp', 'src/smb/smb-client.cpp', 'src/smb/smb-share-list.cpp',
+  ['tests/smb/smb-transfer-test.cpp', 'src/smb/smb-client.cpp', 'src/smb/smb1-client.cpp', 'src/smb/smb-share-list.cpp',
    'src/file-transfer/file-transfer-engine.cpp'],
   dependencies: [cardio_dep, elder_terms_dep, libsmb2_dep])
 test('smb-transfer', find_program('node'),
@@ -119,7 +144,7 @@ test('nfs-ssh-proxy-discovery', find_program('node'),
   args: [files('tests/nfs/run-proxy-discovery.mts'), nfs_ssh_proxy_test, ssh_proxy_test_server], timeout: 60)
 
 smb_share_probe = executable('smb-share-probe',
-  ['tests/smb/smb-share-probe.cpp', 'src/smb/smb-client.cpp', 'src/smb/smb-share-list.cpp'],
+  ['tests/smb/smb-share-probe.cpp', 'src/smb/smb-client.cpp', 'src/smb/smb1-client.cpp', 'src/smb/smb-share-list.cpp'],
   dependencies: [cardio_dep, elder_terms_dep, libsmb2_dep, ssh_transport_dep])
 test('smb-share-probe', find_program('node'),
   args: [files('tests/smb/run-client.mts'), smb_share_probe], timeout: 180)
@@ -127,7 +152,7 @@ test('smb-share-probe-proxy', find_program('node'),
   args: [files('tests/smb/run-client.mts'), smb_share_probe, '--proxy', ssh_proxy_test_server], timeout: 180)
 
 smb_server_test = executable('smb-server-test',
-  ['tests/smb/smb-server-test.cpp', 'src/smb/smb-client.cpp', 'src/smb/smb-share-list.cpp',
+  ['tests/smb/smb-server-test.cpp', 'src/smb/smb-client.cpp', 'src/smb/smb1-client.cpp', 'src/smb/smb-share-list.cpp',
    'src/file-transfer/activity-file-client.cpp', 'src/file-transfer/file-transfer-engine.cpp'],
   dependencies: [cardio_dep, elder_terms_dep, libsmb2_dep, ssh_transport_dep])
 test('smb-server', find_program('node'),
@@ -151,7 +176,7 @@ smb_share_list_test = executable('smb-share-list-test',
 test('smb-share-list', smb_share_list_test)
 
 smb_ssh_proxy_test = executable('smb-ssh-proxy-test',
-  ['tests/smb/smb-ssh-proxy-test.cpp', 'src/smb/smb-client.cpp', 'src/smb/smb-share-list.cpp'],
+  ['tests/smb/smb-ssh-proxy-test.cpp', 'src/smb/smb-client.cpp', 'src/smb/smb1-client.cpp', 'src/smb/smb-share-list.cpp'],
   dependencies: [cardio_dep, elder_terms_dep, libsmb2_dep, ssh_transport_dep])
 test('smb-ssh-proxy', find_program('node'),
   args: [files('tests/smb/run-client.mts'), smb_ssh_proxy_test, '--proxy', ssh_proxy_test_server], timeout: 180)

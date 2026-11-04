@@ -108,6 +108,7 @@ const createPackageStage = (
     'usr/share/doc/elder-terms/licenses/boxrig',
     'usr/share/doc/elder-terms/licenses/jemalloc',
     'usr/share/doc/elder-terms/licenses/libsmb2',
+    'usr/share/doc/elder-terms/licenses/libdsm',
     'usr/share/doc/elder-terms/licenses/connection-icons',
     'usr/share/icons/hicolor/256x256/apps',
     'usr/share/locale/ja/LC_MESSAGES',
@@ -141,6 +142,8 @@ Description: GTK terminal for serial, TELNET, local shell, SSH, SFTP, and FTP co
     'usr/lib/elder-terms/libboxrig-gtk3.so.0',
     'usr/lib/elder-terms/libjemalloc.so.2',
     'usr/lib/elder-terms/libsmb2.so.7',
+    'usr/lib/elder-terms/libdsm.so.3',
+    'usr/lib/elder-terms/elder-terms-file-transfer/elder-terms-smb1-worker',
     'usr/lib/elder-terms/launcher/elder-terms',
     'usr/lib/elder-terms/elder-terms-terminal/elder-terms-terminal',
     'usr/lib/elder-terms/elder-terms-file-transfer/elder-terms-file-transfer',
@@ -221,6 +224,15 @@ Description: GTK terminal for serial, TELNET, local shell, SSH, SFTP, and FTP co
   ])
     textFiles.set(
       `usr/share/doc/elder-terms/licenses/libsmb2/${name}`,
+      'source fixture\n'
+    );
+  for (const name of [
+    'COPYING',
+    'libdsm-source.tar.gz',
+    'libdsm-correctness.patch',
+  ])
+    textFiles.set(
+      `usr/share/doc/elder-terms/licenses/libdsm/${name}`,
       'source fixture\n'
     );
   for (const name of [
@@ -1106,6 +1118,7 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
         'libcardio.so.0',
         'libjemalloc.so.2',
         'libsmb2.so.7',
+        'libdsm.so.3',
         'libboxrig.so.0',
         'libboxrig-ui.so.0',
         'libboxrig-session.so.0',
@@ -1125,6 +1138,10 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
         'Wayland-protocols-NOTICES.md',
       ].map((name) => `usr/share/doc/elder-terms/licenses/boxrig/${name}`),
       'usr/share/doc/elder-terms/licenses/jemalloc/COPYING',
+      'usr/lib/elder-terms/elder-terms-file-transfer/elder-terms-smb1-worker',
+      ...['COPYING', 'libdsm-source.tar.gz', 'libdsm-correctness.patch'].map(
+        (name) => `usr/share/doc/elder-terms/licenses/libdsm/${name}`
+      ),
       ...['COPYING', 'LICENCE-LGPL-2.1.txt', 'libsmb2-source.tar.gz'].map(
         (name) => `usr/share/doc/elder-terms/licenses/libsmb2/${name}`
       ),
@@ -1272,6 +1289,14 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
       join(libraryDirectory, 'elder-terms/libelder-terms.so.0'),
       join(libraryDirectory, 'elder-terms/libjemalloc.so.2'),
       join(libraryDirectory, 'elder-terms/libsmb2.so.7'),
+      join(libraryDirectory, 'elder-terms/libdsm.so.3'),
+      join(
+        libraryDirectory,
+        'elder-terms/elder-terms-file-transfer/elder-terms-smb1-worker'
+      ),
+      'share/doc/elder-terms/licenses/libdsm/COPYING',
+      'share/doc/elder-terms/licenses/libdsm/libdsm-source.tar.gz',
+      'share/doc/elder-terms/licenses/libdsm/libdsm-correctness.patch',
       join(libraryDirectory, 'elder-terms/launcher/elder-terms'),
       join(libraryDirectory, 'elder-terms/launcher/main-window.ui'),
       join(
@@ -1345,6 +1370,28 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
     ).toBeDefined();
     expect(realpathSync(smbResolved!)).toBe(realpathSync(smbLibrary));
     const smbDynamic = run('readelf', ['-d', smbLibrary]);
+    const helper = join(
+      installedRoot,
+      libraryDirectory,
+      'elder-terms/elder-terms-file-transfer/elder-terms-smb1-worker'
+    );
+    const helperLibraries = run('ldd', [helper], environment);
+    expectSuccess(
+      helperLibraries,
+      'installed SMB1 helper dependency resolution failed'
+    );
+    expect(helperLibraries.stdout).not.toContain('not found');
+    const dsmResolved = helperLibraries.stdout
+      .split('\n')
+      .find((line) => line.trimStart().startsWith('libdsm.so.3 => '))
+      ?.split(' => ')[1]
+      ?.split(' (')[0];
+    expect(dsmResolved, 'libdsm must load from the installation').toBeDefined();
+    expect(realpathSync(dsmResolved!)).toBe(
+      realpathSync(
+        join(installedRoot, libraryDirectory, 'elder-terms/libdsm.so.3')
+      )
+    );
     expectSuccess(smbDynamic, 'installed libsmb2 ELF inspection failed');
     expect(smbDynamic.stdout).toContain('Library soname: [libsmb2.so.7]');
     for (const component of [
