@@ -830,19 +830,24 @@ bell_sound=/home/user/.local/share/sounds/terminal-bell.oga
 
 When the terminal receives BEL, the title-bar background briefly changes brightness
 and returns to its original color, regardless of the selected sound or playback success.
-Changing the title moves a subtle band from left to right across the background.
-If the title changes again during a cycle, the effect continues for another cycle.
-Each title is displayed immediately; setting the same title again does not start an effect.
+Receiving data moves a subtle band from left to right across the background.
+This works in both terminals and file-transfer windows. Reception during a cycle
+keeps it running for another cycle; when reception stops, the original background returns.
+Title text still updates immediately during the effect.
 
-Use "Visual BEL notification" and "Title change effect" on the "Terminal appearance"
-tab to enable or disable each effect. Both are enabled initially. Choose the default
-to inherit global settings, or override each preference for a connection.
-This example disables both effects while leaving BEL audio unchanged:
+Use "Visual BEL notification" on the "Terminal appearance" tab and "Titlebar receive effect"
+on the "General" tab to select Disabled, Weak, Medium or Strong independently.
+Both default to Medium. Weak is the original intensity, Medium is 1.5 times Weak,
+and Strong is twice Weak. Choose the default to inherit global settings, or override
+each preference for a connection. Accepted configuration values are `disabled`,
+`weak`, `medium` and `strong`.
+This example disables visual BEL and sets the receive effect to Strong, leaving BEL audio unchanged:
 
 ```ini
+[general]
+receive_effect=strong
 [terminal]
-visual_bell=false
-title_change_effect=false
+visual_bell=disabled
 ```
 
 The effects use the connection's exterior color, or the current GTK theme when no

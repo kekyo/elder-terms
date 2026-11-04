@@ -197,7 +197,7 @@ const scrollTerminalFieldIntoView = async (
     ? 'global_settings'
     : 'settings';
   const appearance =
-    /_terminal_(font|cursor_shape|cursor_blink|background|color_|visual_bell|title_change_effect)/.test(
+    /_terminal_(font|cursor_shape|cursor_blink|background|color_|visual_bell)/.test(
       id
     );
   const pageId = `${prefix}_terminal${appearance ? '_appearance' : ''}_page`;
@@ -2081,7 +2081,7 @@ describe.concurrent('shared settings widget', () => {
     expect(visualErrors).toEqual([]);
   }, 60_000);
 
-  it('saves independent titlebar notifications from the appearance page', async (context) => {
+  it('saves independent BEL and receive intensities across appearance and general pages', async (context) => {
     const temporary = await mkdtemp(
       join(tmpdir(), 'elder-terms-titlebar-settings-')
     );
@@ -2092,7 +2092,7 @@ describe.concurrent('shared settings widget', () => {
         [
           '--page=terminal_appearance',
           '--global=terminal.visual_bell=disabled',
-          '--global=terminal.title_change_effect=disabled',
+          '--global=general.receive_effect=disabled',
           `--save-file=${path}`,
         ],
         async ({ app, directory }) => {
@@ -2104,14 +2104,15 @@ describe.concurrent('shared settings widget', () => {
             await app.getById('settings_terminal_visual_bell_combo'),
             'comboBox'
           );
+          expect(await bell.isChildSelected(0)).toBe(true);
+          await bell.selectChildAt(2);
+          await selectSettingsTab(app, '一般');
           const title = expectElementKind(
-            await app.getById('settings_terminal_title_change_effect_combo'),
+            await app.getById('settings_general_receive_effect_combo'),
             'comboBox'
           );
           expect((await title.info()).states).toContain('showing');
-          expect(await bell.isChildSelected(0)).toBe(true);
           expect(await title.isChildSelected(0)).toBe(true);
-          await bell.selectChildAt(2);
           await title.selectChildAt(4);
           const save = expectElementKind(
             await app.getById('settings_save_button'),
@@ -2121,14 +2122,14 @@ describe.concurrent('shared settings widget', () => {
           await waitForResult(async () => {
             const saved = await readFile(path, 'utf8');
             expect(saved).toContain('visual_bell=weak');
-            expect(saved).toContain('title_change_effect=strong');
+            expect(saved).toContain('receive_effect=strong');
           });
           await title.selectChildAt(0);
           await save.click();
           await waitForResult(async () => {
             const saved = await readFile(path, 'utf8');
             expect(saved).toContain('visual_bell=weak');
-            expect(saved).not.toContain('title_change_effect');
+            expect(saved).not.toContain('receive_effect');
           });
           await writeFile(
             join(directory, 'titlebar-settings.png'),

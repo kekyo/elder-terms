@@ -2655,8 +2655,8 @@ msgid "Visual BEL notification"
 msgstr "Визуальное уведомление BEL"
 
 #: shared/src/settings-widget/settings-presentation.cpp
-msgid "Title change effect"
-msgstr "Эффект изменения заголовка"
+msgid "Titlebar receive effect"
+msgstr "Эффект заголовка при получении данных"
 
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "Weak"
@@ -2669,3 +2669,7 @@ msgstr "Средняя"
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "Strong"
 msgstr "Сильная"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "must be disabled, weak, medium, or strong"
+msgstr "должно быть disabled, weak, medium или strong"

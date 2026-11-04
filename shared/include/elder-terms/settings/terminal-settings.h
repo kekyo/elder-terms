@@ -22,17 +22,15 @@ namespace elder_terms {
 struct TerminalTitlebarEffectsSettings {
   /** Flash the titlebar background on BEL, independently of audio playback. */
   TitlebarEffectStrength bell;
-  /** Animate the titlebar background when the final displayed title changes. */
-  TitlebarEffectStrength title;
+  /** Animate the titlebar background on received data, using the General preference. */
+  TitlebarEffectStrength receive;
 };
-/** @returns Key for enabling the visual BEL notification. */
+/** @returns Key for selecting the visual BEL intensity. */
 ELDER_TERMS_API SettingKey terminal_visual_bell_setting_key();
-/** @returns Key for enabling the title-change background effect. */
-ELDER_TERMS_API SettingKey terminal_title_change_effect_setting_key();
 /**
  * Reads effective titlebar preferences after global and connection inheritance.
  * @param store Layered terminal settings.
- * @returns Independent visual BEL and title-change preferences.
+ * @returns Independent visual BEL and receive preferences.
  * @remarks GTK's animation preference can suppress both effects at runtime.
  */
 ELDER_TERMS_API TerminalTitlebarEffectsSettings terminal_titlebar_effects_settings(const SettingsStore &store);

@@ -23,11 +23,11 @@ static double smooth(double value) {
 
 TitlebarEffectFrame sample_titlebar_effect(TitlebarEffectState &state, std::int64_t now) {
   // At most one remembered cycle exists. A delayed frame consumes it and then
-  // stops; it cannot replay a queue of changes accumulated while not drawing.
+  // stops; it cannot replay a queue of receives accumulated while not drawing.
   while (state.cycle_start && now >= *state.cycle_start + cycle_duration) {
     const auto boundary = *state.cycle_start + cycle_duration;
-    if (state.changed) {
-      state.changed = false;
+    if (state.received) {
+      state.received = false;
       state.attacking = false;
       state.cycle_start = boundary;
     } else {
@@ -39,11 +39,11 @@ TitlebarEffectFrame sample_titlebar_effect(TitlebarEffectState &state, std::int6
   if (state.cycle_start) {
     const auto elapsed = std::max<std::int64_t>(0, now - *state.cycle_start);
     frame.phase = static_cast<double>(elapsed) / cycle_duration;
-    frame.title = .1 * (state.attacking ? state.attack_from +
+    frame.receive = .1 * (state.attacking ? state.attack_from +
         (1 - state.attack_from) * smooth(static_cast<double>(elapsed) / attack_duration) : 1);
     frame.active = true;
   } else if (state.fade_start) {
-    frame.title = .1 * (1 - smooth(static_cast<double>(now - *state.fade_start) / fade_duration));
+    frame.receive = .1 * (1 - smooth(static_cast<double>(now - *state.fade_start) / fade_duration));
     if (now >= *state.fade_start + fade_duration) state.fade_start.reset();
     else frame.active = true;
   }
@@ -54,20 +54,16 @@ TitlebarEffectFrame sample_titlebar_effect(TitlebarEffectState &state, std::int6
   return frame;
 }
 
-void notify_titlebar_title(TitlebarEffectState &state, const std::string &title,
-    std::int64_t now, bool enabled) {
+void notify_titlebar_receive(TitlebarEffectState &state, std::int64_t now) {
   const auto frame = sample_titlebar_effect(state, now);
-  const bool changed = state.title && *state.title != title;
-  state.title = title;
-  if (!changed || !enabled) return;
   if (state.cycle_start) {
-    state.changed = true;
+    state.received = true;
   } else {
-    state.attack_from = frame.title / .1;
+    state.attack_from = frame.receive / .1;
     state.attacking = true;
     state.cycle_start = now;
     state.fade_start.reset();
-    state.changed = false;
+    state.received = false;
   }
 }
 
@@ -76,24 +72,22 @@ void notify_titlebar_bell(TitlebarEffectState &state, std::int64_t now) {
 }
 
 void reset_titlebar_effect(TitlebarEffectState &state) {
-  auto title = std::move(state.title);
   state = {};
-  state.title = std::move(title);
 }
 
 TitlebarEffectFrame scale_titlebar_effect(TitlebarEffectFrame frame,
-    TitlebarEffectStrength bell, TitlebarEffectStrength title) {
+    TitlebarEffectStrength bell, TitlebarEffectStrength receive) {
   const auto bell_scale = titlebar_effect_multiplier(bell);
-  const auto title_scale = titlebar_effect_multiplier(title);
+  const auto receive_scale = titlebar_effect_multiplier(receive);
   frame.bell *= bell_scale;
-  frame.title *= title_scale;
-  frame.limit *= std::max(bell_scale, title_scale);
+  frame.receive *= receive_scale;
+  frame.limit *= std::max(bell_scale, receive_scale);
   return frame;
 }
 
 double titlebar_effect_opacity(const TitlebarEffectFrame &frame, double position) {
   const auto wave = (1 + std::cos(2 * std::numbers::pi * (position - frame.phase))) / 2;
-  return std::clamp(frame.bell + frame.title * std::pow(wave, 8), 0.0, frame.limit);
+  return std::clamp(frame.bell + frame.receive * std::pow(wave, 8), 0.0, frame.limit);
 }
 
 } // namespace elder_terms

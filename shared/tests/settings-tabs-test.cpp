@@ -131,7 +131,7 @@ static void verify_tab_structure(const Fixture &fixture, bool terminal_visible) 
   auto *general = find_widget(fixture.root, id("general_page").c_str());
   require(general != nullptr && gtk_widget_get_visible(general),
           "General tab is missing or hidden");
-  for (const char *field : {"general_show_border_combo", "general_border_width_entry"}) {
+  for (const char *field : {"general_show_border_combo", "general_border_width_entry", "general_receive_effect_combo"}) {
     const auto name = id(field);
     auto *widget = find_widget(fixture.root, name.c_str());
     require(widget != nullptr && count_widgets(fixture.root, name.c_str()) == 1 &&
@@ -155,7 +155,7 @@ static void verify_tab_structure(const Fixture &fixture, bool terminal_visible) 
       "terminal_background_image_entry", "terminal_background_image_opacity_entry",
       "terminal_background_image_fit_combo", "terminal_color_filter_combo",
       "terminal_color_vision_combo", "terminal_color_vision_strength_entry",
-      "terminal_visual_bell_combo", "terminal_title_change_effect_combo",
+      "terminal_visual_bell_combo",
       "terminal_link_decoration_combo", "terminal_color_preview"};
   for (const char *field : behavior_fields) {
     const std::string name = id(field);
@@ -185,13 +185,13 @@ static void verify_titlebar_controls(SettingsWidgetMode mode) {
   SettingsWidgetCallbacks callbacks;
   callbacks.apply = [&](const SettingsStore &store, SettingsWidgetAction action) {
     const auto effects = terminal_titlebar_effects_settings(store);
-    require(effects.bell == TitlebarEffectStrength::disabled && effects.title == TitlebarEffectStrength::disabled, "Apply lost titlebar preferences");
+    require(effects.bell == TitlebarEffectStrength::disabled && effects.receive == TitlebarEffectStrength::disabled, "Apply lost titlebar preferences");
     ++applied;
     action.complete(true, {});
   };
   auto fixture = create_fixture("local", mode, std::move(callbacks));
   auto *bell = GTK_COMBO_BOX(find_widget(fixture.root, (fixture.prefix + "_terminal_visual_bell_combo").c_str()));
-  auto *title = GTK_COMBO_BOX(find_widget(fixture.root, (fixture.prefix + "_terminal_title_change_effect_combo").c_str()));
+  auto *title = GTK_COMBO_BOX(find_widget(fixture.root, (fixture.prefix + "_general_receive_effect_combo").c_str()));
   require(bell && title, "Titlebar preference controls are missing");
   for (const auto &[id, strength] : {std::pair{"weak", TitlebarEffectStrength::weak},
       std::pair{"medium", TitlebarEffectStrength::medium}, std::pair{"strong", TitlebarEffectStrength::strong}}) {
@@ -201,17 +201,17 @@ static void verify_titlebar_controls(SettingsWidgetMode mode) {
   }
   gtk_combo_box_set_active_id(bell, "disabled");
   const auto draft = terminal_titlebar_effects_settings(settings_widget_draft_store(fixture.state));
-  require(draft.bell == TitlebarEffectStrength::disabled && draft.title == TitlebarEffectStrength::medium, "BEL and title preferences are not independent");
+  require(draft.bell == TitlebarEffectStrength::disabled && draft.receive == TitlebarEffectStrength::medium, "BEL and title preferences are not independent");
   gtk_combo_box_set_active_id(title, "disabled");
   gtk_button_clicked(GTK_BUTTON(find_widget(fixture.root, (fixture.prefix + "_apply_button").c_str())));
   require(applied == 1, "Titlebar preferences cannot be applied");
   gtk_combo_box_set_active_id(bell, "inherit");
   gtk_combo_box_set_active_id(title, "inherit");
   const auto inherited = terminal_titlebar_effects_settings(settings_widget_draft_store(fixture.state));
-  require(inherited.bell == TitlebarEffectStrength::medium && inherited.title == TitlebarEffectStrength::medium, "Titlebar controls did not restore inheritance");
+  require(inherited.bell == TitlebarEffectStrength::medium && inherited.receive == TitlebarEffectStrength::medium, "Titlebar controls did not restore inheritance");
   gtk_button_clicked(GTK_BUTTON(find_widget(fixture.root, (fixture.prefix + "_cancel_button").c_str())));
   const auto restored = terminal_titlebar_effects_settings(settings_widget_draft_store(fixture.state));
-  require(restored.bell == TitlebarEffectStrength::disabled && restored.title == TitlebarEffectStrength::disabled, "Cancel did not restore applied titlebar preferences");
+  require(restored.bell == TitlebarEffectStrength::disabled && restored.receive == TitlebarEffectStrength::disabled, "Cancel did not restore applied titlebar preferences");
   destroy_fixture(&fixture);
 }
 

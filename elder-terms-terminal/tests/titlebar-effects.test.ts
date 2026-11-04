@@ -17,12 +17,12 @@ import {
   expectElementKind,
 } from '../../shared/tests/connection-test-helpers.ts';
 
-for (const [sound, color, scale, compact] of [
-  ['default', '#202020', '1', 'false'],
-  ['custom', '#245b76', '2', 'true'],
-  ['removed', '#eeeeee', '1', 'true'],
+for (const [sound, color, scale, compact, strength] of [
+  ['default', '#202020', '1', 'false', 'weak'],
+  ['custom', '#245b76', '2', 'true', 'medium'],
+  ['removed', '#eeeeee', '1', 'true', 'strong'],
 ]) {
-  it(`records a bounded BEL flash with ${sound} audio and preserves terminal geometry`, async (context) => {
+  it(`records a bounded BEL flash with ${sound} audio at ${strength} intensity and preserves terminal geometry`, async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const peer = join(directory, 'peer.mjs');
       const config = join(directory, 'connection.ini');
@@ -50,7 +50,7 @@ process.stdout.write('READY'); process.stdin.on('data', () => process.stdout.wri
       );
       await writeFile(
         config,
-        `[general]\nexterior_background=${color}\ncompact_mode=${compact}\n[terminal]\naccessibility_enabled=true\nbell_sound=${sound === 'default' ? 'default' : wav}\n[local]\ncommand_line=${process.execPath} ${peer}\n`
+        `[general]\nexterior_background=${color}\ncompact_mode=${compact}\nreceive_effect=disabled\n[terminal]\nvisual_bell=${strength}\naccessibility_enabled=true\nbell_sound=${sound === 'default' ? 'default' : wav}\n[local]\ncommand_line=${process.execPath} ${peer}\n`
       );
       await runGtkTest(
         context,
@@ -189,7 +189,7 @@ process.stdout.write('READY'); process.stdin.on('data', () => process.stdout.wri
   });
 }
 
-it('records OSC title motion and simultaneous BEL while every final title is immediately visible', async (context) => {
+it('records plain data reception, simultaneous BEL and immediately visible titles', async (context) => {
   await withTemporaryDirectory(async (directory) => {
     const peer = join(directory, 'titles.mjs');
     const config = join(directory, 'connection.ini');
@@ -198,6 +198,7 @@ it('records OSC title motion and simultaneous BEL while every final title is imm
       `import { writeFileSync } from 'node:fs';
 process.stdin.setRawMode(true); process.stdin.resume(); writeFileSync(${JSON.stringify(join(directory, 'ready'))}, 'READY');
 process.stdin.on('data', (data) => { for (const key of data.toString()) {
+  if (key === 'r') { process.stdout.write('payload'); continue; }
   const title = key === 'a' ? 'effect-alpha' : 'effect-beta';
   process.stdout.write((key === 'b' ? '\\x07' : '') + '\\x1b]0;' + title + '\\x1b\\\\');
 }});`
@@ -235,14 +236,14 @@ process.stdin.on('data', (data) => { for (const key of data.toString()) {
           '-i',
           `${env.DISPLAY}+${capture.bounds.x},${capture.bounds.y}`,
           '-t',
-          '4',
+          '6',
           '-c:v',
           'ffv1',
           '-threads',
           '1',
-          join(evidence.directory, 'titles.mkv'),
+          join(evidence.directory, 'receive.mkv'),
           '-t',
-          '4',
+          '6',
           '-f',
           'rawvideo',
           '-pix_fmt',
@@ -277,6 +278,16 @@ process.stdin.on('data', (data) => { for (const key of data.toString()) {
         await waitForResult(async () =>
           expect(samples.length).toBeGreaterThan(2)
         );
+        const initialTitle = await label.text();
+        await app.input.pressKey('r');
+        await waitForResult(async () =>
+          expect(
+            samples.some((frame) => Math.max(...frame) - Math.min(...frame) > 8)
+          ).toBe(true)
+        );
+        expect(await label.text()).toBe(initialTitle);
+        await app.input.pressKey('r');
+        expect(await label.text()).toBe(initialTitle);
         for (const [key, title] of [
           ['a', 'effect-alpha'],
           ['b', 'effect-beta'],
@@ -296,7 +307,7 @@ process.stdin.on('data', (data) => { for (const key of data.toString()) {
           await finished;
         }
       }
-      await evidence.log('Title video samples and observed updates', {
+      await evidence.log('Receive video samples and observed title updates', {
         samples,
         updates,
       });

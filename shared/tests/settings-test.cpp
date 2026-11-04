@@ -1242,14 +1242,13 @@ static void test_titlebar_effect_settings() {
   const auto global = temporary_config_path("titlebar-global");
   const auto path = temporary_config_path("titlebar-connection");
   auto store = create_default_settings(default_terminal_display_settings(12), "Effects");
-  for (const auto *name : {"visual_bell", "title_change_effect"}) {
-    expect_true(elder_terms::setting_string_value_or_default(store,
-        elder_terms::make_setting_key("terminal", name), "") == "medium", "effects must default to medium");
+  for (const auto &key : {elder_terms::terminal_visual_bell_setting_key(), elder_terms::general_receive_effect_setting_key()}) {
+    expect_true(elder_terms::setting_string_value_or_default(store, key, "") == "medium", "effects must default to medium");
   }
-  write_config(global, "[terminal]\nvisual_bell=weak\ntitle_change_effect=strong\n");
+  write_config(global, "[terminal]\nvisual_bell=weak\n[general]\nreceive_effect=strong\n");
   const SettingsLoadOptions options{.config_path = path, .startup_config_path = std::nullopt, .global_config_path = global};
   const auto bell = elder_terms::terminal_visual_bell_setting_key();
-  const auto title = elder_terms::terminal_title_change_effect_setting_key();
+  const auto title = elder_terms::general_receive_effect_setting_key();
   for (const auto *value : {"disabled", "weak", "medium", "strong"}) {
     write_config(path, std::string("[terminal]\nvisual_bell=") + value + "\n");
     auto loaded = load_settings(options, 12);
@@ -1257,16 +1256,16 @@ static void test_titlebar_effect_settings() {
         elder_terms::setting_string_value_or_default(loaded.store, title, "") == "strong", "strength and inheritance must stay independent");
     expect_true(setting_value_source(loaded.store, title) == SettingValueSource::global, "inherited strength source");
     expect_true(save_settings(loaded.store, path).saved && read_config(path).find(std::string("visual_bell=") + value) != std::string::npos &&
-        read_config(path).find("title_change_effect") == std::string::npos, "save every explicit intensity and omit inherited values");
+        read_config(path).find("receive_effect") == std::string::npos, "save every explicit intensity and omit inherited values");
     loaded = load_settings(options, 12);
     expect_true(elder_terms::setting_string_value_or_default(loaded.store, bell, "") == value, "reload intensity");
     clear_explicit_setting_value(&loaded.store, bell);
     expect_true(elder_terms::setting_string_value_or_default(loaded.store, bell, "") == "weak" &&
         save_settings(loaded.store, path).saved && read_config(path).empty(), "restore inherited strength and remove override");
   }
-  write_config(path, "[terminal]\nvisual_bell=invalid\ntitle_change_effect=invalid\n");
+  write_config(path, "[terminal]\nvisual_bell=invalid\n[general]\nreceive_effect=invalid\n");
   const auto loaded = load_settings(options, 12);
-  expect_true(warnings_contain(loaded.warnings, "visual_bell") && warnings_contain(loaded.warnings, "title_change_effect") &&
+  expect_true(warnings_contain(loaded.warnings, "visual_bell") && warnings_contain(loaded.warnings, "receive_effect") &&
       elder_terms::setting_string_value_or_default(loaded.store, bell, "") == "weak" &&
       elder_terms::setting_string_value_or_default(loaded.store, title, "") == "strong", "invalid strengths warn and inherit");
   remove_config(path);

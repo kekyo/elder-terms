@@ -24,7 +24,7 @@
 #include <glib/gi18n-lib.h>
 
 #include "main-window.h"
-#include "titlebar-effects.h"
+#include "../../shared/src/connection-runtime/titlebar-effects.h"
 #include "../../shared/src/connection-runtime/compact-header.h"
 #include "../../shared/src/connection-runtime/indicator-color.h"
 #include "../../shared/src/connection-runtime/inline-prompt.h"
@@ -896,7 +896,6 @@ static void apply_main_window_title(MainWindow *main_window) {
     gtk_label_set_text(GTK_LABEL(main_window->header_title_label),
                        title.c_str());
   }
-  notify_titlebar_title(main_window->header_bar, title);
 }
 
 static void set_main_window_disconnected_notice_visible(
@@ -1287,6 +1286,8 @@ void note_main_window_activity(MainWindow *main_window,
   if (main_window == nullptr) {
     return;
   }
+
+  if (indicator == ActivityIndicatorId::rd) notify_titlebar_receive(main_window->header_bar);
 
   const std::size_t index = activity_indicator_index(indicator);
   if (!main_window->indicator_visible[index]) {

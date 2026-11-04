@@ -2632,8 +2632,8 @@ msgid "Visual BEL notification"
 msgstr "BEL की दृश्य सूचना"
 
 #: shared/src/settings-widget/settings-presentation.cpp
-msgid "Title change effect"
-msgstr "शीर्षक बदलने का प्रभाव"
+msgid "Titlebar receive effect"
+msgstr "डेटा प्राप्ति पर शीर्षक पट्टी प्रभाव"
 
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "Weak"
@@ -2646,3 +2646,7 @@ msgstr "मध्यम"
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "Strong"
 msgstr "तेज़"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "must be disabled, weak, medium, or strong"
+msgstr "disabled, weak, medium या strong होना चाहिए"

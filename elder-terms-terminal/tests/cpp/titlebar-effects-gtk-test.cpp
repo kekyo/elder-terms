@@ -3,7 +3,7 @@
 // Under MIT.
 // https://github.com/kekyo/elder-terms/
 
-#include "../../src/titlebar-effects.h"
+#include "../../../shared/src/connection-runtime/titlebar-effects.h"
 #include <cassert>
 #include <cstdio>
 
@@ -58,14 +58,13 @@ int main(int argc, char **argv) {
   assert(gtk_widget_get_allocated_height(header) == height);
 
   if (argc > 1) {
-    notify_titlebar_title(header, "Before minimize");
-    notify_titlebar_title(header, "Minimizing");
+    notify_titlebar_receive(header);
     gtk_window_iconify(GTK_WINDOW(window));
     while (!(gdk_window_get_state(gtk_widget_get_window(window)) & GDK_WINDOW_STATE_ICONIFIED))
       g_main_context_iteration(nullptr, TRUE);
     assert(!titlebar_effects_running(header));
     notify_titlebar_bell(header);
-    notify_titlebar_title(header, "Minimized title");
+    notify_titlebar_receive(header);
     assert(!titlebar_effects_running(header));
     gtk_window_deiconify(GTK_WINDOW(window));
     while (!gtk_widget_get_mapped(header) ||
@@ -75,29 +74,26 @@ int main(int argc, char **argv) {
     assert(!titlebar_effects_running(header));
   }
 
-  // Use a fresh installed header's first title as the initial-display check.
-  notify_titlebar_title(other_header, "Initial");
+  // Installing an idle header must not start any animation.
   assert(!titlebar_effects_running(other_header));
-  notify_titlebar_title(header, "Initial");
   set_titlebar_effect_strengths(header, TitlebarEffectStrength::medium, TitlebarEffectStrength::disabled);
   set_titlebar_effect_strengths(header, TitlebarEffectStrength::medium, TitlebarEffectStrength::medium);
-  notify_titlebar_title(header, "Changed");
+  notify_titlebar_receive(header);
   assert(titlebar_effects_running(header));
   reject_background_probe = true;
   while (reject_background_probe) g_main_context_iteration(nullptr, TRUE);
   gtk_header_bar_set_title(GTK_HEADER_BAR(header), "Title after rendering failure");
-  notify_titlebar_title(header, "Title after rendering failure");
+  notify_titlebar_receive(header);
   assert(std::string(gtk_header_bar_get_title(GTK_HEADER_BAR(header))) == "Title after rendering failure");
   gtk_widget_hide(window);
   assert(!titlebar_effects_running(header));
   notify_titlebar_bell(header);
-  notify_titlebar_title(header, "Hidden change");
+  notify_titlebar_receive(header);
   assert(!titlebar_effects_running(header));
   gtk_widget_show(window);
   painted(header);
-  notify_titlebar_title(header, "Hidden change");
   assert(!titlebar_effects_running(header));
-  notify_titlebar_title(header, "Shown change");
+  notify_titlebar_receive(header);
   assert(titlebar_effects_running(header));
   g_object_set(gtk_widget_get_settings(header), "gtk-application-prefer-dark-theme", TRUE, nullptr);
   painted(header);
@@ -108,7 +104,7 @@ int main(int argc, char **argv) {
   g_object_set(gtk_widget_get_settings(header), "gtk-enable-animations", FALSE, nullptr);
   assert(!titlebar_effects_running(header));
   notify_titlebar_bell(header);
-  notify_titlebar_title(header, "Reduced motion");
+  notify_titlebar_receive(header);
   assert(!titlebar_effects_running(header));
   g_object_set(gtk_widget_get_settings(header), "gtk-enable-animations", TRUE, nullptr);
   assert(!titlebar_effects_running(header));
@@ -116,7 +112,7 @@ int main(int argc, char **argv) {
   assert(titlebar_effects_running(header));
   set_titlebar_effect_strengths(header, TitlebarEffectStrength::disabled, TitlebarEffectStrength::medium);
   assert(!titlebar_effects_running(header));
-  notify_titlebar_title(header, "Title still enabled");
+  notify_titlebar_receive(header);
   assert(titlebar_effects_running(header));
   set_titlebar_effect_strengths(header, TitlebarEffectStrength::medium, TitlebarEffectStrength::disabled);
   assert(!titlebar_effects_running(header));
@@ -126,7 +122,7 @@ int main(int argc, char **argv) {
   gtk_widget_destroy(window);
   assert(!titlebar_effects_running(header));
   notify_titlebar_bell(header);
-  notify_titlebar_title(header, "Destroyed");
+  notify_titlebar_receive(header);
   assert(!titlebar_effects_running(header));
   g_object_unref(header);
   gtk_widget_destroy(other);

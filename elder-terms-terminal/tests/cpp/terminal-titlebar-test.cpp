@@ -4,7 +4,7 @@
 // https://github.com/kekyo/elder-terms/
 
 #include "../../src/main-window.h"
-#include "../../src/titlebar-effects.h"
+#include "../../../shared/src/connection-runtime/titlebar-effects.h"
 #include "../../src/terminal-runtime.h"
 #include "../../src/terminal-presentation.h"
 #include <cassert>
@@ -33,6 +33,9 @@ extern "C" int __wrap_main(int argc, char **argv) {
   set_main_window_title(&*window, "Initial");
   assert(!titlebar_effects_running(window->header_bar));
   set_main_window_title(&*window, "A");
+  // Temporary removal check: title changes alone no longer start the gradient.
+  assert(!titlebar_effects_running(window->header_bar));
+  note_main_window_activity(&*window, ActivityIndicatorId::rd);
   assert(titlebar_effects_running(window->header_bar));
   // No dispatcher iteration or frame occurs between these updates: the effect
   // cannot delay or coalesce any visible title, including A -> B -> A.
@@ -51,26 +54,33 @@ extern "C" int __wrap_main(int argc, char **argv) {
   assert(!titlebar_effects_running(window->header_bar));
   set_main_window_connection_phase(&*window, TerminalSessionConnectionPhase::disconnected);
   check_title(*window, "Hidden (Disconnected)");
+  note_main_window_activity(&*window, ActivityIndicatorId::rd);
   assert(titlebar_effects_running(window->header_bar));
   set_setting_value(&settings, terminal_visual_bell_setting_key(), std::string("disabled"));
-  set_setting_value(&settings, terminal_title_change_effect_setting_key(), std::string("disabled"));
+  set_setting_value(&settings, general_receive_effect_setting_key(), std::string("disabled"));
   assert(apply_terminal_presentation(presentation, settings, nullptr));
   set_main_window_title(&*window, "Disabled");
   check_title(*window, "Disabled (Disconnected)");
+  note_main_window_activity(&*window, ActivityIndicatorId::rd);
   assert(!titlebar_effects_running(window->header_bar));
   set_setting_value(&settings, terminal_visual_bell_setting_key(), std::string("medium"));
-  set_setting_value(&settings, terminal_title_change_effect_setting_key(), std::string("medium"));
+  set_setting_value(&settings, general_receive_effect_setting_key(), std::string("medium"));
   assert(apply_terminal_presentation(presentation, settings, nullptr));
   set_main_window_title(&*window, "Disabled");
   assert(!titlebar_effects_running(window->header_bar));
   set_main_window_connection_phase(&*window, TerminalSessionConnectionPhase::connected);
   check_title(*window, "Disabled");
+  note_main_window_activity(&*window, ActivityIndicatorId::sd);
+  assert(!titlebar_effects_running(window->header_bar));
+  // Reception remains visible even if its small status indicator is hidden.
+  window->indicator_visible.fill(false);
+  note_main_window_activity(&*window, ActivityIndicatorId::rd);
   assert(titlebar_effects_running(window->header_bar));
   destroy_terminal_presentation(presentation);
   destroy_terminal_runtime(window->runtime);
   window->runtime = nullptr;
   gtk_widget_destroy(window->window);
   release_main_window(&*window);
-  std::puts("PASS synchronous final titles, duplicates, A-B-A, hidden changes, disconnect and disabled effects");
+  std::puts("PASS synchronous titles, receive activity, hidden changes, disconnect and disabled effects");
   return 0;
 }

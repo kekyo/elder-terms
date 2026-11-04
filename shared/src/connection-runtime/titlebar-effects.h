@@ -20,16 +20,15 @@ void install_titlebar_effects(GtkWidget *header);
  * Applies effective preferences, immediately cancelling disabled effects.
  * @param header Header previously installed with install_titlebar_effects().
  * @param bell Visual BEL intensity.
- * @param title Title-change intensity.
+ * @param receive Data-reception intensity.
  */
-void set_titlebar_effect_strengths(GtkWidget *header, TitlebarEffectStrength bell, TitlebarEffectStrength title);
+void set_titlebar_effect_strengths(GtkWidget *header, TitlebarEffectStrength bell, TitlebarEffectStrength receive);
 
 /**
- * Records a final title after synchronously updating the GTK window and label.
+ * Notifies the header of received data, independent of visible title changes.
  * @param header Installed header.
- * @param title Final visible string.
  */
-void notify_titlebar_title(GtkWidget *header, const std::string &title);
+void notify_titlebar_receive(GtkWidget *header);
 
 /**
  * Notifies the header of BEL independently of audio selection and playback.

@@ -13,7 +13,7 @@ struct TitlebarEffects {
   TitlebarEffectState state;
   guint tick = 0;
   TitlebarEffectStrength bell_strength = TitlebarEffectStrength::medium;
-  TitlebarEffectStrength title_strength = TitlebarEffectStrength::medium;
+  TitlebarEffectStrength receive_strength = TitlebarEffectStrength::medium;
   bool destroyed = false;
 };
 
@@ -87,7 +87,7 @@ void draw_titlebar_effect_frame(GtkWidget *header, cairo_t *cr, const TitlebarEf
   auto *background = cairo_pop_group(cr);
   cairo_set_source(cr, background);
   cairo_paint(cr);
-  if (frame.title > 0 || frame.bell > 0) {
+  if (frame.receive > 0 || frame.bell > 0) {
     // A failed allocation skips only the effect. Never pass an error pattern
     // into GTK's context, which would prevent the title and buttons from drawing.
     if (const auto extreme = background_extreme(style, width, height)) {
@@ -124,7 +124,7 @@ void install_titlebar_effects(GtkWidget *header) {
     auto *clock = gtk_widget_get_frame_clock(header);
     const auto frame = sample_titlebar_effect(effects.state, gdk_frame_clock_get_frame_time(clock));
     if (!frame.active) return FALSE;
-    draw_titlebar_effect_frame(header, cr, scale_titlebar_effect(frame, effects.bell_strength, effects.title_strength));
+    draw_titlebar_effect_frame(header, cr, scale_titlebar_effect(frame, effects.bell_strength, effects.receive_strength));
     return TRUE;
   }), effects);
   g_signal_connect(header, "unmap", G_CALLBACK(+[](GtkWidget *, gpointer data) {
@@ -147,26 +147,25 @@ void install_titlebar_effects(GtkWidget *header) {
       }), header, G_CONNECT_DEFAULT);
 }
 
-void set_titlebar_effect_strengths(GtkWidget *header, TitlebarEffectStrength bell, TitlebarEffectStrength title) {
+void set_titlebar_effect_strengths(GtkWidget *header, TitlebarEffectStrength bell, TitlebarEffectStrength receive) {
   auto *effects = effects_for(header);
   if (!effects || effects->destroyed) return;
   effects->bell_strength = bell;
-  effects->title_strength = title;
+  effects->receive_strength = receive;
   if (bell == TitlebarEffectStrength::disabled) effects->state.bell_start.reset();
-  if (title == TitlebarEffectStrength::disabled) {
+  if (receive == TitlebarEffectStrength::disabled) {
     effects->state.cycle_start.reset();
     effects->state.fade_start.reset();
-    effects->state.changed = false;
+    effects->state.received = false;
   }
   if (!sample_titlebar_effect(effects->state, g_get_monotonic_time()).active) stop(*effects);
   gtk_widget_queue_draw(header);
 }
 
-void notify_titlebar_title(GtkWidget *header, const std::string &title) {
+void notify_titlebar_receive(GtkWidget *header) {
   auto *effects = effects_for(header);
-  if (!effects || effects->destroyed) return;
-  notify_titlebar_title(effects->state, title, g_get_monotonic_time(),
-      effects->title_strength != TitlebarEffectStrength::disabled && can_animate(*effects));
+  if (!effects || effects->receive_strength == TitlebarEffectStrength::disabled || !can_animate(*effects)) return;
+  notify_titlebar_receive(effects->state, g_get_monotonic_time());
   start(*effects);
 }
 

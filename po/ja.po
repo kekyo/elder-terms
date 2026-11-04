@@ -221,8 +221,8 @@ msgid "Visual BEL notification"
 msgstr "BELの視覚通知"
 
 #: shared/src/settings-widget/settings-presentation.cpp
-msgid "Title change effect"
-msgstr "タイトル更新エフェクト"
+msgid "Titlebar receive effect"
+msgstr "受信時のタイトルバー演出"
 
 #: shared/src/settings-widget/settings-presentation.cpp:77
 msgid "Zoom in shortcut"
@@ -3258,3 +3258,7 @@ msgstr "中"
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "Strong"
 msgstr "強"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "must be disabled, weak, medium, or strong"
+msgstr "disabled、weak、medium、strongのいずれかを指定してください"

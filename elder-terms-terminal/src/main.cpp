@@ -47,7 +47,7 @@
 #include "../../elder-terms-file-transfer/src/sftp/sftp-fixture-client.h"
 #include "terminal-bell-player.h"
 #include "terminal-bell.h"
-#include "titlebar-effects.h"
+#include "../../shared/src/connection-runtime/titlebar-effects.h"
 #include "terminal-hyperlink-action.h"
 #include "terminal-presentation.h"
 #include "terminal-renderer-status.h"

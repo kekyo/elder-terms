@@ -234,6 +234,8 @@ ssh_transport_dep = declare_dependency(link_with: ssh_transport_library,
 
 connection_ui_library = static_library('elder-terms-connection-ui',
   ['src/connection-runtime/activity-indicator.cpp',
+   'src/connection-runtime/titlebar-effect-state.cpp',
+   'src/connection-runtime/titlebar-effects.cpp',
    'src/connection-runtime/compact-header.cpp',
    'src/connection-runtime/indicator-color.cpp',
    'src/connection-runtime/inline-prompt.cpp',

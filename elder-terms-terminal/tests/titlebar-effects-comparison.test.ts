@@ -13,7 +13,7 @@ import { createTestEvidence } from '../../shared/tests/connection-test-helpers.t
 
 const exec = promisify(execFile);
 
-it('records and compares titlebar motion, BEL merging, cycle continuity and return to each background', async (context) => {
+it('records and compares weak, medium and strong titlebar motion, BEL merging, cycle continuity and return to each background', async (context) => {
   const evidence = createTestEvidence(context);
   const directory = join(evidence.directory, 'comparison');
   await exec(
@@ -103,7 +103,7 @@ it('records and compares titlebar motion, BEL merging, cycle continuity and retu
       return Math.abs(png.data[offset] - baseline.data[offset]);
     });
   };
-  for (const row of [0, 3, 6]) {
+  for (let row = 0; row < 9; ++row) {
     const first = differences(early, row);
     const second = differences(later, row);
     expect(first.indexOf(Math.max(...first))).toBeLessThan(
@@ -118,6 +118,21 @@ it('records and compares titlebar motion, BEL merging, cycle continuity and retu
       Math.min(...differences(bell, row))
     );
     expect(Math.min(...differences(returned, row))).toBeLessThanOrEqual(1);
+  }
+  for (const first of [0, 3, 6]) {
+    for (const [offset, multiplier] of [
+      [1, 1.5],
+      [2, 2],
+    ]) {
+      const gradientRatio =
+        Math.max(...differences(early, first + offset)) /
+        Math.max(...differences(early, first));
+      const bellRatio =
+        Math.min(...differences(bell, first + offset)) /
+        Math.min(...differences(bell, first));
+      expect(Math.abs(gradientRatio - multiplier)).toBeLessThan(0.15);
+      expect(Math.abs(bellRatio - multiplier)).toBeLessThan(0.15);
+    }
   }
   await evidence.log('Comparison complete', {
     directory,

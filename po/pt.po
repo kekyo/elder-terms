@@ -2649,8 +2649,8 @@ msgid "Visual BEL notification"
 msgstr "Notificação visual de BEL"
 
 #: shared/src/settings-widget/settings-presentation.cpp
-msgid "Title change effect"
-msgstr "Efeito de alteração do título"
+msgid "Titlebar receive effect"
+msgstr "Efeito de recepção na barra de título"
 
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "Weak"
@@ -2663,3 +2663,7 @@ msgstr "Médio"
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "Strong"
 msgstr "Forte"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "must be disabled, weak, medium, or strong"
+msgstr "deve ser disabled, weak, medium ou strong"

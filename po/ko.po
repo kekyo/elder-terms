@@ -2633,8 +2633,8 @@ msgid "Visual BEL notification"
 msgstr "BEL 시각 알림"
 
 #: shared/src/settings-widget/settings-presentation.cpp
-msgid "Title change effect"
-msgstr "제목 변경 효과"
+msgid "Titlebar receive effect"
+msgstr "데이터 수신 시 제목 표시줄 효과"
 
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "Weak"
@@ -2647,3 +2647,7 @@ msgstr "중"
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "Strong"
 msgstr "강"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "must be disabled, weak, medium, or strong"
+msgstr "disabled, weak, medium 또는 strong이어야 합니다"
