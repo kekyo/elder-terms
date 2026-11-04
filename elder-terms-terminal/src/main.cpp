@@ -423,6 +423,7 @@ static cardio::promise<void> check_shared_sftp_connection_async(
     std::shared_ptr<elder_terms::AuthenticatedSshTransport> transport,
     cardio::cancellation cancellation) {
   bool available = false;
+  std::string reason = _("The shared SSH connection was lost.");
   try {
     available =
         co_await transport->is_connected_async(std::move(cancellation));
@@ -430,6 +431,8 @@ static cardio::promise<void> check_shared_sftp_connection_async(
     state->sftp_connection_check_active = false;
     co_return;
   } catch (const std::exception &error) {
+    reason += "\n";
+    reason += error.what();
     std::cerr << "Warning: failed to check shared SFTP connection: "
               << error.what() << '\n';
   }
@@ -437,7 +440,7 @@ static cardio::promise<void> check_shared_sftp_connection_async(
   if (state->sftp_transport == transport &&
       state->sftp_window != nullptr) {
     elder_terms::set_file_transfer_window_connection_available(
-        state->sftp_window, available);
+        state->sftp_window, available, std::move(reason));
   }
   state->sftp_connection_check_active = false;
 }
@@ -457,7 +460,7 @@ static void start_shared_sftp_connection_check(
   if (state->sftp_transport == nullptr ||
       !state->sftp_cancel_source.has_value()) {
     elder_terms::set_file_transfer_window_connection_available(
-        state->sftp_window, false);
+        state->sftp_window, false, _("The shared SSH connection was lost."));
     return;
   }
 
@@ -739,6 +742,9 @@ static void application_terminal_changed(void *context) {
     const auto phase = connection.carrier_connected ? elder_terms::TerminalSessionConnectionPhase::connected :
         elder_terms::TerminalSessionConnectionPhase::disconnected;
     if (phase != state->connection_phase) set_application_connection_phase(state, phase);
+    if (!connection.carrier_connected)
+      elder_terms::set_main_window_disconnected_message(state->main_window,
+          _("Waiting for the serial carrier signal. The connection will resume automatically."));
   } else if (connection.phase == elder_terms::TerminalConnectionPhase::starting) {
     if (state->connection_phase == elder_terms::TerminalSessionConnectionPhase::disconnected)
       set_application_connection_phase(state, elder_terms::TerminalSessionConnectionPhase::connecting);
@@ -750,9 +756,28 @@ static void application_terminal_changed(void *context) {
           std::string(g_strerror(connection.operation_error ? connection.operation_error : connection.spawn.error_number)) :
           connection.operation_error_message;
       std::cerr << "Error: " << message << '\n';
-      if (state->active_profile.kind == elder_terms::TerminalConnectionKind::ssh ||
-          state->active_profile.kind == elder_terms::TerminalConnectionKind::telnet)
-        elder_terms::set_main_window_connection_failure(state->main_window, message, state->active_profile.kind);
+      elder_terms::set_main_window_connection_failure(state->main_window, message, state->active_profile.kind);
+    } else {
+      std::string message;
+      switch (state->active_profile.kind) {
+      case elder_terms::TerminalConnectionKind::local_shell:
+        message = connection.signal_number != 0
+            ? format_translated_string(_("Local command terminated by signal %d."), connection.signal_number)
+            : connection.exit_code >= 0
+                ? format_translated_string(_("Local command exited with status %d."), connection.exit_code)
+                : _("Local command ended.");
+        break;
+      case elder_terms::TerminalConnectionKind::ssh:
+        message = _("SSH session ended.");
+        break;
+      case elder_terms::TerminalConnectionKind::telnet:
+        message = _("TELNET session ended.");
+        break;
+      case elder_terms::TerminalConnectionKind::serial:
+        message = _("Serial connection closed. Waiting for the device to become available.");
+        break;
+      }
+      elder_terms::set_main_window_disconnected_message(state->main_window, message);
     }
     set_application_connection_phase(state, elder_terms::TerminalSessionConnectionPhase::disconnected);
     if (should_auto_close_terminal(state))

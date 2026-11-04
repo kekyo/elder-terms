@@ -12,7 +12,7 @@ namespace elder_terms {
 struct ActivityFileReader final : RemoteFileReader {
   std::unique_ptr<RemoteFileReader> delegate;
   std::function<void(ActivityIndicatorId)> activity;
-  std::function<void()> disconnected;
+  std::function<void(std::string)> disconnected;
 
   cardio::promise<std::size_t>
   read_async(std::span<std::byte> buffer,
@@ -24,7 +24,7 @@ struct ActivityFileReader final : RemoteFileReader {
       }
       co_return size;
     } catch (const RemoteFileError &error) {
-      if (error.connection_lost && disconnected) disconnected();
+      if (error.connection_lost && disconnected) disconnected(error.what());
       throw;
     }
   }
@@ -34,7 +34,7 @@ struct ActivityFileReader final : RemoteFileReader {
     try {
       co_await delegate->close_async(cancellation);
     } catch (const RemoteFileError &error) {
-      if (error.connection_lost && disconnected) disconnected();
+      if (error.connection_lost && disconnected) disconnected(error.what());
       throw;
     }
   }
@@ -43,7 +43,7 @@ struct ActivityFileReader final : RemoteFileReader {
 struct ActivityFileWriter final : RemoteFileWriter {
   std::unique_ptr<RemoteFileWriter> delegate;
   std::function<void(ActivityIndicatorId)> activity;
-  std::function<void()> disconnected;
+  std::function<void(std::string)> disconnected;
 
   RemoteFileCreationState creation_state() const noexcept override {
     return delegate->creation_state();
@@ -58,7 +58,7 @@ struct ActivityFileWriter final : RemoteFileWriter {
         activity(ActivityIndicatorId::sd);
       }
     } catch (const RemoteFileError &error) {
-      if (error.connection_lost && disconnected) disconnected();
+      if (error.connection_lost && disconnected) disconnected(error.what());
       throw;
     }
   }
@@ -68,7 +68,7 @@ struct ActivityFileWriter final : RemoteFileWriter {
     try {
       co_await delegate->close_async(cancellation);
     } catch (const RemoteFileError &error) {
-      if (error.connection_lost && disconnected) disconnected();
+      if (error.connection_lost && disconnected) disconnected(error.what());
       throw;
     }
   }
@@ -79,7 +79,7 @@ struct ActivityFileWriter final : RemoteFileWriter {
 struct ActivityFileClient final : RemoteFileClient {
   std::shared_ptr<RemoteFileClient> delegate;
   std::function<void(ActivityIndicatorId)> activity;
-  std::function<void()> disconnected;
+  std::function<void(std::string)> disconnected;
 
   RemoteFileCapabilities capabilities() const noexcept override {
     return delegate->capabilities();
@@ -103,7 +103,7 @@ struct ActivityFileClient final : RemoteFileClient {
     try {
       co_return co_await delegate->resolve_input_path_async(std::move(text), std::move(cancellation));
     } catch (const RemoteFileError &error) {
-      if (error.connection_lost && disconnected) disconnected();
+      if (error.connection_lost && disconnected) disconnected(error.what());
       throw;
     }
   }
@@ -122,7 +122,7 @@ struct ActivityFileClient final : RemoteFileClient {
       activity(ActivityIndicatorId::rd);
       co_return result;
     } catch (const RemoteFileError &error) {
-      if (error.connection_lost && disconnected) disconnected();
+      if (error.connection_lost && disconnected) disconnected(error.what());
       throw;
     }
   }
@@ -143,7 +143,7 @@ struct ActivityFileClient final : RemoteFileClient {
       }
       co_return result;
     } catch (const RemoteFileError &error) {
-      if (error.connection_lost && disconnected) disconnected();
+      if (error.connection_lost && disconnected) disconnected(error.what());
       throw;
     }
   }
@@ -159,7 +159,7 @@ struct ActivityFileClient final : RemoteFileClient {
       activity(ActivityIndicatorId::rd);
       co_return result;
     } catch (const RemoteFileError &error) {
-      if (error.connection_lost && disconnected) disconnected();
+      if (error.connection_lost && disconnected) disconnected(error.what());
       throw;
     }
   }
@@ -174,7 +174,7 @@ struct ActivityFileClient final : RemoteFileClient {
       activity(ActivityIndicatorId::rd);
       co_return result;
     } catch (const RemoteFileError &error) {
-      if (error.connection_lost && disconnected) disconnected();
+      if (error.connection_lost && disconnected) disconnected(error.what());
       throw;
     }
   }
@@ -189,7 +189,7 @@ struct ActivityFileClient final : RemoteFileClient {
       activity(ActivityIndicatorId::rd);
       co_return result;
     } catch (const RemoteFileError &error) {
-      if (error.connection_lost && disconnected) disconnected();
+      if (error.connection_lost && disconnected) disconnected(error.what());
       throw;
     }
   }
@@ -205,7 +205,7 @@ struct ActivityFileClient final : RemoteFileClient {
           std::move(path), permissions, cancellation);
       activity(ActivityIndicatorId::rd);
     } catch (const RemoteFileError &error) {
-      if (error.connection_lost && disconnected) disconnected();
+      if (error.connection_lost && disconnected) disconnected(error.what());
       throw;
     }
   }
@@ -219,7 +219,7 @@ struct ActivityFileClient final : RemoteFileClient {
       co_await delegate->remove_file_async(std::move(path), cancellation);
       activity(ActivityIndicatorId::rd);
     } catch (const RemoteFileError &error) {
-      if (error.connection_lost && disconnected) disconnected();
+      if (error.connection_lost && disconnected) disconnected(error.what());
       throw;
     }
   }
@@ -233,7 +233,7 @@ struct ActivityFileClient final : RemoteFileClient {
       co_await delegate->remove_directory_async(std::move(path), cancellation);
       activity(ActivityIndicatorId::rd);
     } catch (const RemoteFileError &error) {
-      if (error.connection_lost && disconnected) disconnected();
+      if (error.connection_lost && disconnected) disconnected(error.what());
       throw;
     }
   }
@@ -248,7 +248,7 @@ struct ActivityFileClient final : RemoteFileClient {
           std::move(path), cancellation);
       activity(ActivityIndicatorId::rd);
     } catch (const RemoteFileError &error) {
-      if (error.connection_lost && disconnected) disconnected();
+      if (error.connection_lost && disconnected) disconnected(error.what());
       throw;
     }
   }
@@ -263,7 +263,7 @@ struct ActivityFileClient final : RemoteFileClient {
           std::move(source), std::move(destination), cancellation);
       activity(ActivityIndicatorId::rd);
     } catch (const RemoteFileError &error) {
-      if (error.connection_lost && disconnected) disconnected();
+      if (error.connection_lost && disconnected) disconnected(error.what());
       throw;
     }
   }
@@ -279,7 +279,7 @@ struct ActivityFileClient final : RemoteFileClient {
           std::move(source), std::move(destination), overwrite, cancellation);
       activity(ActivityIndicatorId::rd);
     } catch (const RemoteFileError &error) {
-      if (error.connection_lost && disconnected) disconnected();
+      if (error.connection_lost && disconnected) disconnected(error.what());
       throw;
     }
   }
@@ -294,7 +294,7 @@ struct ActivityFileClient final : RemoteFileClient {
           std::move(target), std::move(path), cancellation);
       activity(ActivityIndicatorId::rd);
     } catch (const RemoteFileError &error) {
-      if (error.connection_lost && disconnected) disconnected();
+      if (error.connection_lost && disconnected) disconnected(error.what());
       throw;
     }
   }
@@ -310,7 +310,7 @@ struct ActivityFileClient final : RemoteFileClient {
           std::move(path), std::move(attributes), cancellation);
       activity(ActivityIndicatorId::rd);
     } catch (const RemoteFileError &error) {
-      if (error.connection_lost && disconnected) disconnected();
+      if (error.connection_lost && disconnected) disconnected(error.what());
       throw;
     }
   }
@@ -330,7 +330,7 @@ struct ActivityFileClient final : RemoteFileClient {
       observed->disconnected = disconnected;
       co_return std::move(observed);
     } catch (const RemoteFileError &error) {
-      if (error.connection_lost && disconnected) disconnected();
+      if (error.connection_lost && disconnected) disconnected(error.what());
       throw;
     }
   }
@@ -352,7 +352,7 @@ struct ActivityFileClient final : RemoteFileClient {
       observed->disconnected = disconnected;
       co_return std::move(observed);
     } catch (const RemoteFileError &error) {
-      if (error.connection_lost && disconnected) disconnected();
+      if (error.connection_lost && disconnected) disconnected(error.what());
       throw;
     }
   }
@@ -361,7 +361,7 @@ struct ActivityFileClient final : RemoteFileClient {
 std::shared_ptr<RemoteFileClient> create_activity_file_client(
     std::shared_ptr<RemoteFileClient> client,
     std::function<void(ActivityIndicatorId)> activity,
-    std::function<void()> disconnected) {
+    std::function<void(std::string)> disconnected) {
   auto observed = std::make_shared<ActivityFileClient>();
   observed->delegate = std::move(client);
   observed->activity = std::move(activity);

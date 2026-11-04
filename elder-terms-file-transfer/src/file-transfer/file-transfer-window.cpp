@@ -228,6 +228,7 @@ struct FileTransferWindow {
   bool local_load_started = false;
   bool remote_load_started = false;
   bool connection_available = false;
+  bool has_disconnection_detail = false;
   bool transfer_active = false;
   bool browser_action_active = false;
   bool browser_action_progress = false;
@@ -3382,13 +3383,14 @@ void attach_file_transfer_window_client(
           note_activity_indicator_widget(&owner->indicators[id == ActivityIndicatorId::sd ? 1 : 2]);
           if (id == ActivityIndicatorId::rd) notify_titlebar_receive(owner->header_bar);
         }
-      }, [weak = std::weak_ptr<FileTransferWindow>(window)] {
+      }, [weak = std::weak_ptr<FileTransferWindow>(window)](std::string reason) {
         if (const auto owner = weak.lock()) {
-          set_file_transfer_window_connection_available(owner, false);
+          set_file_transfer_window_connection_available(owner, false, std::move(reason));
         }
       });
   attach_file_transfer_queue(window->jobs, window->client, window->protocol_name);
   window->connection_available = true;
+  window->has_disconnection_detail = false;
   update_file_transfer_job_view(window->job_view, file_transfer_jobs(window->jobs), true);
   window->connection_state = FileTransferConnectionState::ready;
   set_file_transfer_status(window.get(), _("Ready"));
@@ -3474,9 +3476,17 @@ void show_file_transfer_window_connection_error(
 }
 
 void set_file_transfer_window_connection_available(
-    const std::shared_ptr<FileTransferWindow> &window, bool available) {
-  if (window == nullptr || window->destroyed ||
-      window->connection_available == available) {
+    const std::shared_ptr<FileTransferWindow> &window, bool available,
+    std::string reason) {
+  if (window == nullptr || window->destroyed) return;
+  if (window->connection_available == available) {
+    // A liveness check may arrive before the failing request. Preserve the first
+    // detailed error rather than replacing it with later cleanup errors.
+    if (!available && window->connection_state == FileTransferConnectionState::disconnected &&
+        !window->has_disconnection_detail && !reason.empty()) {
+      gtk_label_set_text(GTK_LABEL(window->connection_notice.message_label), reason.c_str());
+      window->has_disconnection_detail = true;
+    }
     return;
   }
   window->connection_available = available;
@@ -3488,14 +3498,13 @@ void set_file_transfer_window_connection_available(
     if (window->transfer_cancel_source.has_value()) {
       (void)window->transfer_cancel_source->cancel();
     }
-    if (general_auto_close(window->settings)) {
-      gtk_widget_destroy(window->window);
-      return;
-    }
     set_file_transfer_status(window.get(), _("Disconnected"));
     gtk_label_set_text(GTK_LABEL(window->connection_notice.title_label), _("Disconnected"));
-    gtk_label_set_text(GTK_LABEL(window->connection_notice.message_label), _("The connection to the remote service was lost."));
+    gtk_label_set_text(GTK_LABEL(window->connection_notice.message_label),
+        reason.empty() ? _("The connection to the remote service was lost.") : reason.c_str());
+    window->has_disconnection_detail = !reason.empty();
   } else {
+    window->has_disconnection_detail = false;
     if (window->client) attach_file_transfer_queue(window->jobs, window->client, window->protocol_name);
     set_file_transfer_status(window.get(), _("Ready"));
   }

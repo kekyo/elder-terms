@@ -73,6 +73,17 @@ describe.concurrent('terminal connection error recovery', () => {
                     'sensitive'
                   );
                   expect((await app.output()).exitCode).toBeNull();
+                  const reason = await expectElementKind(
+                    await app.getById('disconnected_notice_label'),
+                    'label'
+                  ).text();
+                  expect(reason).toContain(
+                    kind === 'local'
+                      ? 'Local command failed:'
+                      : 'TELNET connection failed:'
+                  );
+                  if (kind === 'local')
+                    expect(reason).toContain('No such file or directory');
                 });
                 if (attempt === 1) await reconnect.click();
               }

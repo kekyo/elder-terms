@@ -347,6 +347,14 @@ void set_main_window_connection_failure(MainWindow *main_window,
                                         TerminalConnectionKind kind);
 
 /**
+ * Sets the reason for a completed session or a temporary carrier loss.
+ * @param main_window Main window containing the disconnected notice.
+ * @param message User-facing explanation retained until the next connection.
+ */
+void set_main_window_disconnected_message(MainWindow *main_window,
+                                         const std::string &message);
+
+/**
  * Updates the reconnect button and the overlay's native input handling.
  * @param main_window Main window containing the disconnected notice.
  * @param presentation Visibility and readiness derived from session state.

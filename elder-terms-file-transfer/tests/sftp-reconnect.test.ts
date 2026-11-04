@@ -18,8 +18,8 @@ import {
 
 import { startSshLatencyFixture } from '../../shared/tests/ssh-latency-fixture.mts';
 
-for (const shared of [false, true]) {
-  it(`reconnects SFTP after an established SSH connection drops: shared=${shared}`, async (context) => {
+for (const [shared, autoClose] of [[false, false], [true, false], [false, true], [true, true]]) {
+  it(`reconnects SFTP after an established SSH connection drops: shared=${shared}, auto_close=${autoClose}`, async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const remote = join(directory, 'remote');
       await mkdir(remote);
@@ -94,7 +94,7 @@ for (const shared of [false, true]) {
           [
             '[general]',
             `type=${shared ? 'ssh' : 'sftp'}`,
-            'auto_close=false',
+            `auto_close=${autoClose}`,
             '[ssh]',
             'address=127.0.0.1',
             `port=${address.port}`,
@@ -167,6 +167,21 @@ for (const shared of [false, true]) {
         await waitForResult(async () =>
           expect((await reconnect.info()).states).toContain('showing')
         );
+        expect((await app.output()).exitCode).toBeNull();
+        expect(
+          await expectElementKind(
+            await app.getById('file_transfer_connection_notice_title_label'),
+            'label'
+          ).text()
+        ).toBe('Disconnected');
+        expect(
+          await expectElementKind(
+            await app.getById(
+              'file_transfer_connection_notice_message_label'
+            ),
+            'label'
+          ).text()
+        ).not.toBe('');
         await writeFile(join(remote, 'after.txt'), 'after');
         await reconnect.click();
         const accept = expectElementKind(
@@ -179,7 +194,7 @@ for (const shared of [false, true]) {
         await accept.click();
         await expectFile('after.txt');
         expect((await reconnect.info()).states).not.toContain('showing');
-        if (shared)
+        if (shared && !autoClose)
           expect(
             (await (await app.getById('reconnect_button')).info()).states
           ).toContain('showing');

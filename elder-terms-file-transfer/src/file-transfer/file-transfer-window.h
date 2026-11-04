@@ -139,11 +139,13 @@ void show_file_transfer_window_connection_error(
  *
  * @param window File-transfer window state.
  * @param available True while the remote transport is usable.
- * @remarks A transition to unavailable closes the window when [general]
- * auto_close is enabled; otherwise the local browser remains usable.
+ * @param reason Optional transport failure detail when becoming unavailable.
+ * @remarks Unexpected disconnections retain the notice regardless of auto_close.
+ * The local browser remains usable. The first available failure detail is kept.
  */
 void set_file_transfer_window_connection_available(
-    const std::shared_ptr<FileTransferWindow> &window, bool available);
+    const std::shared_ptr<FileTransferWindow> &window, bool available,
+    std::string reason = {});
 
 /**
  * Displays the protocol negotiated by the current connection.
