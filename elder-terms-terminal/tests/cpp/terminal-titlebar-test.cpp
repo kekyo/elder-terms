@@ -30,9 +30,6 @@ extern "C" int __wrap_main(int argc, char **argv) {
   set_main_window_title(&*window, "Initial");
   gtk_widget_show(window->window);
   assert(!titlebar_effects_running(window->header_bar));
-  // Temporary removal check: raw activity no longer animates normal input.
-  note_main_window_activity(&*window, ActivityIndicatorId::rd);
-  assert(!titlebar_effects_running(window->header_bar));
   for (const auto &bytes : {std::vector<unsigned char>{}, {7}, {7, 7, 7}}) {
     note_main_window_output(&*window, bytes);
     assert(!titlebar_effects_running(window->header_bar));

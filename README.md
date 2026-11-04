@@ -835,6 +835,10 @@ This works in both terminals and file-transfer windows. Reception during a cycle
 keeps it running for another cycle; when reception stops, the original background returns.
 Title text still updates immediately during the effect.
 
+In terminals, BEL-only input does not start or extend the gradient.
+An effect already in progress keeps its current cycle and any scheduled continuation.
+Input containing BEL together with other data, and file-transfer data, still triggers the gradient.
+
 Use "Visual BEL notification" on the "Terminal appearance" tab and "Titlebar receive effect"
 on the "General" tab to select Disabled, Weak, Medium or Strong independently.
 Both default to Medium. Weak is the original intensity, Medium is 1.5 times Weak,
