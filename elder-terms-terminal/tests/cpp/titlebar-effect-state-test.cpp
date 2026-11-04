@@ -69,6 +69,11 @@ int main() {
   assert(!sample_titlebar_effect(state, 1740000).active);
   notify_titlebar_receive(state, 2000000);
   notify_titlebar_receive(state, 2000010);
+  const auto before_bell = sample_titlebar_effect(state, 2600000);
+  notify_titlebar_bell(state, 2600000);
+  const auto after_bell = sample_titlebar_effect(state, 2600000);
+  assert(after_bell.phase == before_bell.phase && after_bell.receive == before_bell.receive);
+  assert(state.received && state.cycle_start == 2000000);
   assert(!sample_titlebar_effect(state, 100000000).active);
 
   for (double phase = 0; phase < 1; phase += .05) {

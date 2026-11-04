@@ -180,7 +180,8 @@ static cardio::promise<void> scenarios(Fixture *fixture) {
     expect(boxrig_ui_model_terminal(boxrig_ui_view_model(boxrig_gtk3_terminal_widget_view(terminal_runtime_widget(runtime)))) == core,
         "recovery retains the original terminal core");
     check_appearance(fixture, shape);
-    note_main_window_activity(fixture->window, ActivityIndicatorId::rd);
+    const unsigned char received[] = {'A'};
+    note_main_window_output(fixture->window, received);
     set_main_window_title(fixture->window, "After terminal replacement");
     set_main_window_title(fixture->window, "Latest title after replacement");
     expect(std::string(gtk_label_get_text(GTK_LABEL(fixture->window->header_title_label))).starts_with(

@@ -834,7 +834,11 @@ cardio::promise<bool> terminal_connection_resize(TerminalConnection *connection,
   co_return resized;
 }
 
-TerminalConnectionState terminal_connection_state(const TerminalConnection *connection) { return connection->state; }
+TerminalConnectionState terminal_connection_state(const TerminalConnection *connection) {
+  auto state = connection->state;
+  state.binary_receive = connection->operation && connection->operation->transfer_prepared;
+  return state;
+}
 
 cardio::promise<bool> terminal_connection_change_encoding(TerminalConnection *connection, std::string encoding) {
   const bool starting = connection->state.phase == TerminalConnectionPhase::starting;

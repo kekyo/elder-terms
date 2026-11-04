@@ -46,11 +46,11 @@ for (const [sound, color, scale, compact, strength] of [
         peer,
         `import { writeFileSync } from 'node:fs';
 process.stdin.setRawMode(true); process.stdin.resume(); writeFileSync(${JSON.stringify(join(directory, 'ready'))}, 'READY');
-process.stdout.write('READY'); process.stdin.on('data', () => process.stdout.write('\\x07\\x07\\x07'));`
+process.stdin.on('data', () => process.stdout.write('\\x07\\x07\\x07'));`
       );
       await writeFile(
         config,
-        `[general]\nexterior_background=${color}\ncompact_mode=${compact}\nreceive_effect=disabled\n[terminal]\nvisual_bell=${strength}\naccessibility_enabled=true\nbell_sound=${sound === 'default' ? 'default' : wav}\n[local]\ncommand_line=${process.execPath} ${peer}\n`
+        `[general]\nexterior_background=${color}\ncompact_mode=${compact}\n[terminal]\nvisual_bell=${strength}\naccessibility_enabled=true\nbell_sound=${sound === 'default' ? 'default' : wav}\n[local]\ncommand_line=${process.execPath} ${peer}\n`
       );
       await runGtkTest(
         context,
@@ -109,7 +109,7 @@ process.stdout.write('READY'); process.stdin.on('data', () => process.stdout.wri
           );
           const finished = once(recorder, 'close');
           let pending = Buffer.alloc(0);
-          const samples: number[] = [];
+          const samples: number[][] = [];
           let stderr = '';
           recorder.stderr.on('data', (chunk: Buffer) => {
             stderr += chunk.toString();
@@ -118,8 +118,12 @@ process.stdout.write('READY'); process.stdin.on('data', () => process.stdout.wri
             pending = Buffer.concat([pending, chunk]);
             const size = width * height * 3;
             while (pending.length >= size) {
-              const offset = (3 * factor * width + Math.round(width * 0.3)) * 3;
-              samples.push(pending[offset]);
+              samples.push(
+                [0.2, 0.4, 0.6].map(
+                  (x) =>
+                    pending[(3 * factor * width + Math.round(width * x)) * 3]
+                )
+              );
               pending = pending.subarray(size);
             }
           });
@@ -148,18 +152,26 @@ process.stdout.write('READY'); process.stdin.on('data', () => process.stdout.wri
             expect(output.stderr).not.toContain(
               'Failed to play terminal bell sound'
             );
-          const baseline = samples[inputFrame - 1];
+          const baseline = samples[inputFrame - 1][0];
+          // A BEL flash is uniform. Default receive effects must not add a
+          // moving band, either during the flash or after it has faded.
+          for (const frame of samples)
+            expect(Math.max(...frame) - Math.min(...frame)).toBeLessThanOrEqual(
+              1
+            );
           expect(
             Math.max(
               ...samples
                 .slice(inputFrame)
-                .map((value) => Math.abs(value - baseline))
+                .map((frame) => Math.abs(frame[0] - baseline))
             )
           ).toBeGreaterThan(20);
-          expect(samples.slice(-5)).toEqual(Array(5).fill(baseline));
+          expect(samples.slice(-5)).toEqual(
+            Array.from({ length: 5 }, () => [baseline, baseline, baseline])
+          );
           const active = samples
             .slice(inputFrame)
-            .filter((value) => Math.abs(value - baseline) > 2);
+            .filter((frame) => Math.abs(frame[0] - baseline) > 2);
           expect(active.length).toBeGreaterThan(2);
           expect(active.length).toBeLessThan(22);
           const after = await readWindowCellLayout(app);
@@ -189,7 +201,7 @@ process.stdout.write('READY'); process.stdin.on('data', () => process.stdout.wri
   });
 }
 
-it('records plain data reception, simultaneous BEL and immediately visible titles', async (context) => {
+it('records receive cycles preserved across BEL-only input, mixed input and immediately visible titles', async (context) => {
   await withTemporaryDirectory(async (directory) => {
     const peer = join(directory, 'titles.mjs');
     const config = join(directory, 'connection.ini');
@@ -199,6 +211,7 @@ it('records plain data reception, simultaneous BEL and immediately visible title
 process.stdin.setRawMode(true); process.stdin.resume(); writeFileSync(${JSON.stringify(join(directory, 'ready'))}, 'READY');
 process.stdin.on('data', (data) => { for (const key of data.toString()) {
   if (key === 'r') { process.stdout.write('payload'); continue; }
+  if (key === 'q') { process.stdout.write('\\x07'); continue; }
   const title = key === 'a' ? 'effect-alpha' : 'effect-beta';
   process.stdout.write((key === 'b' ? '\\x07' : '') + '\\x1b]0;' + title + '\\x1b\\\\');
 }});`
@@ -258,6 +271,8 @@ process.stdin.on('data', (data) => { for (const key of data.toString()) {
       let pending = Buffer.alloc(0);
       const samples: number[][] = [];
       const updates: { title: string; frame: number }[] = [];
+      const bells: number[] = [];
+      let receiveFrame = 0;
       let stderr = '';
       recorder.stderr.on('data', (chunk: Buffer) => {
         stderr += chunk.toString();
@@ -267,7 +282,7 @@ process.stdin.on('data', (data) => { for (const key of data.toString()) {
         const size = png.width * png.height * 3;
         while (pending.length >= size) {
           samples.push(
-            [0.2, 0.4, 0.6].map(
+            [0.2, 0.4, 0.6, 0.8, 0.95].map(
               (x) => pending[(3 * png.width + Math.round(png.width * x)) * 3]
             )
           );
@@ -279,6 +294,7 @@ process.stdin.on('data', (data) => { for (const key of data.toString()) {
           expect(samples.length).toBeGreaterThan(2)
         );
         const initialTitle = await label.text();
+        receiveFrame = samples.length;
         await app.input.pressKey('r');
         await waitForResult(async () =>
           expect(
@@ -299,6 +315,15 @@ process.stdin.on('data', (data) => { for (const key of data.toString()) {
           );
           updates.push({ title, frame: samples.length });
         }
+        // The first cycle already remembers ordinary input. A BEL must retain
+        // that reservation; one in the second cycle must not add a third cycle.
+        for (const offset of [48, 102]) {
+          await waitForResult(async () =>
+            expect(samples.length).toBeGreaterThanOrEqual(receiveFrame + offset)
+          );
+          bells.push(samples.length);
+          await app.input.pressKey('q');
+        }
         const [status] = await finished;
         expect(status, stderr).toBe(0);
       } finally {
@@ -310,7 +335,16 @@ process.stdin.on('data', (data) => { for (const key of data.toString()) {
       await evidence.log('Receive video samples and observed title updates', {
         samples,
         updates,
+        bells,
+        receiveFrame,
       });
+      // Observe continuous horizontal contrast through both BEL flashes and
+      // the cycle boundary, then a settled background before a third cycle.
+      for (const frame of samples.slice(receiveFrame + 15, receiveFrame + 132))
+        expect(Math.max(...frame) - Math.min(...frame)).toBeGreaterThan(7);
+      expect(samples.slice(receiveFrame + 168, receiveFrame + 192)).toEqual(
+        Array.from({ length: 24 }, () => [32, 32, 32, 32, 32])
+      );
       expect(
         samples.some((frame) => Math.max(...frame) - Math.min(...frame) > 8)
       ).toBe(true);
@@ -318,7 +352,7 @@ process.stdin.on('data', (data) => { for (const key of data.toString()) {
       expect(samples.some((frame) => frame[2] > frame[1] + 5)).toBe(true);
       expect(samples.some((frame) => Math.min(...frame) > 50)).toBe(true);
       expect(samples.slice(-5)).toEqual(
-        Array.from({ length: 5 }, () => [32, 32, 32])
+        Array.from({ length: 5 }, () => [32, 32, 32, 32, 32])
       );
       expect(await label.text()).toContain('effect-alpha');
       await evidence.captureEvidence('title-settled', () => header.capture());

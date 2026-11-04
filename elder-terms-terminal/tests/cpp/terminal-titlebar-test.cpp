@@ -30,10 +30,24 @@ extern "C" int __wrap_main(int argc, char **argv) {
   set_main_window_title(&*window, "Initial");
   gtk_widget_show(window->window);
   assert(!titlebar_effects_running(window->header_bar));
+  // Temporary removal check: raw activity no longer animates normal input.
+  note_main_window_activity(&*window, ActivityIndicatorId::rd);
+  assert(!titlebar_effects_running(window->header_bar));
+  for (const auto &bytes : {std::vector<unsigned char>{}, {7}, {7, 7, 7}}) {
+    note_main_window_output(&*window, bytes);
+    assert(!titlebar_effects_running(window->header_bar));
+  }
+  for (const auto &bytes : {std::vector<unsigned char>{0}, {10}, {7, 'A', 7}, {0xe3, 0x81, 0x82}}) {
+    note_main_window_output(&*window, bytes);
+    assert(titlebar_effects_running(window->header_bar));
+    gtk_widget_hide(window->window);
+    gtk_widget_show(window->window);
+  }
+  const unsigned char received[] = {'A'};
   set_main_window_title(&*window, "Initial");
   assert(!titlebar_effects_running(window->header_bar));
   set_main_window_title(&*window, "A");
-  note_main_window_activity(&*window, ActivityIndicatorId::rd);
+  note_main_window_output(&*window, received);
   assert(titlebar_effects_running(window->header_bar));
   // No dispatcher iteration or frame occurs between these updates: the effect
   // cannot delay or coalesce any visible title, including A -> B -> A.
@@ -52,14 +66,14 @@ extern "C" int __wrap_main(int argc, char **argv) {
   assert(!titlebar_effects_running(window->header_bar));
   set_main_window_connection_phase(&*window, TerminalSessionConnectionPhase::disconnected);
   check_title(*window, "Hidden (Disconnected)");
-  note_main_window_activity(&*window, ActivityIndicatorId::rd);
+  note_main_window_output(&*window, received);
   assert(titlebar_effects_running(window->header_bar));
   set_setting_value(&settings, terminal_visual_bell_setting_key(), std::string("disabled"));
   set_setting_value(&settings, general_receive_effect_setting_key(), std::string("disabled"));
   assert(apply_terminal_presentation(presentation, settings, nullptr));
   set_main_window_title(&*window, "Disabled");
   check_title(*window, "Disabled (Disconnected)");
-  note_main_window_activity(&*window, ActivityIndicatorId::rd);
+  note_main_window_output(&*window, received);
   assert(!titlebar_effects_running(window->header_bar));
   set_setting_value(&settings, terminal_visual_bell_setting_key(), std::string("medium"));
   set_setting_value(&settings, general_receive_effect_setting_key(), std::string("medium"));
@@ -72,7 +86,7 @@ extern "C" int __wrap_main(int argc, char **argv) {
   assert(!titlebar_effects_running(window->header_bar));
   // Reception remains visible even if its small status indicator is hidden.
   window->indicator_visible.fill(false);
-  note_main_window_activity(&*window, ActivityIndicatorId::rd);
+  note_main_window_output(&*window, received);
   assert(titlebar_effects_running(window->header_bar));
   destroy_terminal_presentation(presentation);
   destroy_terminal_runtime(window->runtime);

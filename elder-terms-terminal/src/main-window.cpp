@@ -1287,13 +1287,22 @@ void note_main_window_activity(MainWindow *main_window,
     return;
   }
 
-  if (indicator == ActivityIndicatorId::rd) notify_titlebar_receive(main_window->header_bar);
+  // Binary protocol data bypasses normal output decoding. Its 0x07 bytes are
+  // payload, not terminal BELs, and still count as reception.
+  if (indicator == ActivityIndicatorId::rd && main_window->runtime &&
+      terminal_runtime_connection_state(main_window->runtime).binary_receive)
+    notify_titlebar_receive(main_window->header_bar);
 
   const std::size_t index = activity_indicator_index(indicator);
   if (!main_window->indicator_visible[index]) {
     return;
   }
   note_activity_indicator_widget(&main_window->indicators[index]);
+}
+
+void note_main_window_output(MainWindow *main_window, std::span<const unsigned char> bytes) {
+  if (main_window && std::any_of(bytes.begin(), bytes.end(), [](unsigned char byte) { return byte != 0x07; }))
+    notify_titlebar_receive(main_window->header_bar);
 }
 
 void set_main_window_indicator_state(MainWindow *main_window,

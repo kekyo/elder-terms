@@ -1970,6 +1970,7 @@ int main(int argc, char **argv) {
   elder_terms::terminal_runtime_set_changed_callback(app_state.runtime, application_terminal_changed, &app_state);
   elder_terms::terminal_runtime_set_output_callback(app_state.runtime,
       [&app_state](std::span<const unsigned char> raw, std::span<const unsigned char> cooked) {
+        elder_terms::note_main_window_output(app_state.main_window, cooked);
         // Ready I/O can arrive before the next frame observes the connection.
         // Start logging before accepting its first received chunk.
         if (!app_state.closing && app_state.connection_phase !=
