@@ -679,7 +679,8 @@ describe.concurrent('elder-terms-terminal serial session', () => {
         await waitForActivityIndicatorImageState(app, 'conn', 'off');
         await expectDisconnectedNoticeRenderedUndimmedAtTerminalTopRight(
           app,
-          evidence
+          evidence,
+          /Serial connection failed:[\s\S]*serial device not found/
         );
       });
     });
@@ -741,7 +742,10 @@ describe.concurrent('elder-terms-terminal serial session', () => {
                 `${connectedTitle} (Disconnected)`
               );
               await expectMainWindowStatus(app, connectionStatus);
-              await expectDisconnectedNoticeVisibleAtTerminalTopRight(app);
+              await expectDisconnectedNoticeVisibleAtTerminalTopRight(
+                app,
+                /Serial connection failed:/
+              );
 
               const reconnect = expectElementKind(
                 await app.getById('reconnect_button'),

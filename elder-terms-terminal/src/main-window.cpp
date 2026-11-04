@@ -1352,16 +1352,36 @@ void set_main_window_connection_failure(MainWindow *main_window,
     return;
   }
 
-  const bool telnet = kind == TerminalConnectionKind::telnet;
+  const char *heading = nullptr;
+  const char *format = nullptr;
+  switch (kind) {
+  case TerminalConnectionKind::local_shell:
+    heading = _("Local command failed");
+    format = _("Local command failed:\n%s");
+    break;
+  case TerminalConnectionKind::serial:
+    heading = _("Serial connection failed");
+    format = _("Serial connection failed:\n%s");
+    break;
+  case TerminalConnectionKind::telnet:
+    heading = _("TELNET connection failed");
+    format = _("TELNET connection failed:\n%s");
+    break;
+  case TerminalConnectionKind::ssh:
+    heading = _("SSH connection failed");
+    format = _("SSH connection failed:\n%s");
+    break;
+  }
   const std::string text =
-      message.empty()
-          ? (telnet ? _("TELNET connection failed") : _("SSH connection failed"))
-          : format_translated_string(
-                telnet ? _("TELNET connection failed:\n%s")
-                       : _("SSH connection failed:\n%s"),
-                message.c_str());
+      message.empty() ? heading : format_translated_string(format, message.c_str());
+  set_main_window_disconnected_message(main_window, text);
+}
+
+void set_main_window_disconnected_message(MainWindow *main_window,
+                                         const std::string &message) {
+  if (main_window == nullptr || main_window->disconnected_notice_label == nullptr) return;
   gtk_label_set_text(GTK_LABEL(main_window->disconnected_notice_label),
-                     text.c_str());
+                     message.c_str());
 }
 
 void set_main_window_reconnect_presentation(

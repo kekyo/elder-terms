@@ -57,7 +57,7 @@ static std::string accessible_id(const std::string &prefix,
   return prefix + "_" + suffix;
 }
 
-static void apply_inline_prompt_style(const InlinePromptWidgets &widgets) {
+void apply_inline_prompt_style(const InlinePromptWidgets &widgets) {
   GtkCssProvider *provider = gtk_css_provider_new();
   gtk_css_provider_load_from_data(provider, inline_prompt_css, -1, nullptr);
 

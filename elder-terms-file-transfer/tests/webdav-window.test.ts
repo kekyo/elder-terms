@@ -38,7 +38,7 @@ import { createWebdavTestServer } from './webdav-test-server.ts';
 
 describe('WebDAV window', () => {
   for (const autoClose of [false, true]) {
-    it(`respects general auto-close=${autoClose} when the WebDAV service disconnects`, async (context) => {
+    it(`retains the failure and reconnects with auto_close=${autoClose} when WebDAV disconnects`, async (context) => {
       const directory = await mkdtemp(
         join(tmpdir(), 'elder-terms-dav-disconnect-')
       );
@@ -96,41 +96,48 @@ describe('WebDAV window', () => {
         serverClosed = true;
         await refresh.click();
         await waitForResult(async () => {
-          if (autoClose) {
-            const output = await app.output();
-            expect(output.exitCode, output.stderr).toBe(0);
-            expect(output.exitSignal).toBeNull();
-          } else {
-            expect(
-              await expectElementKind(
-                await app.getById('file_transfer_status_label'),
-                'label'
-              ).text()
-            ).toBe('Disconnected');
-            expect((await refresh.info()).states).not.toContain('sensitive');
-            expect((await app.output()).exitCode).toBeNull();
-          }
+          expect(
+            await expectElementKind(
+              await app.getById('file_transfer_status_label'),
+              'label'
+            ).text()
+          ).toBe('Disconnected');
+          expect((await refresh.info()).states).not.toContain('sensitive');
+          expect((await app.output()).exitCode).toBeNull();
+          expect(
+            await expectElementKind(
+              await app.getById(
+                'file_transfer_connection_notice_message_label'
+              ),
+              'label'
+            ).text()
+          ).toMatch(/connect/i);
         });
-        if (!autoClose) {
+        {
           const reconnect = expectElementKind(
             await app.getById('file_transfer_reconnect_button'),
             'button'
           );
           expect((await reconnect.info()).states).toContain('showing');
           expect(
-            (await (await app.getById('file_transfer_dim_overlay')).info())
-              .states
+            (
+              await (
+                await app.getById('file_transfer_connection_notice_panel')
+              ).info()
+            ).states
           ).toContain('showing');
           // A failed attempt must return to the reconnect action.
           await reconnect.click();
-          const accept = expectElementKind(
-            await app.getById('file_transfer_prompt_accept_button'),
-            'button'
-          );
           await waitForResult(async () => {
-            expect((await accept.info()).states).toContain('showing');
+            expect(
+              await expectElementKind(
+                await app.getById(
+                  'file_transfer_connection_notice_title_label'
+                ),
+                'label'
+              ).text()
+            ).toBe('Failed to start WebDAV');
           });
-          await accept.click();
           await waitForResult(async () => {
             expect((await reconnect.info()).states).toContain('showing');
           });

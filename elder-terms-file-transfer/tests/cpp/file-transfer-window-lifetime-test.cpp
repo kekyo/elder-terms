@@ -232,13 +232,23 @@ static cardio::promise<void> verify_async(
         set_file_transfer_window_connection_available(closing_window, true);
         set_file_transfer_window_connection_available(closing_window, false);
         const bool destroyed = file_transfer_window_widget(closing_window) == nullptr;
-        if (!auto_close) {
-          auto *dim = find_widget(file_transfer_window_widget(closing_window), "file_transfer_dim_overlay");
-          expect(dim != nullptr && gtk_widget_get_visible(dim),
-                 "Disconnected file browsers must display the disconnection overlay");
+        if (!destroyed) {
+          auto *notice = find_widget(file_transfer_window_widget(closing_window), "file_transfer_connection_notice_panel");
+          expect(notice != nullptr && gtk_widget_get_visible(notice),
+                 "Disconnected file browsers must display the reason and available actions");
+          set_file_transfer_window_connection_available(closing_window, false, "Connection reset by peer");
+          set_file_transfer_window_connection_available(closing_window, false, "Connection is closed");
+          auto *reason = find_widget(notice, "file_transfer_connection_notice_message_label");
+          expect(std::strcmp(gtk_label_get_text(GTK_LABEL(reason)), "Connection reset by peer") == 0,
+                 "The first detailed disconnection reason must survive later cleanup errors");
+          expect(!gtk_widget_get_visible(find_widget(notice, "file_transfer_reconnect_button")),
+                 "A window without a reconnect callback must offer only Close");
+          gtk_button_clicked(GTK_BUTTON(find_widget(notice, "file_transfer_connection_notice_cancel_button")));
+          expect(file_transfer_window_widget(closing_window) == nullptr,
+                 "Close on the notice must close a window without reconnection support");
         }
         co_await close_file_transfer_window_async(closing_window);
-        expect(destroyed == auto_close, "File transfer disconnection must respect general auto-close");
+        expect(!destroyed, "Unexpected file transfer disconnection must retain the reason even with auto-close");
       }
     }
     for (const bool close_during_reconnect : {false, true}) {
@@ -269,6 +279,7 @@ static cardio::promise<void> verify_async(
       expect(button && gtk_widget_get_visible(button), "Disconnected FTP must offer reconnect");
       gtk_button_clicked(GTK_BUTTON(button));
       expect(!gtk_widget_get_visible(button), "Reconnect must prevent duplicate attempts");
+      gtk_button_clicked(GTK_BUTTON(button));
       co_await old_client->cleanup_started.wait();
       expect(reconnects == 0, "Reconnect must wait for old operation cleanup");
       std::optional<cardio::promise<void>> reconnect_closing;
@@ -288,13 +299,16 @@ static cardio::promise<void> verify_async(
       auto failing = std::make_shared<GatedClient>();
       failing->operation_failure = connection_lost;
       unsigned disconnections = 0;
+      std::string reason;
       auto observed = create_activity_file_client(failing, [](ActivityIndicatorId) {},
-          [&disconnections] { ++disconnections; });
+          [&disconnections, &reason](std::string message) { ++disconnections; reason = std::move(message); });
       bool rejected = false;
       try { (void)co_await observed->load_directory_async("/remote", {}); }
       catch (const RemoteFileError &) { rejected = true; }
       expect(rejected && disconnections == (connection_lost ? 1U : 0U),
              "Only transport failures must notify a file browser disconnection");
+      expect(reason == (connection_lost ? "Remote operation failed" : ""),
+             "Disconnection callbacks must preserve the transport failure reason");
     }
     std::vector<ActivityIndicatorId> activity;
     auto observed = create_activity_file_client(create_sftp_fixture_client(false),
@@ -539,8 +553,8 @@ static cardio::promise<void> verify_async(
       gtk_combo_box_set_active(GTK_COMBO_BOX(auto_close), 1);
       gtk_button_clicked(GTK_BUTTON(find_widget(settings_dialog, "settings_apply_button")));
       set_file_transfer_window_connection_available(window, false);
-      expect(file_transfer_window_widget(window) == nullptr,
-             "Applying auto-close in file browser settings must affect the next disconnection");
+      expect(file_transfer_window_widget(window) != nullptr,
+             "Applying auto-close must not discard an unexpected file transfer disconnection");
       closing.emplace(close_file_transfer_window_async(window));
       co_await *closing;
     } else {

@@ -356,13 +356,19 @@ it.for([false, true])(
         onOutput: evidence.recordAppOutputEvent,
       });
       const title = expectElementKind(
+        await app.getById('file_transfer_connection_notice_title_label'),
+        'label'
+      );
+      const promptTitle = expectElementKind(
         await app.getById('file_transfer_prompt_title_label'),
         'label'
       );
       await waitForResult(async () =>
-        expect(await title.text()).toMatch(/SSH proxy|Failed to start NFS/)
+        expect(`${await promptTitle.text()} ${await title.text()}`).toMatch(
+          /SSH proxy|Failed to start NFS/
+        )
       );
-      if ((await title.text()).includes('SSH proxy'))
+      if ((await promptTitle.text()).includes('SSH proxy'))
         await expectElementKind(
           await app.getById('file_transfer_prompt_accept_button'),
           'button'
@@ -373,7 +379,7 @@ it.for([false, true])(
       if (reserved)
         expect(
           await expectElementKind(
-            await app.getById('file_transfer_prompt_message_label'),
+            await app.getById('file_transfer_connection_notice_message_label'),
             'label'
           ).text()
         ).toContain('reserved');

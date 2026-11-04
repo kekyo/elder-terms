@@ -68,6 +68,12 @@ describe.concurrent('terminal reconnection', () => {
             ).toHaveLength(round);
             expect((await reconnect.info()).states).toContain('showing');
             expect((await reconnect.info()).states).toContain('sensitive');
+            expect(
+              await expectElementKind(
+                await app.getById('disconnected_notice_label'),
+                'label'
+              ).text()
+            ).toBe('Local command exited with status 0.');
           });
           if (round < 3) await reconnect.click();
         }
@@ -229,6 +235,16 @@ describe.concurrent('terminal reconnection', () => {
                   expect((await reconnect.info()).states).toContain(
                     'sensitive'
                   );
+                  const reason = await expectElementKind(
+                    await app.getById('disconnected_notice_label'),
+                    'label'
+                  ).text();
+                  // A peer EOF has no reliable logout/network-loss distinction.
+                  expect(reason).toMatch(
+                    /^SSH (session ended\.|connection failed:)/
+                  );
+                  if (ending === 'logout')
+                    expect(reason).toBe('SSH session ended.');
                 });
                 await evidence.captureEvidence(
                   `ssh-${ending}-${round}`,

@@ -417,15 +417,18 @@ Closing the window cancels waiting jobs and finishes active-transfer cleanup bef
 
 ![Reconnect button after disconnection](./images/ssh-telnet-reconnect.png)
 
-To keep a disconnected terminal or file transfer window open,
-turn off "Close window when session ends" in its General settings (`[general] auto_close=false`).
-The disconnected overlay then offers a "Reconnect" button for SSH, TELNET, serial,
-local shells, SFTP, FTP/FTPS, WebDAV, and SMB.
-It becomes clickable after the previous connection's pending work has stopped.
+If a connection fails or disconnects, review the reason in the notice and select
+"Reconnect" there. In file transfer windows, the notice appears over the remote
+pane while the local browser remains usable. Select "Close" to exit the window.
 
-For serial connections, this reopens the device. For local shells, it starts a new
-shell or configured command. An SFTP window opened from an SSH terminal can also
-reconnect independently.
+To keep a terminal open after a normal session ends, turn off "Close window when
+session ends" in General settings (`[general] auto_close=false`). Failed connection
+attempts and file transfer disconnections retain their notices regardless of this setting.
+
+Reconnection waits for the previous connection's pending work to stop. It reopens
+serial devices or starts a new local shell or command. You can also wait for a
+serial connection to recover automatically, or reconnect an SFTP window independently
+of the SSH terminal that opened it.
 
 If reconnection fails, review the reason and retry from the same window.
 Interrupted transfers are not resumed automatically.

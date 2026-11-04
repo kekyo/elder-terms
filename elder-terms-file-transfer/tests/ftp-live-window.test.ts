@@ -752,29 +752,28 @@ for (const testCase of [
         await waitForResult(async () =>
           expect(
             await expectElementKind(
-              await app.getById('file_transfer_prompt_title_label'),
+              await app.getById('file_transfer_connection_notice_title_label'),
               'label'
             ).text()
           ).toBe('Failed to start FTPS')
         );
-        const acknowledge = expectElementKind(
-          await app.getById('file_transfer_prompt_accept_button'),
+        const reconnect = expectElementKind(
+          await app.getById('file_transfer_reconnect_button'),
           'button'
         );
-        expect((await acknowledge.info()).name).toBe('OK');
+        expect((await reconnect.info()).name).toBe('Reconnect');
         expect(
           (
             await (
-              await app.getById('file_transfer_prompt_cancel_button')
+              await app.getById('file_transfer_connection_notice_cancel_button')
             ).info()
           ).states
-        ).not.toContain('showing');
+        ).toContain('showing');
         expect(serverLog).not.toContain('COMMAND USER');
         expect(serverLog).not.toContain('COMMAND PASS');
         await evidence.captureEvidence('certificate-rejected', async () =>
           app.capture()
         );
-        await acknowledge.click();
         await waitForResult(async () => {
           const output = await app.output();
           expect(output.exitCode, output.stderr).toBeNull();
@@ -790,13 +789,15 @@ for (const testCase of [
         await waitForResult(async () => {
           expect(
             await expectElementKind(
-              await app.getById('file_transfer_prompt_title_label'),
+              await app.getById('file_transfer_connection_notice_title_label'),
               'label'
             ).text()
           ).toBe('Failed to start FTP');
           expect(
             await expectElementKind(
-              await app.getById('file_transfer_prompt_message_label'),
+              await app.getById(
+                'file_transfer_connection_notice_message_label'
+              ),
               'label'
             ).text()
           ).toContain('530');
@@ -1238,8 +1239,11 @@ for (const testCase of [
         await waitForResult(async () => {
           expect((await reconnect.info()).states).toContain('showing');
           expect(
-            (await (await app.getById('file_transfer_dim_overlay')).info())
-              .states
+            (
+              await (
+                await app.getById('file_transfer_connection_notice_panel')
+              ).info()
+            ).states
           ).toContain('showing');
           expect(
             await expectElementKind(

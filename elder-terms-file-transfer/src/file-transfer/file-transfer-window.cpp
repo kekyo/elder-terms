@@ -178,6 +178,7 @@ struct FileTransferWindow {
   GtkWidget *paned = nullptr;
   GtkWidget *dim_overlay = nullptr;
   GtkWidget *reconnect_button = nullptr;
+  InlinePromptWidgets connection_notice{};
   GtkWidget *action_overlay = nullptr;
   GtkWidget *action_label = nullptr;
   GtkWidget *action_progress = nullptr;
@@ -227,6 +228,7 @@ struct FileTransferWindow {
   bool local_load_started = false;
   bool remote_load_started = false;
   bool connection_available = false;
+  bool has_disconnection_detail = false;
   bool transfer_active = false;
   bool browser_action_active = false;
   bool browser_action_progress = false;
@@ -646,6 +648,7 @@ static void update_file_transfer_sensitivity(FileTransferWindow *window) {
   const bool local_ready = idle && !window->local.busy;
   const bool remote_ready =
       idle && !window->remote.busy && window->connection_available;
+  gtk_widget_set_sensitive(window->reconnect_button, idle);
   const bool transfer_ready = local_ready && remote_ready;
   const bool remote_creatable = can_create_remote_children(window);
   const auto local_destination = selected_file_transfer_destination(&window->local);
@@ -708,18 +711,15 @@ static void update_file_action_overlay_presentation(
     reset_activity_indicator_widget(&window->indicators[2]);
   }
   const bool disconnected =
-      window->connection_state == FileTransferConnectionState::disconnected;
+      window->connection_state == FileTransferConnectionState::disconnected ||
+      window->connection_state == FileTransferConnectionState::failed;
   set_widget_visible(window->reconnect_button, disconnected && static_cast<bool>(window->reconnect));
+  set_widget_visible(window->connection_notice.panel, disconnected);
   // A disconnected remote service must not prevent local browsing.
-  gtk_overlay_set_overlay_pass_through(GTK_OVERLAY(window->root_overlay),
-      window->dim_overlay, disconnected &&
-      !window->browser_action_active && !window->certificate_confirmation);
   const bool connection_blocked =
-      disconnected ||
       window->connection_state == FileTransferConnectionState::connecting ||
       window->connection_state ==
-          FileTransferConnectionState::authenticating ||
-      window->connection_state == FileTransferConnectionState::failed;
+          FileTransferConnectionState::authenticating;
   set_widget_visible(window->dim_overlay,
                      connection_blocked || window->certificate_confirmation ||
                          window->browser_action_active);
@@ -760,7 +760,7 @@ static cardio::promise<void> reconnect_file_transfer_window_async(
   } catch (const cardio::canceled_exception &) {
   } catch (const std::exception &error) { failure = error.what(); }
   if (!failure.empty()) {
-    co_await show_file_transfer_window_connection_error_async(
+    show_file_transfer_window_connection_error(
         window, _("Connection failed"), std::move(failure),
         window->stop_source.get_cancellation());
   }
@@ -771,7 +771,8 @@ static cardio::promise<void> reconnect_file_transfer_window_async(
 static void on_file_transfer_reconnect_clicked(GtkButton *, gpointer data) {
   auto *window = static_cast<FileTransferWindow *>(data);
   if (window->destroyed || window->reconnecting || !window->reconnect ||
-      window->connection_state != FileTransferConnectionState::disconnected) return;
+      (window->connection_state != FileTransferConnectionState::disconnected &&
+       window->connection_state != FileTransferConnectionState::failed)) return;
   window->reconnect_task.reset();
   window->reconnect_task.emplace(reconnect_file_transfer_window_async(window->self.lock()));
 }
@@ -3166,8 +3167,10 @@ create_file_transfer_window(FileTransferWindowOptions options) {
       create_file_transfer_pane(state.get(), &state->local, false);
   GtkWidget *remote =
       create_file_transfer_pane(state.get(), &state->remote, true);
+  GtkWidget *remote_overlay = gtk_overlay_new();
+  gtk_container_add(GTK_CONTAINER(remote_overlay), remote);
   gtk_paned_pack1(GTK_PANED(state->paned), local, TRUE, FALSE);
-  gtk_paned_pack2(GTK_PANED(state->paned), remote, TRUE, FALSE);
+  gtk_paned_pack2(GTK_PANED(state->paned), remote_overlay, TRUE, FALSE);
   gtk_paned_set_position(GTK_PANED(state->paned), 520);
 
   state->status_bar = gtk_event_box_new();
@@ -3254,14 +3257,23 @@ create_file_transfer_window(FileTransferWindowOptions options) {
   gtk_overlay_add_overlay(GTK_OVERLAY(state->root_overlay),
                           state->dim_overlay);
 
-  state->reconnect_button = gtk_button_new_with_label(_("Reconnect"));
+  state->connection_notice = create_inline_prompt_widgets("file_transfer_connection_notice");
+  apply_inline_prompt_style(state->connection_notice);
+  gtk_label_set_text(GTK_LABEL(state->connection_notice.title_label), _("Disconnected"));
+  gtk_label_set_text(GTK_LABEL(state->connection_notice.message_label), _("The connection to the remote service was lost."));
+  gtk_label_set_line_wrap(GTK_LABEL(state->connection_notice.title_label), TRUE);
+  gtk_label_set_max_width_chars(GTK_LABEL(state->connection_notice.title_label), 40);
+  gtk_label_set_max_width_chars(GTK_LABEL(state->connection_notice.message_label), 40);
+  gtk_overlay_add_overlay(GTK_OVERLAY(remote_overlay), state->connection_notice.panel);
+  state->reconnect_button = state->connection_notice.accept_button;
+  gtk_button_set_label(GTK_BUTTON(state->reconnect_button), _("Reconnect"));
   gestament_gtk_assign_accessible_id(state->reconnect_button, "file_transfer_reconnect_button");
   gtk_widget_set_no_show_all(state->reconnect_button, TRUE);
-  gtk_widget_set_halign(state->reconnect_button, GTK_ALIGN_CENTER);
-  gtk_widget_set_valign(state->reconnect_button, GTK_ALIGN_CENTER);
-  gtk_overlay_add_overlay(GTK_OVERLAY(state->root_overlay), state->reconnect_button);
   g_signal_connect(state->reconnect_button, "clicked",
                    G_CALLBACK(on_file_transfer_reconnect_clicked), state.get());
+  gtk_button_set_label(GTK_BUTTON(state->connection_notice.cancel_button), _("Close"));
+  g_signal_connect_swapped(state->connection_notice.cancel_button, "clicked",
+                           G_CALLBACK(gtk_widget_destroy), state->window);
 
   state->action_overlay =
       gtk_frame_new(nullptr);
@@ -3371,13 +3383,14 @@ void attach_file_transfer_window_client(
           note_activity_indicator_widget(&owner->indicators[id == ActivityIndicatorId::sd ? 1 : 2]);
           if (id == ActivityIndicatorId::rd) notify_titlebar_receive(owner->header_bar);
         }
-      }, [weak = std::weak_ptr<FileTransferWindow>(window)] {
+      }, [weak = std::weak_ptr<FileTransferWindow>(window)](std::string reason) {
         if (const auto owner = weak.lock()) {
-          set_file_transfer_window_connection_available(owner, false);
+          set_file_transfer_window_connection_available(owner, false, std::move(reason));
         }
       });
   attach_file_transfer_queue(window->jobs, window->client, window->protocol_name);
   window->connection_available = true;
+  window->has_disconnection_detail = false;
   update_file_transfer_job_view(window->job_view, file_transfer_jobs(window->jobs), true);
   window->connection_state = FileTransferConnectionState::ready;
   set_file_transfer_status(window.get(), _("Ready"));
@@ -3444,47 +3457,36 @@ void mark_file_transfer_certificate_exception(const std::shared_ptr<FileTransfer
   set_file_transfer_status(window.get(), window->status_text);
 }
 
-cardio::promise<void> show_file_transfer_window_connection_error_async(
+void show_file_transfer_window_connection_error(
     const std::shared_ptr<FileTransferWindow> &window, std::string title,
     std::string message, cardio::cancellation cancellation) {
-  if (window == nullptr || window->destroyed || window->prompt == nullptr ||
+  if (window == nullptr || window->destroyed ||
       cancellation.is_cancellation_requested()) {
-    co_return;
+    return;
   }
   window->connection_available = false;
   window->connection_state = FileTransferConnectionState::failed;
+  gtk_label_set_text(GTK_LABEL(window->connection_notice.title_label), title.c_str());
+  gtk_label_set_text(GTK_LABEL(window->connection_notice.message_label), message.c_str());
   set_file_transfer_status(window.get(), _("Connection failed"));
   update_file_transfer_sensitivity(window.get());
   update_file_action_overlay_presentation(window.get());
-  InlinePromptRequest request{
-      .title = std::move(title),
-      .message = std::move(message),
-      .accept_label = window->reconnect ? _("OK") : _("Close"),
-      .cancel_label = _("Cancel"),
-      .input_required = false,
-      .echo = false,
-      .cancel_visible = false,
-  };
-  auto pending = prompt_inline_async(
-      window->prompt, std::move(request), std::move(cancellation));
-  const InlinePromptResponse response = co_await pending;
-  if (response.accepted && !window->destroyed && window->window != nullptr) {
-    if (window->reconnect) {
-      // Initial failures and failed retries both leave the connection available
-      // for a new attempt, even when successful sessions would auto-close.
-      window->connection_state = FileTransferConnectionState::disconnected;
-      set_file_transfer_status(window.get(), _("Disconnected"));
-      update_file_action_overlay_presentation(window.get());
-    } else {
-      gtk_widget_destroy(window->window);
-    }
-  }
+  // Do not await acknowledgement here: a reconnect callback may need to await
+  // the startup task that is reporting this failure before it can try again.
 }
 
 void set_file_transfer_window_connection_available(
-    const std::shared_ptr<FileTransferWindow> &window, bool available) {
-  if (window == nullptr || window->destroyed ||
-      window->connection_available == available) {
+    const std::shared_ptr<FileTransferWindow> &window, bool available,
+    std::string reason) {
+  if (window == nullptr || window->destroyed) return;
+  if (window->connection_available == available) {
+    // A liveness check may arrive before the failing request. Preserve the first
+    // detailed error rather than replacing it with later cleanup errors.
+    if (!available && window->connection_state == FileTransferConnectionState::disconnected &&
+        !window->has_disconnection_detail && !reason.empty()) {
+      gtk_label_set_text(GTK_LABEL(window->connection_notice.message_label), reason.c_str());
+      window->has_disconnection_detail = true;
+    }
     return;
   }
   window->connection_available = available;
@@ -3496,12 +3498,13 @@ void set_file_transfer_window_connection_available(
     if (window->transfer_cancel_source.has_value()) {
       (void)window->transfer_cancel_source->cancel();
     }
-    if (general_auto_close(window->settings)) {
-      gtk_widget_destroy(window->window);
-      return;
-    }
     set_file_transfer_status(window.get(), _("Disconnected"));
+    gtk_label_set_text(GTK_LABEL(window->connection_notice.title_label), _("Disconnected"));
+    gtk_label_set_text(GTK_LABEL(window->connection_notice.message_label),
+        reason.empty() ? _("The connection to the remote service was lost.") : reason.c_str());
+    window->has_disconnection_detail = !reason.empty();
   } else {
+    window->has_disconnection_detail = false;
     if (window->client) attach_file_transfer_queue(window->jobs, window->client, window->protocol_name);
     set_file_transfer_status(window.get(), _("Ready"));
   }

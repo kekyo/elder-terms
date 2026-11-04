@@ -700,13 +700,15 @@ it.for(['auto', '1'])(
         await prompt.setText(attempt);
         await accept.click();
         if (attempt !== password) {
-          await waitForResult(async () =>
-            expect(await message.text()).toContain(
-              smb1 ? 'login failed' : 'STATUS_LOGON_FAILURE'
-            )
+          const noticeMessage = expectElementKind(
+            await app.getById('file_transfer_connection_notice_message_label'),
+            'label'
           );
-          await accept.click();
           await waitForResult(async () => {
+            expect((await noticeMessage.info()).states).toContain('showing');
+            expect(await noticeMessage.text()).toContain(
+              smb1 ? 'login failed' : 'STATUS_LOGON_FAILURE'
+            );
             expect((await reconnect.info()).states).toContain('showing');
             expect((await reconnect.info()).states).toContain('sensitive');
           });

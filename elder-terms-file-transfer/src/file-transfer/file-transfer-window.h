@@ -121,16 +121,16 @@ cardio::promise<InlinePromptResponse> confirm_file_transfer_window_async(
 void mark_file_transfer_certificate_exception(const std::shared_ptr<FileTransferWindow> &window);
 
 /**
- * Shows a connection failure inside the file-transfer surface until acknowledged.
+ * Shows a persistent connection failure with direct reconnect and close actions.
  *
  * @param window File-transfer window hosting the error.
  * @param title Short connection failure heading.
  * @param message Detailed failure text.
  * @param cancellation Application shutdown cancellation signal.
- * @remarks Acknowledgement offers reconnection when a reconnect callback is
- * available, including after the initial attempt; otherwise it closes the window.
+ * @remarks Returns immediately so the failed connection can finish cleanup before
+ * a new attempt. The local browser remains usable while the notice is visible.
  */
-cardio::promise<void> show_file_transfer_window_connection_error_async(
+void show_file_transfer_window_connection_error(
     const std::shared_ptr<FileTransferWindow> &window, std::string title,
     std::string message, cardio::cancellation cancellation);
 
@@ -139,11 +139,13 @@ cardio::promise<void> show_file_transfer_window_connection_error_async(
  *
  * @param window File-transfer window state.
  * @param available True while the remote transport is usable.
- * @remarks A transition to unavailable closes the window when [general]
- * auto_close is enabled; otherwise the local browser remains usable.
+ * @param reason Optional transport failure detail when becoming unavailable.
+ * @remarks Unexpected disconnections retain the notice regardless of auto_close.
+ * The local browser remains usable. The first available failure detail is kept.
  */
 void set_file_transfer_window_connection_available(
-    const std::shared_ptr<FileTransferWindow> &window, bool available);
+    const std::shared_ptr<FileTransferWindow> &window, bool available,
+    std::string reason = {});
 
 /**
  * Displays the protocol negotiated by the current connection.

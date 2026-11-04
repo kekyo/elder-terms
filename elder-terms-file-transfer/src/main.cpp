@@ -241,7 +241,7 @@ start_sftp_application_async(SftpApplicationState *state) {
 
   if (!state->shutting_down) {
     std::cerr << failure << '\n';
-    co_await elder_terms::show_file_transfer_window_connection_error_async(
+    elder_terms::show_file_transfer_window_connection_error(
         state->window, _("Failed to start SFTP"), std::move(failure),
         state->stop_source.get_cancellation());
   }
@@ -609,7 +609,7 @@ start_ftp_application_async(FtpApplicationState *state) {
   co_await elder_terms::stop_ssh_socks_proxy_async(state->route);
   if (!state->shutting_down) {
     std::cerr << failure << '\n';
-    co_await elder_terms::show_file_transfer_window_connection_error_async(
+    elder_terms::show_file_transfer_window_connection_error(
         state->window, state->connection.tls_mode == elder_terms::FtpTlsMode::none
             ? _("Failed to start FTP") : _("Failed to start FTPS"), std::move(failure),
         state->stop_source.get_cancellation());

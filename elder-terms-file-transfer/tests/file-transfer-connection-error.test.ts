@@ -143,11 +143,20 @@ describe.concurrent('file transfer connection error recovery', () => {
                 }
               }
               await waitForResult(async () =>
-                expect(await title.text()).toBe(
+                expect((await reconnect.info()).states).toContain('showing')
+              );
+              await waitForResult(async () =>
+                expect(
+                  await expectElementKind(
+                    await app.getById(
+                      'file_transfer_connection_notice_title_label'
+                    ),
+                    'label'
+                  ).text()
+                ).toBe(
                   `Failed to start ${protocol === 'webdav' ? 'WebDAV' : protocol === 'https' ? 'HTTP' : protocol.toUpperCase()}`
                 )
               );
-              await accept.click();
               await waitForResult(async () => {
                 expect((await app.output()).exitCode).toBeNull();
                 expect((await reconnect.info()).states).toContain('showing');
@@ -156,6 +165,26 @@ describe.concurrent('file transfer connection error recovery', () => {
                   (await (await app.getById('file_transfer_local_tree')).info())
                     .states
                 ).toContain('sensitive');
+              });
+              const localTree = expectElementKind(
+                await app.getById('file_transfer_local_tree'),
+                'table'
+              );
+              await writeFile(
+                join(directory, `offline-${attempt}.txt`),
+                'local browsing'
+              );
+              await expectElementKind(
+                await app.getById('file_transfer_local_refresh_button'),
+                'button'
+              ).click();
+              await waitForResult(async () => {
+                const names: string[] = [];
+                for (let row = 0; row < (await localTree.getRowCount()); ++row)
+                  names.push(
+                    (await (await localTree.cellAt(row, 0))?.info())?.name ?? ''
+                  );
+                expect(names).toContain(`offline-${attempt}.txt`);
               });
               if (attempt === 1) await reconnect.click();
             }
@@ -208,15 +237,13 @@ describe.concurrent('file transfer connection error recovery', () => {
           await waitForResult(async () =>
             expect(
               await expectElementKind(
-                await app.getById('file_transfer_prompt_title_label'),
+                await app.getById(
+                  'file_transfer_connection_notice_title_label'
+                ),
                 'label'
               ).text()
             ).toBe('Failed to start WebDAV')
           );
-          await expectElementKind(
-            await app.getById('file_transfer_prompt_accept_button'),
-            'button'
-          ).click();
           const reconnect = expectElementKind(
             await app.getById('file_transfer_reconnect_button'),
             'button'
