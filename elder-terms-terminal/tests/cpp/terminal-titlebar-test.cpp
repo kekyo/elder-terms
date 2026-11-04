@@ -33,8 +33,6 @@ extern "C" int __wrap_main(int argc, char **argv) {
   set_main_window_title(&*window, "Initial");
   assert(!titlebar_effects_running(window->header_bar));
   set_main_window_title(&*window, "A");
-  // Temporary removal check: title changes alone no longer start the gradient.
-  assert(!titlebar_effects_running(window->header_bar));
   note_main_window_activity(&*window, ActivityIndicatorId::rd);
   assert(titlebar_effects_running(window->header_bar));
   // No dispatcher iteration or frame occurs between these updates: the effect

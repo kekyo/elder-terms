@@ -1248,13 +1248,13 @@ static void test_titlebar_effect_settings() {
   write_config(global, "[terminal]\nvisual_bell=weak\n[general]\nreceive_effect=strong\n");
   const SettingsLoadOptions options{.config_path = path, .startup_config_path = std::nullopt, .global_config_path = global};
   const auto bell = elder_terms::terminal_visual_bell_setting_key();
-  const auto title = elder_terms::general_receive_effect_setting_key();
+  const auto receive = elder_terms::general_receive_effect_setting_key();
   for (const auto *value : {"disabled", "weak", "medium", "strong"}) {
     write_config(path, std::string("[terminal]\nvisual_bell=") + value + "\n");
     auto loaded = load_settings(options, 12);
     expect_true(loaded.warnings.empty() && elder_terms::setting_string_value_or_default(loaded.store, bell, "") == value &&
-        elder_terms::setting_string_value_or_default(loaded.store, title, "") == "strong", "strength and inheritance must stay independent");
-    expect_true(setting_value_source(loaded.store, title) == SettingValueSource::global, "inherited strength source");
+        elder_terms::setting_string_value_or_default(loaded.store, receive, "") == "strong", "strength and inheritance must stay independent");
+    expect_true(setting_value_source(loaded.store, receive) == SettingValueSource::global, "inherited strength source");
     expect_true(save_settings(loaded.store, path).saved && read_config(path).find(std::string("visual_bell=") + value) != std::string::npos &&
         read_config(path).find("receive_effect") == std::string::npos, "save every explicit intensity and omit inherited values");
     loaded = load_settings(options, 12);
@@ -1267,7 +1267,7 @@ static void test_titlebar_effect_settings() {
   const auto loaded = load_settings(options, 12);
   expect_true(warnings_contain(loaded.warnings, "visual_bell") && warnings_contain(loaded.warnings, "receive_effect") &&
       elder_terms::setting_string_value_or_default(loaded.store, bell, "") == "weak" &&
-      elder_terms::setting_string_value_or_default(loaded.store, title, "") == "strong", "invalid strengths warn and inherit");
+      elder_terms::setting_string_value_or_default(loaded.store, receive, "") == "strong", "invalid strengths warn and inherit");
   remove_config(path);
   remove_config(global);
 }

@@ -2107,13 +2107,13 @@ describe.concurrent('shared settings widget', () => {
           expect(await bell.isChildSelected(0)).toBe(true);
           await bell.selectChildAt(2);
           await selectSettingsTab(app, '一般');
-          const title = expectElementKind(
+          const receive = expectElementKind(
             await app.getById('settings_general_receive_effect_combo'),
             'comboBox'
           );
-          expect((await title.info()).states).toContain('showing');
-          expect(await title.isChildSelected(0)).toBe(true);
-          await title.selectChildAt(4);
+          expect((await receive.info()).states).toContain('showing');
+          expect(await receive.isChildSelected(0)).toBe(true);
+          await receive.selectChildAt(4);
           const save = expectElementKind(
             await app.getById('settings_save_button'),
             'button'
@@ -2124,7 +2124,7 @@ describe.concurrent('shared settings widget', () => {
             expect(saved).toContain('visual_bell=weak');
             expect(saved).toContain('receive_effect=strong');
           });
-          await title.selectChildAt(0);
+          await receive.selectChildAt(0);
           await save.click();
           await waitForResult(async () => {
             const saved = await readFile(path, 'utf8');

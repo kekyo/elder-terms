@@ -1066,10 +1066,19 @@ describe('SFTP window', () => {
 
         const header = await app.getById('file_transfer_header_bar');
         const status = await app.getById('file_transfer_status_bar');
-        expect(capturePixel(await header.capture(), 0.3, 0.5)).toEqual([
+        // The directory reply animates the header; observe its return to the
+        // configured background across the band before testing idle colors.
+        const headerCapture = await waitForResult(async () => {
+          const capture = await header.capture();
+          for (const x of [0.05, 0.2, 0.35, 0.5, 0.65, 0.8, 0.95]) {
+            expect(capturePixel(capture, x, 0.05)).toEqual([0x7a, 0x24, 0x68]);
+          }
+          return capture;
+        });
+        expect(capturePixel(headerCapture, 0.3, 0.5)).toEqual([
           0x7a, 0x24, 0x68,
         ]);
-        expect(capturePixel(await header.capture(), 0.9, 0.5)).toEqual(
+        expect(capturePixel(headerCapture, 0.9, 0.5)).toEqual(
           exteriorComponentBackground
         );
         const statusCapture = await status.capture();

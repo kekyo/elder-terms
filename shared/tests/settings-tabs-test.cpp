@@ -191,8 +191,8 @@ static void verify_titlebar_controls(SettingsWidgetMode mode) {
   };
   auto fixture = create_fixture("local", mode, std::move(callbacks));
   auto *bell = GTK_COMBO_BOX(find_widget(fixture.root, (fixture.prefix + "_terminal_visual_bell_combo").c_str()));
-  auto *title = GTK_COMBO_BOX(find_widget(fixture.root, (fixture.prefix + "_general_receive_effect_combo").c_str()));
-  require(bell && title, "Titlebar preference controls are missing");
+  auto *receive = GTK_COMBO_BOX(find_widget(fixture.root, (fixture.prefix + "_general_receive_effect_combo").c_str()));
+  require(bell && receive, "Titlebar preference controls are missing");
   for (const auto &[id, strength] : {std::pair{"weak", TitlebarEffectStrength::weak},
       std::pair{"medium", TitlebarEffectStrength::medium}, std::pair{"strong", TitlebarEffectStrength::strong}}) {
     require(gtk_combo_box_set_active_id(bell, id), "Missing intensity choice");
@@ -201,12 +201,12 @@ static void verify_titlebar_controls(SettingsWidgetMode mode) {
   }
   gtk_combo_box_set_active_id(bell, "disabled");
   const auto draft = terminal_titlebar_effects_settings(settings_widget_draft_store(fixture.state));
-  require(draft.bell == TitlebarEffectStrength::disabled && draft.receive == TitlebarEffectStrength::medium, "BEL and title preferences are not independent");
-  gtk_combo_box_set_active_id(title, "disabled");
+  require(draft.bell == TitlebarEffectStrength::disabled && draft.receive == TitlebarEffectStrength::medium, "BEL and receive preferences are not independent");
+  gtk_combo_box_set_active_id(receive, "disabled");
   gtk_button_clicked(GTK_BUTTON(find_widget(fixture.root, (fixture.prefix + "_apply_button").c_str())));
   require(applied == 1, "Titlebar preferences cannot be applied");
   gtk_combo_box_set_active_id(bell, "inherit");
-  gtk_combo_box_set_active_id(title, "inherit");
+  gtk_combo_box_set_active_id(receive, "inherit");
   const auto inherited = terminal_titlebar_effects_settings(settings_widget_draft_store(fixture.state));
   require(inherited.bell == TitlebarEffectStrength::medium && inherited.receive == TitlebarEffectStrength::medium, "Titlebar controls did not restore inheritance");
   gtk_button_clicked(GTK_BUTTON(find_widget(fixture.root, (fixture.prefix + "_cancel_button").c_str())));
