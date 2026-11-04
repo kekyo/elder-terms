@@ -54,6 +54,8 @@ struct NfsConnectionSettings {
   gint64 request_timeout_seconds = 60;
   /** Invalid effective settings, including their key and configuration source. */
   std::vector<std::string> validation_errors;
+  /** Editable fields associated with the validation errors. */
+  std::vector<SettingValidationIssue> validation_issues{};
 };
 
 /** @param name NFS setting name. @returns Key in the nfs INI section. */

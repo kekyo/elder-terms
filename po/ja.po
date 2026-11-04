@@ -3025,3 +3025,216 @@ msgstr "[smb] require_encryption: 暗号化にはSMB3が必要です"
 
 msgid "SSH proxy is unavailable with SMB 1; select SMB 2/3 or disable SSH proxy"
 msgstr "SMB1ではSSH proxyを利用できません。SMB2/3を選ぶか、SSH proxyを無効にしてください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "SMB server address is required"
+msgstr "SMBサーバーのアドレスを入力してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "NFS server address is required"
+msgstr "NFSサーバーのアドレスを入力してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "HTTP base URL is required"
+msgstr "HTTPの基準URLを入力してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "HTTP start page is outside the base URL"
+msgstr "開始ページは基準URLの範囲内で指定してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "[ssh_proxy] address: SSH proxy server address is required"
+msgstr "SSH proxyサーバーのアドレスを入力してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "must contain valid UTF-8 without control characters"
+msgstr "制御文字を含まないUTF-8の文字列を入力してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "must be a hostname or IP address without a scheme, path, or credentials"
+msgstr "ホスト名またはIPアドレスを入力してください。スキーム、パス、認証情報は含められません"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "must be an integer between 1 and 65535"
+msgstr "1から65535までの整数を入力してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "must be between 0 (automatic) and 65535"
+msgstr "0（自動）から65535までの整数を入力してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "must be between 1 and 86400 seconds"
+msgstr "1秒から86400秒までの整数を入力してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "must be an integer between 1 and 86400"
+msgstr "1から86400までの整数を入力してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "must be auto, 1, 2, or 3"
+msgstr "自動、1、2、3のいずれかを選択してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "must select NFS version 2, 3 or 4.0"
+msgstr "NFSのバージョン2、3、4.0のいずれかを選択してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "must be at most 15 ASCII letters, digits, hyphens, or underscores"
+msgstr "半角英数字、ハイフン、アンダースコアを使い、15文字以内で入力してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "must be an absolute path without dot segments, colons, trailing dots or spaces, or control characters"
+msgstr "絶対パスを入力してください。ドット区間、コロン、末尾のドットや空白、制御文字は含められません"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "must be empty or an absolute path without empty, dot, or parent components"
+msgstr "空欄にするか、空の区間、ドット、親ディレクトリを含まない絶対パスを入力してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "must contain absolute paths without empty, dot, or parent components"
+msgstr "空の区間、ドット、親ディレクトリを含まない絶対パスを入力してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "must be -1 (current process) or an unsigned 32-bit ID"
+msgstr "-1（現在のプロセス）か、符号なし32ビットのIDを入力してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "must contain at most 16 unsigned 32-bit group IDs"
+msgstr "符号なし32ビットのグループIDを16個以内で入力してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "must be an available encoding without replacement or ignore modifiers"
+msgstr "置換・無視の修飾子を付けず、利用可能な文字コードを入力してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "must be an absolute PEM CA bundle path or empty"
+msgstr "PEM形式のCA証明書束の絶対パスを入力するか、空欄にしてください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "identifier must not be empty"
+msgstr "識別子を入力してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "identifier may contain only letters, digits, '-' and '_'"
+msgstr "識別子には半角英数字、ハイフン、アンダースコアを使ってください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "identifier must be unique"
+msgstr "識別子が重複しています"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "regular expression must not be empty"
+msgstr "正規表現を入力してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "command must not be empty"
+msgstr "コマンドを入力してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "command must not contain a NUL byte"
+msgstr "コマンドにNUL文字は含められません"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "send text must not be empty"
+msgstr "送信する文字列を入力してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "path template must not be empty when path validation is enabled"
+msgstr "パスの検証が有効な場合はパステンプレートを入力してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "font family names must be valid UTF-8 without NUL characters"
+msgstr "フォント名にはNUL文字を含まないUTF-8の文字列を入力してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "font family names must not contain commas or control characters"
+msgstr "フォント名にカンマや制御文字は含められません"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "font family names must be non-empty and unique"
+msgstr "フォント名を入力し、重複しないようにしてください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "contains an empty capture placeholder"
+msgstr "キャプチャの参照先を入力してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "contains an unmatched capture placeholder"
+msgstr "キャプチャ参照の閉じ波括弧がありません"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "literal '$' must be written as '$$'"
+msgstr "文字としての「$」は「$$」と入力してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "contains more than one capture transformation"
+msgstr "キャプチャの変換は1つだけ指定してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+#, c-format
+msgid "references an unknown capture: %s"
+msgstr "存在しないキャプチャを参照しています: %s"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "A known export path is required when export discovery is disabled"
+msgstr "エクスポートの探索が無効です。開始パスまたは既知のエクスポートを入力してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "A known NFS v4 namespace path is required when namespace discovery is disabled"
+msgstr "名前空間の探索が無効です。開始パスまたは既知のNFS v4名前空間パスを入力してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "[ftp] tls_min_version must not exceed tls_max_version"
+msgstr "TLSの最小バージョンは最大バージョン以下にしてください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "HTTP or HTTPS URL required"
+msgstr "HTTPまたはHTTPSのURLを入力してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "HTTP base URL must not contain a query or fragment"
+msgstr "基準URLにクエリやフラグメントは含められません"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "HTTP base URL must end in a slash"
+msgstr "基準URLの末尾にスラッシュを付けてください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Malformed HTTP URL escape"
+msgstr "URLのエスケープ表記が不正です"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Ambiguous HTTP URL character"
+msgstr "URLに制御文字やバックスラッシュは含められません"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Ambiguous encoded HTTP path separator"
+msgstr "URLのパス区切りをエンコードしないでください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Invalid HTTP base URL"
+msgstr "有効なHTTPの基準URLを入力してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "Invalid HTTP endpoint"
+msgstr "有効なHTTPの接続先を入力してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "must be an absolute path without dot segments or control characters"
+msgstr "ドット区間や制御文字を含まない絶対パスを入力してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "must be an encoded absolute URL path without a query, fragment, or dot segments"
+msgstr "クエリ、フラグメント、ドット区間を含まない、エンコード済みの絶対URLパスを入力してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "must not contain control characters"
+msgstr "制御文字は含められません"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "security levels must be selected with tls_compatibility"
+msgstr "セキュリティレベルはTLS互換性の設定で選択してください"
+
+#: shared/src/settings-widget/settings-presentation.cpp
+msgid "TLS 1.3 cipher suites must encrypt data"
+msgstr "TLS 1.3の暗号スイートはデータの暗号化に対応したものを指定してください"

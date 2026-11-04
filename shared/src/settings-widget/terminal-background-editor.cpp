@@ -4,6 +4,7 @@
 // https://github.com/kekyo/elder-terms/
 
 #include "terminal-background-editor.h"
+#include "settings-validation.h"
 #include "settings-presentation.h"
 #include <elder-terms/modal-color-button.h>
 #include <elder-terms/modal-dialog.h>
@@ -59,14 +60,10 @@ static void sync_color(TerminalBackgroundEditor *editor) {
 
 static void validate_fields(TerminalBackgroundEditor *editor) {
   for (const auto &field : editor->fields) {
-    gtk_entry_set_icon_from_icon_name(GTK_ENTRY(field.entry), GTK_ENTRY_ICON_SECONDARY,
-        field.valid ? nullptr : "dialog-error-symbolic");
-    gtk_widget_set_tooltip_text(field.entry, field.valid ? nullptr :
+    set_settings_input_error(field.entry, field.valid ? "" :
         field.number ? _("Enter an integer from 0 to 100") : _("Enter a color as #RRGGBB"));
   }
-  gtk_entry_set_icon_from_icon_name(GTK_ENTRY(editor->image_path), GTK_ENTRY_ICON_SECONDARY,
-      editor->image_valid ? nullptr : "dialog-error-symbolic");
-  gtk_widget_set_tooltip_text(editor->image_path, editor->image_valid ? nullptr : _("Enter an absolute local image path"));
+  set_settings_input_error(editor->image_path, editor->image_valid ? "" : _("Enter an absolute local image path"));
 }
 
 void sync_terminal_background_editor(TerminalBackgroundEditor *editor, bool preserve_invalid) {

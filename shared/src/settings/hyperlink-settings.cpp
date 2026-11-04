@@ -157,14 +157,20 @@ bool hyperlink_action_rule_id_is_valid(const std::string &id,
 }
 
 bool hyperlink_action_rule_is_valid(const HyperlinkActionRule &rule,
-                                    std::string *reason) {
+                                    std::string *reason,
+                                    RuleValidationLocation *location) {
+  RuleValidationLocation ignored;
+  if (!location) location = &ignored;
+  location->field = RuleValidationField::identifier;
   if (!hyperlink_action_rule_id_is_valid(rule.id, reason)) {
     return false;
   }
+  location->field = RuleValidationField::pattern;
   if (rule.pattern.empty()) {
     *reason = "regular expression must not be empty";
     return false;
   }
+  location->field = RuleValidationField::command;
   if (trim_ascii_whitespace(rule.command).empty()) {
     *reason = "command must not be empty";
     return false;
@@ -174,21 +180,26 @@ bool hyperlink_action_rule_is_valid(const HyperlinkActionRule &rule,
     return false;
   }
 
+  location->field = RuleValidationField::pattern;
   RegularExpressionState *regex =
       create_regular_expression(rule.pattern, reason);
   if (regex == nullptr) {
     return false;
   }
 
-  bool valid = std::all_of(
-      rule.arguments.begin(), rule.arguments.end(),
-      [regex, reason](const std::string &argument) {
-        return regex_capture_template_is_valid(
-            argument, regex,
-            RegexCaptureTemplateOptions{.allow_uri_decode = true}, reason);
-      });
+  location->field = RuleValidationField::argument;
+  bool valid = true;
+  for (std::size_t index = 0; index < rule.arguments.size(); ++index) {
+    location->argument_index = index;
+    if (!regex_capture_template_is_valid(rule.arguments[index], regex,
+        RegexCaptureTemplateOptions{.allow_uri_decode = true}, reason)) {
+      valid = false;
+      break;
+    }
+  }
   if (valid && rule.path_validation ==
                    HyperlinkPathValidation::existing_local_path) {
+    location->field = RuleValidationField::path_template;
     if (rule.path_template.empty()) {
       *reason = "path template must not be empty when path validation is "
                 "enabled";

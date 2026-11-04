@@ -6,6 +6,7 @@
 #include "smb-settings-editor.h"
 
 #include "settings-presentation.h"
+#include "settings-validation.h"
 
 #include <algorithm>
 #include <charconv>
@@ -69,8 +70,8 @@ static void update_validation(SmbSettingsEditor *editor) {
   for (auto &field : editor->fields) {
     if (field.entry) {
       gtk_widget_set_sensitive(field.entry, !editor->read_only);
-      gtk_entry_set_icon_from_icon_name(GTK_ENTRY(field.entry), GTK_ENTRY_ICON_SECONDARY,
-                                        field.valid ? nullptr : "dialog-error-symbolic");
+      set_settings_input_error(field.entry, field.valid ? "" :
+          settings_rejected_input_reason(*editor->store, smb_setting_key(field.name), field.entry));
     }
     if (field.combo) gtk_widget_set_sensitive(field.combo, !editor->read_only);
     if (!field.valid)
@@ -194,6 +195,8 @@ SmbSettingsEditor *create_smb_settings_editor(SettingsStore *store,
       control = std::string_view(field.name) == "address"
           ? create_address_row(field.entry) : field.entry;
     }
+    bind_settings_field(control, smb_setting_key(field.name));
+    control = decorate_settings_control(control);
     gtk_widget_set_hexpand(control, TRUE);
     gtk_grid_attach(GTK_GRID(editor->root), label, 0, row, 1, 1);
     gtk_grid_attach(GTK_GRID(editor->root), control, 1, row++, 1, 1);

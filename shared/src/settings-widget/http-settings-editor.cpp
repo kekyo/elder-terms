@@ -5,6 +5,7 @@
 
 #include "http-settings-editor.h"
 #include "settings-presentation.h"
+#include "settings-validation.h"
 #include <elder-terms/modal-dialog.h>
 
 #include <algorithm>
@@ -80,8 +81,8 @@ static void update_validation(HttpSettingsEditor *editor) {
         gtk_widget_set_sensitive(editor->browse, enabled && custom);
       }
       gtk_widget_set_sensitive(field.entry, enabled && custom);
-      gtk_entry_set_icon_from_icon_name(GTK_ENTRY(field.entry), GTK_ENTRY_ICON_SECONDARY,
-                                        field.valid ? nullptr : "dialog-error-symbolic");
+      set_settings_input_error(field.entry, field.valid ? "" :
+          settings_rejected_input_reason(*editor->store, http_setting_key(field.name), field.entry));
     }
     if (!field.valid) errors.push_back(setting_label(http_setting_key(field.name)) + ": " + _("Enter a valid value"));
   }
@@ -244,6 +245,8 @@ HttpSettingsEditor *create_http_settings_editor(SettingsStore *store,
       gtk_box_pack_start(GTK_BOX(box), editor->browse, FALSE, FALSE, 0);
       g_signal_connect(editor->browse, "clicked", G_CALLBACK(browse_clicked), editor);
     }
+    bind_settings_field(box, http_setting_key(field.name));
+    box = decorate_settings_control(box);
     gtk_widget_set_hexpand(box, TRUE);
     gtk_grid_attach(GTK_GRID(editor->root), label, 0, row, 1, 1);
     gtk_grid_attach(GTK_GRID(editor->root), box, 1, row++, 1, 1);

@@ -23,7 +23,7 @@ import type {
   GtkWidgetElement,
 } from 'gestament';
 import { describe, expect, it } from 'vitest';
-import { waitForResult } from 'gestament/testing';
+import { createGtkCaptureExpect, waitForResult } from 'gestament/testing';
 import {
   countCaptureFixtureDiffPixels,
   countNonBackgroundPixels,
@@ -860,6 +860,145 @@ const clearKeyBinding = async (
 };
 
 describe.concurrent('shared settings widget', () => {
+  it('explains an inherited SMB1 proxy conflict in Japanese', async (context) => {
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=ssh_proxy',
+        '--type=smb',
+        '--save',
+        '--global=smb.address=server.example',
+        '--global=smb.version=1',
+        '--global=ssh_proxy.enabled=true',
+        '--global=ssh_proxy.address=gateway.example',
+      ],
+      async ({ app, directory }) => {
+        const proxy = await app.getById('settings_ssh_proxy_enabled_combo');
+        const message =
+          'SMB1ではSSH proxyを利用できません。SMB2/3を選ぶか、SSH proxyを無効にしてください';
+        expect((await proxy.info()).description).toBe(message);
+        expect(
+          (await (await app.getById('settings_smb_version_combo')).info())
+            .description
+        ).toBe(message);
+        await expectInsensitive(await app.getById('settings_apply_button'));
+        await expectInsensitive(await app.getById('settings_save_button'));
+        const { bounds } = await proxy.capture();
+        await app.input.moveMouseTo(
+          Math.round(bounds.x + 24),
+          Math.round(bounds.y + bounds.height / 2)
+        );
+        await waitForResult(async () =>
+          expect(await app.getWindowCount()).toBeGreaterThan(1)
+        );
+        await writeFile(
+          join(directory, 'smb1-proxy-ja-screen.png'),
+          (await app.capture()).image
+        );
+        const window = expectElementKind(await app.windowAt(0), 'window');
+        const windowBounds = await window.bounds();
+        expect(bounds.x + bounds.width).toBeLessThanOrEqual(
+          windowBounds.x + windowBounds.width
+        );
+        await expectElementKind(proxy, 'comboBox').selectChildAt(1);
+        await expectSensitive(await app.getById('settings_apply_button'));
+      },
+      { env: japaneseTestEnvironment }
+    );
+  });
+  it('explains required inputs and SMB1 proxy conflicts on real hover', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--page=smb', '--type=smb', '--save'],
+      async ({ app, directory }) => {
+        const visual = createGtkCaptureExpect({ outputResultPath: directory });
+        const hoverError = async (
+          id: string,
+          expected: string,
+          name: string
+        ): Promise<void> => {
+          const control = await app.getById(id);
+          expect((await control.info()).description).toContain(expected);
+          const { bounds } = await control.capture();
+          await app.input.moveMouseTo(
+            Math.round(bounds.x + 24),
+            Math.round(bounds.y + bounds.height / 2)
+          );
+          const popup = await waitForResult(async () => {
+            for (let index = 0; index < (await app.getWindowCount()); ++index) {
+              const window = await app.windowAt(index);
+              if (!window) continue;
+              const info = await window.info();
+              // GTK3 tooltips may be exposed only by X11, without an AT-SPI role.
+              if (
+                info.roleName === 'tool tip' ||
+                (info.roleName === 'window' && info.interfaces.length === 0)
+              )
+                return window;
+            }
+            throw new Error('GTK tooltip has not appeared');
+          });
+          const capture = await popup.capture();
+          await visual.expectCapture(capture, name).toContainText(expected);
+          await writeFile(
+            join(directory, name + '-screen.png'),
+            (await app.capture()).image
+          );
+          await app.input.moveMouseTo(0, 0);
+        };
+        try {
+          await selectSettingsTab(app, 'SMB');
+          await expectInsensitive(await app.getById('settings_apply_button'));
+          await hoverError(
+            'settings_smb_address_entry',
+            'SMB server address is required',
+            'required-address'
+          );
+          await expectElementKind(
+            await app.getById('settings_smb_address_entry'),
+            'entry'
+          ).setText('server.example');
+          await expectElementKind(
+            await app.getById('settings_smb_version_combo'),
+            'comboBox'
+          ).selectChildAt(2);
+          await selectSettingsTab(app, 'SSH proxy');
+          await expectElementKind(
+            await app.getById('settings_ssh_proxy_enabled_combo'),
+            'comboBox'
+          ).selectChildAt(2);
+          await expectElementKind(
+            await app.getById('settings_ssh_proxy_address_entry'),
+            'entry'
+          ).setText('gateway.example');
+          await expectInsensitive(await app.getById('settings_save_button'));
+          await hoverError(
+            'settings_ssh_proxy_enabled_combo',
+            'select SMB 2/3 or disable SSH proxy',
+            'smb1-proxy'
+          );
+          await expectElementKind(
+            await app.getById('settings_ssh_proxy_enabled_combo'),
+            'comboBox'
+          ).selectChildAt(1);
+          await expectSensitive(await app.getById('settings_apply_button'));
+          expect(
+            (
+              await (
+                await app.getById('settings_ssh_proxy_enabled_combo')
+              ).info()
+            ).description
+          ).toBe('');
+        } finally {
+          await writeFile(
+            join(directory, 'hover-final-screen.png'),
+            (await app.capture()).image
+          );
+          await visual.release();
+        }
+      }
+    );
+  });
   it('waits for the complete latest settings record when output arrives in chunks', async () => {
     for (const prefix of ['APPLIED', 'REBASED', 'SAVED'] as const) {
       for (const previous of [

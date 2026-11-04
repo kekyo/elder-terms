@@ -116,12 +116,15 @@ static void verify_tab_structure(const Fixture &fixture, bool terminal_visible) 
   require(gtk_widget_get_visible(behavior) == terminal_visible &&
               gtk_widget_get_visible(appearance) == terminal_visible &&
               gtk_widget_get_visible(behavior_tab) == terminal_visible &&
-              gtk_widget_get_visible(appearance_tab) == terminal_visible,
+              gtk_widget_get_visible(appearance_tab) == terminal_visible &&
+              gtk_widget_get_visible(find_widget(behavior_tab, id("terminal_tab_label").c_str())) == terminal_visible &&
+              gtk_widget_get_visible(find_widget(appearance_tab, id("terminal_appearance_tab_label").c_str())) == terminal_visible,
           "Terminal tab visibility differs from connection type");
   require(gtk_notebook_page_num(GTK_NOTEBOOK(notebook), appearance) ==
               gtk_notebook_page_num(GTK_NOTEBOOK(notebook), behavior) + 1,
           "Terminal appearance does not follow Terminal");
-  require(std::strcmp(gtk_label_get_text(GTK_LABEL(appearance_tab)),
+  require(std::strcmp(gtk_label_get_text(GTK_LABEL(find_widget(appearance_tab,
+                  id("terminal_appearance_tab_label").c_str()))),
                       "Terminal appearance") == 0,
           "Terminal appearance tab has the wrong title");
 

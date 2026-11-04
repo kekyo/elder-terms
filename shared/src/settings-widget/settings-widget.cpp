@@ -41,6 +41,7 @@
 #include "terminal-background-editor.h"
 #include "terminal-color-preview.h"
 #include "settings-presentation.h"
+#include "settings-validation.h"
 
 #define GETTEXT_PACKAGE "elder-terms"
 #include <glib/gi18n-lib.h>
@@ -369,6 +370,8 @@ static GtkWidget *create_row_label(const char *text) {
 
 static GtkWidget *attach_row(GtkWidget *grid, int row, const SettingKey &key,
                              GtkWidget *control) {
+  bind_settings_field(control, key);
+  control = decorate_settings_control(control);
   const std::string label_text = setting_label(key);
   GtkWidget *label = create_row_label(label_text.c_str());
   gtk_grid_attach(GTK_GRID(grid), label, 0, row, 1, 1);
@@ -380,6 +383,7 @@ static GtkWidget *attach_row(GtkWidget *grid, int row, const SettingKey &key,
 
 static GtkWidget *attach_text_row(GtkWidget *grid, int row,
                                   const char *text, GtkWidget *control) {
+  control = decorate_settings_control(control);
   GtkWidget *label = create_row_label(text);
   gtk_grid_attach(GTK_GRID(grid), label, 0, row, 1, 1);
   gtk_widget_set_hexpand(control, true);
@@ -489,22 +493,7 @@ static void sync_inheritable_entry(GtkWidget *entry,
 
 static void set_entry_validation(GtkWidget *entry, bool valid,
                                  const std::string &reason) {
-  if (entry == nullptr) {
-    return;
-  }
-  GtkStyleContext *context = gtk_widget_get_style_context(entry);
-  if (valid) {
-    gtk_style_context_remove_class(context, GTK_STYLE_CLASS_ERROR);
-  } else {
-    gtk_style_context_add_class(context, GTK_STYLE_CLASS_ERROR);
-  }
-  gtk_entry_set_icon_from_icon_name(
-      GTK_ENTRY(entry), GTK_ENTRY_ICON_SECONDARY,
-      valid ? nullptr : "dialog-error-symbolic");
-  const std::string message = settings_validation_message(reason);
-  gtk_entry_set_icon_tooltip_text(GTK_ENTRY(entry),
-                                  GTK_ENTRY_ICON_SECONDARY,
-                                  valid ? nullptr : message.c_str());
+  set_settings_input_error(entry, valid ? std::string() : reason);
 }
 
 static void update_string_entry(SettingsWidgetState *state, GtkWidget *entry,
@@ -877,10 +866,7 @@ static void sync_terminal_text_widgets(SettingsWidgetState *state) {
   populate_terminal_special_code_combos(state, defaults);
   state->terminal_encoding_valid = true;
   if (state->terminal_encoding_entry != nullptr) {
-    gtk_entry_set_icon_from_icon_name(GTK_ENTRY(state->terminal_encoding_entry),
-                                      GTK_ENTRY_ICON_SECONDARY, nullptr);
-    gtk_entry_set_icon_tooltip_text(GTK_ENTRY(state->terminal_encoding_entry),
-                                    GTK_ENTRY_ICON_SECONDARY, nullptr);
+    set_settings_input_error(state->terminal_encoding_entry, "");
   }
   state->synchronizing = previous_synchronizing;
 }
@@ -890,6 +876,7 @@ static void update_connection_pages(SettingsWidgetState *state) {
   for (const ConnectionSettingsPage &page : state->connection_pages) {
     const bool visible =
         state->mode == SettingsWidgetMode::global_defaults ||
+        !settings_validation_summary(page.page).empty() ||
         std::any_of(page.connection_types.begin(),
                     page.connection_types.end(),
                     [&active_type](const char *connection_type) {
@@ -897,6 +884,9 @@ static void update_connection_pages(SettingsWidgetState *state) {
                     });
     gtk_widget_set_visible(page.page, visible);
     gtk_widget_set_visible(page.tab_label, visible);
+    // GTK3 exposes notebook tab visibility through its descendant label to AT-SPI.
+    auto *label = static_cast<GtkWidget *>(g_object_get_data(G_OBJECT(page.tab_label), "elder-terms-tab-label"));
+    if (label) gtk_widget_set_visible(label, visible);
   }
   if (state->ssh_proxy_experimental_label != nullptr) {
     gtk_widget_set_visible(state->ssh_proxy_experimental_label,
@@ -951,8 +941,12 @@ static void update_general_name_from_widget(SettingsWidgetState *state) {
 
 static GtkWidget *create_tab_label(const char *text, const char *id) {
   GtkWidget *label = gtk_label_new(text);
-  assign_accessible_id(label, id);
-  return label;
+  assign_accessible_id(label, (std::string(id) + "_label").c_str());
+  gtk_widget_show(label);
+  auto *tab = decorate_settings_control(label);
+  assign_accessible_id(tab, id);
+  g_object_set_data(G_OBJECT(tab), "elder-terms-tab-label", label);
+  return tab;
 }
 
 static void update_general_type_from_widget(SettingsWidgetState *state) {
@@ -967,6 +961,7 @@ static void update_general_type_from_widget(SettingsWidgetState *state) {
                                SettingValue{type});
   }
   update_connection_pages(state);
+  sync_ssh_proxy_settings_editor(state->ssh_proxy_editor, true);
   sync_terminal_text_widgets(state);
 }
 
@@ -1385,13 +1380,7 @@ static void set_terminal_encoding_validation(
   if (state->terminal_encoding_entry == nullptr) {
     return;
   }
-  gtk_entry_set_icon_from_icon_name(
-      GTK_ENTRY(state->terminal_encoding_entry), GTK_ENTRY_ICON_SECONDARY,
-      valid ? nullptr : "dialog-error-symbolic");
-  const std::string message = settings_validation_message(reason);
-  gtk_entry_set_icon_tooltip_text(
-      GTK_ENTRY(state->terminal_encoding_entry), GTK_ENTRY_ICON_SECONDARY,
-      valid ? nullptr : message.c_str());
+  set_settings_input_error(state->terminal_encoding_entry, valid ? "" : reason);
 }
 
 static void update_terminal_encoding_from_widget(SettingsWidgetState *state) {
@@ -1596,6 +1585,42 @@ static bool settings_inputs_valid(const SettingsWidgetState *state) {
 }
 
 static void update_action_sensitivity(SettingsWidgetState *state) {
+  std::vector<SettingValidationIssue> issues;
+  const auto include = [&](const auto &settings) {
+    issues.insert(issues.end(), settings.validation_issues.begin(), settings.validation_issues.end());
+  };
+  const auto type = connection_type_value(state->draft_store);
+  const bool global = state->mode == SettingsWidgetMode::global_defaults;
+  if (state->http_editor) set_settings_validation_enabled(http_settings_editor_root(state->http_editor), global || type == http_connection_type);
+  if (state->webdav_editor) set_settings_validation_enabled(webdav_settings_editor_root(state->webdav_editor), global || type == webdav_connection_type);
+  if (state->smb_editor) set_settings_validation_enabled(smb_settings_editor_root(state->smb_editor), global || type == smb_connection_type);
+  if (state->nfs_editor) set_settings_validation_enabled(nfs_settings_editor_root(state->nfs_editor), global || type == nfs_connection_type);
+  if (state->ssh_proxy_editor) set_settings_validation_enabled(ssh_proxy_settings_editor_root(state->ssh_proxy_editor),
+      global || (type != local_connection_type && type != serial_connection_type));
+  for (const auto &control : state->ftp_tls_controls) {
+    set_settings_validation_enabled(control.combo, global || type == ftp_connection_type);
+    set_settings_validation_enabled(control.entry, global || type == ftp_connection_type);
+  }
+  if (global || type == ftp_connection_type) include(ftp_connection_settings(state->draft_store));
+  if (global || type == http_connection_type) include(http_connection_settings(state->draft_store));
+  if (global || type == webdav_connection_type) include(webdav_connection_settings(state->draft_store));
+  if (global || type == smb_connection_type) include(smb_connection_settings(state->draft_store));
+  if (global || type == nfs_connection_type) include(nfs_connection_settings(state->draft_store));
+  include(global ? ssh_proxy_settings(state->draft_store) : ssh_proxy_connection_settings(state->draft_store));
+  refresh_settings_validation(state->root, issues);
+  if (state->notebook) {
+    const auto count = gtk_notebook_get_n_pages(GTK_NOTEBOOK(state->notebook));
+    for (int index = 0; index < count; ++index) {
+      auto *page = gtk_notebook_get_nth_page(GTK_NOTEBOOK(state->notebook), index);
+      auto *tab = gtk_notebook_get_tab_label(GTK_NOTEBOOK(state->notebook), page);
+      auto *label = static_cast<GtkWidget *>(g_object_get_data(G_OBJECT(tab), "elder-terms-tab-label"));
+      const auto summary = settings_validation_summary(page);
+      set_settings_input_error(tab, summary);
+      set_settings_input_error(label, summary);
+      refresh_settings_validation(tab, {});
+    }
+    update_connection_pages(state);
+  }
   const gboolean sensitive = !state->action_pending && settings_inputs_valid(state);
   if (state->apply_button != nullptr) {
     gtk_widget_set_sensitive(state->apply_button, sensitive);
@@ -2162,13 +2187,7 @@ static void update_log_base_directory_from_widget(
 static void set_log_file_name_format_validation(
     SettingsWidgetState *state, bool valid, const std::string &reason) {
   state->log_file_name_format_valid = valid;
-  gtk_entry_set_icon_from_icon_name(
-      GTK_ENTRY(state->log_file_name_format_entry), GTK_ENTRY_ICON_SECONDARY,
-      valid ? nullptr : "dialog-error-symbolic");
-  const std::string message = settings_validation_message(reason);
-  gtk_entry_set_icon_tooltip_text(
-      GTK_ENTRY(state->log_file_name_format_entry), GTK_ENTRY_ICON_SECONDARY,
-      valid ? nullptr : message.c_str());
+  set_settings_input_error(state->log_file_name_format_entry, valid ? "" : reason);
 }
 
 static void update_log_file_name_format_from_widget(
@@ -2241,15 +2260,7 @@ static void clear_container(GtkWidget *container) {
 
 static void set_text_view_validation(GtkWidget *view, bool valid,
                                      const std::string &reason) {
-  GtkStyleContext *context = gtk_widget_get_style_context(view);
-  if (valid) {
-    gtk_style_context_remove_class(context, GTK_STYLE_CLASS_ERROR);
-    gtk_widget_set_tooltip_text(view, nullptr);
-    return;
-  }
-  gtk_style_context_add_class(context, GTK_STYLE_CLASS_ERROR);
-  const std::string message = settings_validation_message(reason);
-  gtk_widget_set_tooltip_text(view, message.c_str());
+  set_settings_input_error(view, valid ? "" : reason);
 }
 
 static bool macro_id_is_duplicated(const SettingsWidgetState *state,
@@ -2263,6 +2274,16 @@ static bool macro_id_is_duplicated(const SettingsWidgetState *state,
 }
 
 static void update_macro_validation(SettingsWidgetState *state) {
+  for (std::size_t index = 0; index < state->draft_store.macro_rules.size(); ++index) {
+    auto *row = gtk_list_box_get_row_at_index(GTK_LIST_BOX(state->macro_list), static_cast<int>(index));
+    if (!row) continue;
+    const auto &candidate = state->draft_store.macro_rules[index];
+    std::string reason;
+    macro_rule_is_valid(candidate, &reason);
+    if (macro_id_is_duplicated(state, &candidate)) reason = "identifier must be unique";
+    set_settings_input_error(GTK_WIDGET(row), reason);
+    set_settings_input_error(static_cast<GtkWidget *>(g_object_get_data(G_OBJECT(row), "elder-terms-rule-label")), reason);
+  }
   const MacroRule *rule = selected_macro_rule(state);
   if (rule == nullptr) {
     set_entry_validation(state->macro_id_entry, true, {});
@@ -2298,16 +2319,14 @@ static void update_macro_validation(SettingsWidgetState *state) {
   set_entry_validation(state->macro_regex_entry, regex_valid, regex_reason);
 
   std::string rule_reason;
-  const bool rule_valid = macro_rule_is_valid(*rule, &rule_reason);
-  if (std::holds_alternative<MacroSendAction>(rule->action)) {
-    set_entry_validation(state->macro_command_entry, true, {});
-    set_text_view_validation(state->macro_send_view, rule_valid,
-                             rule_reason);
-  } else {
-    set_text_view_validation(state->macro_send_view, true, {});
-    set_entry_validation(state->macro_command_entry, rule_valid,
-                         rule_reason);
-  }
+  RuleValidationLocation location;
+  const bool rule_valid = macro_rule_is_valid(*rule, &rule_reason, &location);
+  set_entry_validation(state->macro_command_entry,
+      rule_valid || location.field != RuleValidationField::command, rule_reason);
+  set_text_view_validation(state->macro_send_view,
+      rule_valid || location.field != RuleValidationField::send_text, rule_reason);
+  set_settings_argument_error(state->macro_arguments_box, location.argument_index,
+      !rule_valid && location.field == RuleValidationField::argument ? rule_reason : "");
   update_action_sensitivity(state);
 }
 
@@ -2468,7 +2487,8 @@ static void rebuild_macro_list(SettingsWidgetState *state) {
     GtkWidget *label =
         gtk_label_new(state->draft_store.macro_rules[index].id.c_str());
     gtk_label_set_xalign(GTK_LABEL(label), 0.0F);
-    gtk_container_add(GTK_CONTAINER(row), label);
+    gtk_container_add(GTK_CONTAINER(row), decorate_settings_control(label));
+    g_object_set_data(G_OBJECT(row), "elder-terms-rule-label", label);
     g_object_set_data(G_OBJECT(row), "elder-terms-macro-index",
                       GINT_TO_POINTER(static_cast<int>(index) + 1));
     gtk_container_add(GTK_CONTAINER(state->macro_list), row);
@@ -3226,7 +3246,8 @@ static void on_ftp_tls_combo_changed(GtkComboBox *combo, gpointer data) {
       if (choice != "custom") gtk_entry_set_text(GTK_ENTRY(control.entry), ftp_tls_effective_text(state->draft_store, control).c_str());
       gtk_widget_set_sensitive(control.entry, choice == "custom");
       if (control.browse) gtk_widget_set_sensitive(control.browse, choice == "custom");
-      set_entry_validation(control.entry, control.valid, control.valid ? "" : _("Enter a valid value"));
+      set_entry_validation(control.entry, control.valid, control.valid ? "" :
+          settings_rejected_input_reason(state->draft_store, make_setting_key("ftp", control.name), control.entry));
       state->synchronizing = false;
     }
     if (std::string(control.name) == "tls_mode" && state->ftp_port_valid) {
@@ -3249,7 +3270,8 @@ static void on_ftp_tls_text_changed(GtkEditable *entry, gpointer data) {
     if (control.entry != GTK_WIDGET(entry)) continue;
     const std::string text = gtk_entry_get_text(GTK_ENTRY(entry));
     control.valid = !text.empty() && set_explicit_setting_value(&state->draft_store, make_setting_key("ftp", control.name), text);
-    set_entry_validation(control.entry, control.valid, control.valid ? "" : _("Enter a valid value"));
+    set_entry_validation(control.entry, control.valid, control.valid ? "" :
+          settings_rejected_input_reason(state->draft_store, make_setting_key("ftp", control.name), control.entry));
     break;
   }
   update_ftp_tls_validation(state);
@@ -4135,8 +4157,16 @@ static void update_terminal_font_draft(SettingsWidgetState *state) {
   std::string reason;
   state->terminal_fonts_valid = terminal_font_families_are_valid(
       state->terminal_font_draft, &reason);
-  for (const auto &row : state->terminal_font_rows) {
-    set_entry_validation(row.entry, state->terminal_fonts_valid, reason);
+  for (std::size_t index = 0; index < state->terminal_font_rows.size(); ++index) {
+    const auto &family = state->terminal_font_draft[index];
+    std::string field_reason;
+    bool valid = terminal_font_families_are_valid({family}, &field_reason);
+    if (valid && std::count_if(state->terminal_font_draft.begin(), state->terminal_font_draft.end(),
+        [&](const auto &other) { return trim_ascii_whitespace(other) == trim_ascii_whitespace(family); }) > 1) {
+      valid = false;
+      field_reason = "font family names must be non-empty and unique";
+    }
+    set_entry_validation(state->terminal_font_rows[index].entry, valid, field_reason);
   }
   const bool synchronizing = state->synchronizing;
   state->synchronizing = true;
@@ -6659,6 +6689,7 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
 
   state->smb_editor = create_smb_settings_editor(
       &state->draft_store, state->id_prefix, state->is_runtime, [state] {
+        sync_ssh_proxy_settings_editor(state->ssh_proxy_editor, true);
         update_action_sensitivity(state);
         notify_changed(state);
       }, [state](GtkWidget *entry) {

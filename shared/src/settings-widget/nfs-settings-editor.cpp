@@ -5,6 +5,7 @@
 
 #include "nfs-settings-editor.h"
 #include "settings-presentation.h"
+#include "settings-validation.h"
 #include <algorithm>
 #include <charconv>
 #include <sstream>
@@ -79,9 +80,8 @@ static void update_validation(NfsSettingsEditor *editor) {
         !setting_has_explicit_value(*editor->store, nfs_setting_key(field.name));
     gtk_widget_set_sensitive(field.control, editable && !inherited_list);
     if (field.mode) gtk_widget_set_sensitive(field.mode, editable);
-    if (GTK_IS_ENTRY(field.control))
-      gtk_entry_set_icon_from_icon_name(GTK_ENTRY(field.control), GTK_ENTRY_ICON_SECONDARY,
-          field.valid ? nullptr : "dialog-error-symbolic");
+    set_settings_input_error(field.control, field.valid ? "" :
+          settings_rejected_input_reason(*editor->store, nfs_setting_key(field.name), field.control));
     if (!field.valid) errors.push_back(setting_label(nfs_setting_key(field.name)) + ": " + _("Enter a valid value"));
   }
   gtk_label_set_text(GTK_LABEL(editor->error), errors.empty() ? "" : errors.front().c_str());
@@ -231,6 +231,8 @@ NfsSettingsEditor *create_nfs_settings_editor(SettingsStore *store, std::string 
       gtk_container_add(GTK_CONTAINER(scroll), field.control);
       gtk_box_pack_start(GTK_BOX(container), scroll, TRUE, TRUE, 0);
     } else if (std::string_view(field.name) == "address") container = create_address_row(field.control);
+    bind_settings_field(container, nfs_setting_key(field.name));
+    container = decorate_settings_control(container);
     gtk_widget_set_hexpand(container, TRUE);
     gtk_grid_attach(GTK_GRID(editor->root), label, 0, row, 1, 1);
     gtk_grid_attach(GTK_GRID(editor->root), container, 1, row++, 1, 1);

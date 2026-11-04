@@ -11,6 +11,8 @@ Configure a shared gateway in global settings. Select Disabled in a connection t
 Local shells and serial connections ignore these settings.
 Connection routes are read-only while connected. Reconnect or open a new window after changing saved settings.
 
+Selecting Enabled for SSH proxy with SMB1 marks both the proxy control and the SMB version control as invalid. Hover over either control to see the reason and how to fix it: select SMB2/3 or disable SSH proxy. The draft selection is retained, and Apply and Save remain unavailable until the conflict is resolved. The same feedback appears when SMB1 is selected after enabling the proxy, or when the combination comes from inherited values.
+
 | Key in `[ssh_proxy]` | Default | Meaning |
 | --- | --- | --- |
 | `enabled` | `false` | Set to `true` to use the gateway. |

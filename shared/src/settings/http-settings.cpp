@@ -3,6 +3,7 @@
 // Under MIT.
 // https://github.com/kekyo/elder-terms/
 #include <elder-terms/settings/http-settings.h>
+#include "validation-issues.h"
 #include <elder-terms/settings/general-settings.h>
 #include <elder-terms/http-url.h>
 #include <curl/curl.h>
@@ -62,7 +63,7 @@ HttpConnectionSettings http_connection_settings(const SettingsStore &store) {
   HttpConnectionSettings result;
   result.base_url = text("base_url", ""); result.start_url = text("start_url", "");
   if (result.base_url.empty() && general_connection_kind(store) == ConnectionKind::http)
-    result.validation_errors.push_back("HTTP base URL is required");
+    add_validation_issue(result, {http_setting_key("base_url")}, "HTTP base URL is required");
   result.username = text("username", ""); result.local_directory = text("local_directory", "");
   result.ca_file = text("ca_file", ""); result.prompt_certificate = text("certificate_error_action", "reject") == "prompt";
   const auto auth = text("authentication", "none");
@@ -70,12 +71,17 @@ HttpConnectionSettings http_connection_settings(const SettingsStore &store) {
       : auth == "digest" ? HttpAuthentication::digest : HttpAuthentication::automatic;
   result.connect_timeout_seconds = setting_integer_value_or_default(store, http_setting_key("connect_timeout_seconds"), 30);
   result.idle_timeout_seconds = setting_integer_value_or_default(store, http_setting_key("idle_timeout_seconds"), 60);
-  for (const auto &entry : store.entries) if (entry.definition.key.section == "http" && !entry.validation_error.empty())
+  for (const auto &entry : store.entries) if (entry.definition.key.section == "http" && !entry.validation_error.empty()) {
+    result.validation_issues.push_back({{entry.definition.key}, entry.validation_error});
     result.validation_errors.push_back("[http] " + entry.definition.key.name + ": " + entry.validation_error);
+  }
+  auto url_field = http_setting_key("base_url");
   if (!result.base_url.empty()) try {
     result.base_url = http_scope_url(result.base_url);
+    url_field = http_setting_key("start_url");
     result.start_url = http_resolve_url(result.base_url, result.start_url);
     if (!http_url_in_scope(result.base_url, result.start_url)) throw std::invalid_argument("HTTP start page is outside the base URL");
+    url_field = http_setting_key("base_url");
     std::unique_ptr<CURLU, decltype(&curl_url_cleanup)> url(curl_url(), curl_url_cleanup);
     if (!url || curl_url_set(url.get(), CURLUPART_URL, result.base_url.c_str(), CURLU_DISALLOW_USER) != CURLUE_OK)
       throw std::invalid_argument("Invalid HTTP base URL");
@@ -86,7 +92,7 @@ HttpConnectionSettings http_connection_settings(const SettingsStore &store) {
     };
     result.scheme = part(CURLUPART_SCHEME); result.address = part(CURLUPART_HOST); result.port = std::stoll(part(CURLUPART_PORT));
     if (result.address.starts_with('[') && result.address.ends_with(']')) result.address = result.address.substr(1, result.address.size() - 2);
-  } catch (const std::exception &error) { result.validation_errors.push_back(error.what()); }
+  } catch (const std::exception &error) { add_validation_issue(result, {url_field}, error.what()); }
   return result;
 }
 }

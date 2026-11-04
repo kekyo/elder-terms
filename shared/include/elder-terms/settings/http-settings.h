@@ -42,6 +42,8 @@ struct HttpConnectionSettings {
   gint64 idle_timeout_seconds = 60;
   /** Invalid effective settings, with their key and configuration source. */
   std::vector<std::string> validation_errors;
+  /** Editable fields associated with the validation errors. */
+  std::vector<SettingValidationIssue> validation_issues{};
 };
 
 /**

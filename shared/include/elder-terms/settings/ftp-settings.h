@@ -107,6 +107,8 @@ struct FtpConnectionSettings {
   FtpCertificateErrorAction certificate_error_action = FtpCertificateErrorAction::reject;
   /** Invalid effective settings, including their keys and sources. */
   std::vector<std::string> validation_errors{};
+  /** Editable fields associated with the validation errors. */
+  std::vector<SettingValidationIssue> validation_issues{};
 };
 
 /**

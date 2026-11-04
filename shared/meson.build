@@ -152,6 +152,7 @@ elder_terms_shared_sources = elder_terms_shared_resources + elder_terms_noto_pre
   'src/settings/terminal-settings.cpp',
   'src/settings/transfer-settings.cpp',
   'src/settings-widget/settings-presentation.cpp',
+  'src/settings-widget/settings-validation.cpp',
   'src/settings-widget/application-settings-widget.cpp',
   'src/settings-widget/connection-icon-editor.cpp',
   'src/settings-widget/connection-icon-picker.cpp',
@@ -420,6 +421,15 @@ settings_actions_test = executable('settings-actions-test', 'tests/settings-acti
   dependencies: [elder_terms_dep])
 test('settings-actions-test', find_program('xvfb-run'), args: ['-a', settings_actions_test],
   env: ['NO_AT_BRIDGE=1', 'G_DEBUG=fatal-criticals'])
+
+settings_validation_test = executable('settings-validation-test', 'tests/settings-validation-test.cpp',
+  dependencies: [elder_terms_dep])
+test('settings-validation-test', find_program('xvfb-run'), args: ['-a', settings_validation_test],
+  env: ['NO_AT_BRIDGE=1', 'G_DEBUG=fatal-criticals'])
+foreach scenario : ['smb', 'http', 'ftp', 'webdav', 'nfs', 'macro', 'links']
+  test('settings-validation-' + scenario, find_program('xvfb-run'), args: ['-a', settings_validation_test, scenario],
+    env: ['NO_AT_BRIDGE=1', 'G_DEBUG=fatal-criticals'])
+endforeach
 
 settings_icon_test = executable('settings-icon-test', 'tests/settings-icon-test.cpp',
   dependencies: [elder_terms_dep])

@@ -4,6 +4,7 @@
 // https://github.com/kekyo/elder-terms/
 
 #include "hyperlink-settings-editor.h"
+#include "settings-validation.h"
 
 #include <algorithm>
 #include <cctype>
@@ -126,12 +127,7 @@ static int widget_index(GtkWidget *widget) {
 
 static void set_entry_validation(GtkWidget *entry, bool valid,
                                  const std::string &reason) {
-  gtk_entry_set_icon_from_icon_name(
-      GTK_ENTRY(entry), GTK_ENTRY_ICON_SECONDARY,
-      valid ? nullptr : "dialog-error-symbolic");
-  gtk_entry_set_icon_tooltip_text(GTK_ENTRY(entry),
-                                  GTK_ENTRY_ICON_SECONDARY,
-                                  valid ? nullptr : reason.c_str());
+  set_settings_input_error(entry, valid ? "" : reason);
 }
 
 static bool rule_id_is_unique(const HyperlinkSettingsEditorState *state,
@@ -164,6 +160,16 @@ static bool all_rules_are_valid(
 }
 
 static void update_validation(HyperlinkSettingsEditorState *state) {
+  for (std::size_t index = 0; index < state->store->hyperlink_rules.size(); ++index) {
+    auto *row = gtk_list_box_get_row_at_index(GTK_LIST_BOX(state->rule_list), static_cast<int>(index));
+    if (!row) continue;
+    const auto &candidate = state->store->hyperlink_rules[index];
+    std::string reason;
+    hyperlink_action_rule_is_valid(candidate, &reason);
+    if (!rule_id_is_unique(state, &candidate)) reason = _("Identifier must be unique");
+    set_settings_input_error(GTK_WIDGET(row), reason);
+    set_settings_input_error(static_cast<GtkWidget *>(g_object_get_data(G_OBJECT(row), "elder-terms-rule-label")), reason);
+  }
   const HyperlinkActionRule *rule = selected_rule(state);
   if (rule == nullptr) {
     set_entry_validation(state->id_entry, true, {});
@@ -183,14 +189,18 @@ static void update_validation(HyperlinkSettingsEditorState *state) {
   set_entry_validation(state->id_entry, id_valid, id_reason);
 
   std::string reason;
-  const bool rule_valid = hyperlink_action_rule_is_valid(*rule, &reason);
-  set_entry_validation(state->regex_entry, rule_valid, reason);
+  RuleValidationLocation location;
+  const bool rule_valid = hyperlink_action_rule_is_valid(*rule, &reason, &location);
+  set_entry_validation(state->regex_entry,
+      rule_valid || location.field != RuleValidationField::pattern, reason);
   set_entry_validation(state->command_entry,
-                       !rule->command.empty() || rule_valid, reason);
+      rule_valid || location.field != RuleValidationField::command, reason);
   set_entry_validation(
       state->path_entry,
-      rule->path_validation == HyperlinkPathValidation::none || rule_valid,
+      rule_valid || location.field != RuleValidationField::path_template,
       reason);
+  set_settings_argument_error(state->arguments_box, location.argument_index,
+      !rule_valid && location.field == RuleValidationField::argument ? reason : "");
   const std::string display_reason = id_valid ? reason : id_reason;
   gtk_label_set_text(GTK_LABEL(state->validation_label),
                      id_valid && rule_valid ? ""
@@ -360,7 +370,8 @@ static void rebuild_rule_list(HyperlinkSettingsEditorState *state) {
     GtkWidget *label =
         gtk_label_new(state->store->hyperlink_rules[index].id.c_str());
     gtk_label_set_xalign(GTK_LABEL(label), 0.0F);
-    gtk_container_add(GTK_CONTAINER(row), label);
+    gtk_container_add(GTK_CONTAINER(row), decorate_settings_control(label));
+    g_object_set_data(G_OBJECT(row), "elder-terms-rule-label", label);
     g_object_set_data(G_OBJECT(row), link_widget_index_key,
                       GINT_TO_POINTER(static_cast<int>(index) + 1));
     gtk_container_add(GTK_CONTAINER(state->rule_list), row);

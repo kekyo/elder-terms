@@ -4,6 +4,7 @@
 // https://github.com/kekyo/elder-terms/
 
 #include <elder-terms/settings/nfs-settings.h>
+#include "validation-issues.h"
 #include <elder-terms/settings/general-settings.h>
 #include <algorithm>
 #include <charconv>
@@ -172,16 +173,19 @@ NfsConnectionSettings nfs_connection_settings(const SettingsStore &store) {
   result.request_timeout_seconds = number("request_timeout_seconds", 60);
   for (const auto &entry : store.entries) {
     if (entry.definition.key.section != "nfs" || entry.validation_error.empty()) continue;
+    result.validation_issues.push_back({{entry.definition.key}, entry.validation_error});
     const auto source = setting_value_source(store, entry.definition.key);
     result.validation_errors.push_back("[nfs] " + entry.definition.key.name + " (" +
         (source == SettingValueSource::global ? "global" : "connection") + "): " + entry.validation_error);
   }
   if (general_connection_kind(store) == ConnectionKind::nfs && result.address.empty())
-    result.validation_errors.emplace_back("NFS server address is required");
+    add_validation_issue(result, {nfs_setting_key("address")}, "NFS server address is required");
   if (result.version != "4.0" && !result.discover_exports && result.export_path.empty() && result.known_exports.empty())
-    result.validation_errors.emplace_back("A known export path is required when export discovery is disabled");
+    add_validation_issue(result, {nfs_setting_key("discover_exports"), nfs_setting_key("export_path"), nfs_setting_key("known_exports")},
+        "A known export path is required when export discovery is disabled");
   if (result.version == "4.0" && !result.discover_namespace && result.namespace_path.empty() && result.known_namespace_paths.empty())
-    result.validation_errors.emplace_back("A known NFS v4 namespace path is required when namespace discovery is disabled");
+    add_validation_issue(result, {nfs_setting_key("discover_namespace"), nfs_setting_key("namespace_path"), nfs_setting_key("known_namespace_paths")},
+        "A known NFS v4 namespace path is required when namespace discovery is disabled");
   return result;
 }
 
