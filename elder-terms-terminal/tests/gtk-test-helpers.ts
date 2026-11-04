@@ -400,13 +400,14 @@ export const expectDisconnectedNoticeVisibleAtTerminalTopRight = async (
     'label'
   );
 
-  expect(await label.text()).toMatch(expectedMessage);
-
   const { noticeCapture, terminalCapture } = await waitForResult(
     async () => {
       const info = await notice.info();
       expect(info.states).toContain('showing');
       expect(info.states).toContain('visible');
+      if (typeof expectedMessage === 'string')
+        expect(await label.text()).toBe(expectedMessage);
+      else expect(await label.text()).toMatch(expectedMessage);
       return {
         noticeCapture: await notice.capture(),
         terminalCapture: await terminal.capture(),

@@ -550,22 +550,28 @@ describe.concurrent('elder-terms-terminal local session', () => {
           await waitForActivityIndicatorImageState(app, 'conn', 'off');
           await expectMainWindowTitle(app, `${connectedTitle} (Disconnected)`);
           await expectMainWindowStatus(app, 'local terminal');
-          await expectDisconnectedNoticeVisibleAtTerminalTopRight(app);
+          await expectDisconnectedNoticeVisibleAtTerminalTopRight(
+            app,
+            'Local command exited with status 0.'
+          );
           await waitForResult(async () =>
             expect(
               (await (await app.getById('reconnect_button')).info()).states
             ).toContain('sensitive')
           );
-          for (const [widgetId, horizontalRatio] of [
-            ['disconnected_notice', 0.05],
-            ['disconnected_notice_background', 0.05],
-            ['disconnected_notice_label', 0.95],
-          ] as const) {
+          for (const widgetId of [
+            'disconnected_notice',
+            'disconnected_notice_background',
+            'disconnected_notice_label',
+          ]) {
+            const capture = await (await app.getById(widgetId)).capture();
+            // Sample the background margin independently of the reason's width.
+            // Relative positions can fall on text or the wider reconnect button.
             expect(
               capturePixel(
-                await (await app.getById(widgetId)).capture(),
-                horizontalRatio,
-                0.5
+                capture,
+                2 / capture.bounds.width,
+                2 / capture.bounds.height
               )
             ).toEqual(background);
           }
@@ -807,7 +813,10 @@ describe.concurrent('elder-terms-terminal local session', () => {
             );
             await writeFile(shell.releasePath, 'stop', 'utf8');
             await waitForFileText(shell.finishedPath, 'finished');
-            await expectDisconnectedNoticeVisibleAtTerminalTopRight(app);
+            await expectDisconnectedNoticeVisibleAtTerminalTopRight(
+              app,
+              'Local command exited with status 0.'
+            );
             const stoppedAt = states.length;
             await waitForResult(async () => {
               expect(states.length).toBeGreaterThan(stoppedAt + 2);
