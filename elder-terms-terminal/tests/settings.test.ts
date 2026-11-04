@@ -2102,6 +2102,10 @@ describe.concurrent('elder-terms-terminal settings', () => {
                 capturePixel(await generalTab.capture(), 0.1, 0.5)
               ).toEqual(componentBackground);
             });
+            await evidence.captureEvidence(
+              'connection-colors-settings-tabs',
+              async () => (await app.getById('settings_dialog')).capture()
+            );
             const generalTabCapture = await generalTab.capture();
             expect(capturePixel(generalTabCapture, 0.5, 0.15)).toEqual(
               componentBackground

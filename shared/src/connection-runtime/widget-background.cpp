@@ -116,6 +116,9 @@ static constexpr char widget_background_highlight_selectors[] =
 static constexpr char component_background_selectors[] =
     "notebook > header > tabs > tab, "
     "notebook > header > tabs > tab > label, "
+    "notebook > header > tabs > tab > box, "
+    "notebook > header > tabs > tab > box > label, "
+    "notebook > header > tabs > tab > box > image, "
     "button, "
     "button > box, "
     "button > label, "
