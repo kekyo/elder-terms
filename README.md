@@ -418,8 +418,10 @@ Closing the window cancels waiting jobs and finishes active-transfer cleanup bef
 ![Reconnect button after disconnection](./images/ssh-telnet-reconnect.png)
 
 If a connection fails or disconnects, review the reason in the notice and select
-"Reconnect" there. In file transfer windows, the notice appears over the remote
-pane while the local browser remains usable. Select "Close" to exit the window.
+"Reconnect" there.
+
+In file transfer windows, the notice dims the background and blocks both file lists
+and the transfer queue until reconnection succeeds. Select "Close" to exit the window.
 
 To keep a terminal open after a normal session ends, turn off "Close window when
 session ends" in General settings (`[general] auto_close=false`). Failed connection
