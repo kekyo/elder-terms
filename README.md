@@ -1483,7 +1483,7 @@ the menu is open, the target from when you opened the menu is still copied.
 Select a connection in the launcher and open its "Links" tab to enable or
 disable link actions, add and remove rules, change their order, edit command
 arguments, and restore the built-in defaults. The same tab is available from
-the settings dialog in a running terminal. Link settings are saved separately
+the settings dialog in a running terminal. Link rules are saved separately
 for each connection.
 
 When a connection defines no link rules, the built-in rules recognize:
@@ -1497,6 +1497,18 @@ When a connection defines no link rules, the built-in rules recognize:
   `~/Downloads/` in visible terminal text, opened with
   `xdg-open` when they name a local file or directory. Surrounding quotes are
   excluded from the link.
+
+The built-in HTTP/HTTPS recognition excludes following Japanese punctuation and
+closing brackets without a matching opening bracket. For example,
+`参照: https://host/a、詳細は後述` and `[label](https://host/a)` both open and
+copy `https://host/a`.
+Balanced brackets inside a URL, IPv6 address brackets, percent escapes, queries,
+and fragments are preserved. A URL continues across screen-width wrapping;
+an explicit newline ends it.
+Punctuation in prose cannot always be distinguished from part of a URL. For
+example, commas in a query are retained as values. These boundaries apply to
+the built-in URL expression. They do not trim matches of an edited expression
+or the URI explicitly supplied by OSC 8.
 
 URI escapes in captures, such as `%20`, can be decoded before a value is
 passed to the command. "Restore defaults" removes the connection's explicit
@@ -1537,12 +1549,24 @@ file or directory on the computer running elder-terms; otherwise the command
 is not run. Relative paths are rejected because terminal display text does not
 provide a reliable local working directory, particularly for remote sessions.
 
-"Link decoration" in the "Appearance" tab offers "No decoration", "Always
-underline" (the default), and "Validate links (with dimming)". This setting
-applies to visible text and OSC 8. Recognition, copying, and Ctrl+click remain
-available in every mode. No decoration adds no link styling; always underline
-adds underlines without changing brightness. Validation mode dims local paths
-until confirmed valid; other links look the same as always underline.
+The top of the "Links" tab offers separate "Regex link display" and "OSC 8 link
+display" settings. Regex links are found by regular expressions in visible
+terminal text. OSC 8 links have a target and display range explicitly supplied
+by the connection.
+The defaults are "Underline on hover" for regex links and "Always underline"
+for OSC 8 links. Each setting offers four choices:
+
+| Choice | Display |
+| --- | --- |
+| No decoration | Adds no link styling. |
+| Always underline | Adds underlines without changing brightness. |
+| Underline on hover | Underlines only the link under the pointer. Holding Ctrl is unnecessary. |
+| Validate links (with dimming) | Adds underlines and dims local paths until confirmed valid. Valid paths return to normal brightness; other links look the same as always underline. |
+
+Recognition, copying, and Ctrl+click remain available in every display mode.
+When the two sources overlap, the OSC 8 display setting takes precedence.
+OSC 8 links without a matching action rule also receive the chosen display;
+a display setting does not authorize additional targets to open.
 Original text and background colors, inverse, bold, and existing underline styles
 are preserved. Dimming operates on corrected display colors in Oklch, halving
 the lightness difference from the background. Hue is retained; chroma is reduced
@@ -1553,8 +1577,18 @@ absolute paths, home-relative paths starting with `~/`, and URIs starting with
 visible label is decorated. Terminal input and drawing continue
 while existence checks run. `Ctrl`+click checks the path again, running the
 command if valid or showing a modal dialog with the reason if invalid.
-Decoration inherits as an ordinary setting. In INI files, set
-`[terminal] link_decoration` to `none`, `underline`, or `validated`.
+Both display settings inherit independently from global settings into connection
+settings. Each can also be changed in a running terminal: Apply reflects the
+changes, and Cancel discards unapplied changes.
+In INI files, set `regex_link_decoration` and `osc8_link_decoration` under
+`[terminal]` to `none`, `underline`, `hover`, or `validated`. This example
+matches the built-in defaults:
+
+```ini
+[terminal]
+regex_link_decoration=hover
+osc8_link_decoration=underline
+```
 
 The same settings can be edited directly in a connection's INI file. This
 example recognizes an absolute local source path followed by a line number:
