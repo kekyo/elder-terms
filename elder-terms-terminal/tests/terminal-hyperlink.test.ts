@@ -103,6 +103,102 @@ describe.concurrent('elder-terms-terminal terminal links', () => {
     });
   });
 
+  for (const backend of ['opengl', 'cairo']) {
+    it(`opens and copies delimited local paths with ${backend}`, async (context) => {
+      await withTemporaryDirectory(async (directory) => {
+        const homeDirectory = join(directory, 'local home');
+        const target = '~/Downloads/';
+        const expanded = `${homeDirectory}/Downloads/`;
+        await mkdir(expanded, { recursive: true });
+        const peer = join(directory, 'delimited-paths.mjs');
+        const config = join(directory, 'connection.ini');
+        const recorded = join(directory, 'opened.txt');
+        const opener = join(directory, 'xdg-open');
+        const prefix = 'kouji@banshee:';
+        const fixture = `\x1b[?25l\x1b[1;32m${prefix}\x1b[1;34m${target}\x1b[0m$ \r\npath=${target};\r\n「${target}」`;
+        await writeFile(
+          peer,
+          `process.stdin.setRawMode(true); process.stdin.resume(); process.stdout.write(${JSON.stringify(fixture)});`
+        );
+        await writeFile(
+          config,
+          `[local]\ncommand_line=${process.execPath} ${peer}\n`
+        );
+        await writeFile(
+          opener,
+          `#!/bin/sh\nprintf '%s\\n' "$1" >> ${shellQuote(recorded)}\n`
+        );
+        await chmod(opener, 0o755);
+        await runGtkTest(
+          context,
+          ['-c', config],
+          async (app, evidence) => {
+            const terminal = await app.getById('terminal_view');
+            const { bounds } = await terminal.capture();
+            const layout = await readWindowCellLayout(app);
+            const readClipboard = promisify(execFile);
+            const reader = fileURLToPath(
+              new URL(
+                '../../.build/elder-terms-terminal/clipboard-read-helper',
+                import.meta.url
+              )
+            );
+            for (const [row, column] of [
+              [0, prefix.length + 2],
+              [1, 7],
+              [2, 4],
+            ]) {
+              await app.input.moveMouseTo(
+                Math.trunc(bounds.x + layout.cellWidth * (column + 0.5)),
+                Math.trunc(bounds.y + layout.cellHeight * (row + 0.5))
+              );
+              await app.input.setMouseButton('right', true);
+              await app.input.setMouseButton('right', false);
+              const copy = await app.getById('terminal_context_copy_link_item');
+              if (copy.kind !== 'menuItem')
+                throw new Error('Missing copy link command');
+              await copy.click();
+              await waitForResult(async () => {
+                const result = await readClipboard(reader, [], {
+                  env: await app.environment(),
+                });
+                expect(result.stdout).toBe(target);
+              });
+              await app.input.moveMouseTo(
+                Math.trunc(bounds.x + layout.cellWidth * (column + 0.5)),
+                Math.trunc(bounds.y + layout.cellHeight * (row + 0.5))
+              );
+              await app.input.setModifier('control', true);
+              try {
+                await app.input.setMouseButton('left', true);
+                await app.input.setMouseButton('left', false);
+              } finally {
+                await app.input.setModifier('control', false);
+              }
+              await waitForResult(async () =>
+                expect(await readFile(recorded, 'utf8')).toBe(
+                  `${expanded}\n`.repeat(row + 1)
+                )
+              );
+              if (row === 0)
+                await evidence.captureEvidence(
+                  'delimited-prompt-path',
+                  async () => app.capture()
+                );
+            }
+          },
+          {
+            env: {
+              PATH: `${directory}:${process.env.PATH ?? ''}`,
+              HOME: homeDirectory,
+              ...(backend === 'cairo' ? { GDK_GL: 'disable' } : {}),
+            },
+          }
+        );
+      });
+    });
+  }
+
   it('runs the configured argv after Ctrl+clicking an OSC 8 link', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const actionPath = join(directory, 'record-link-action.sh');

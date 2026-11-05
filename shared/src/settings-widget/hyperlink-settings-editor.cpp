@@ -754,7 +754,7 @@ static GtkWidget *create_rule_editor(HyperlinkSettingsEditorState *state) {
   gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(state->whole_token_combo),
       "substring", _("Partial match"));
   gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(state->whole_token_combo),
-      "whole-token", _("Whitespace, quotes or line ends"));
+      "whole-token", _("Whitespace, punctuation or line ends"));
   g_signal_connect(state->whole_token_combo, "changed", G_CALLBACK(on_whole_token_changed), state);
   attach_editor_row(state->editor, 7, _("Text boundaries"), state->whole_token_combo);
 
