@@ -119,3 +119,19 @@ On a read-only share, you can list and receive files. Attempts to send or change
 The deb package includes the complete source of [libsmb2](https://github.com/sahlberg/libsmb2), used for SMB communication, at `/usr/share/doc/elder-terms/licenses/libsmb2/libsmb2-source.tar.gz`. In the same directory, `COPYING` describes each component's license and `LICENCE-LGPL-2.1.txt` contains the full library license.
 
 The corresponding source of [libdsm](https://github.com/videolabs/libdsm), used for SMB1, is included at `/usr/share/doc/elder-terms/licenses/libdsm/libdsm-source.tar.gz`. The same directory contains the license in `COPYING` and the applied bug fixes in `libdsm-correctness.patch`.
+
+The bundled libdsm and this project's modifications are provided under LGPL 2.1 or later. Original copyright notices are preserved, and each modified file records the changes and their dates. Elder-terms itself remains under the MIT license. Following Sections 2, 4, and 6 of [LGPL 2.1](https://opensource.org/license/lgpl-2-1), the package includes the modified source and build definitions and allows replacement of the shared library.
+
+You can rebuild libdsm using only the bundled source. Install a C compiler, Meson, Ninja, pkg-config, the libtasn1 development files, and `asn1Parser`. On Debian-based distributions, the libtasn1 packages are `libtasn1-6-dev` and `libtasn1-bin`.
+
+```sh
+mkdir libdsm-rebuild
+cd libdsm-rebuild
+tar -xf /usr/share/doc/elder-terms/licenses/libdsm/libdsm-source.tar.gz
+meson setup build source --prefix="$PWD/sdk" --libdir=lib \
+  -Ddefault_library=shared -Dbinaries=false
+meson compile -C build dsm
+meson install -C build --no-rebuild --tags=runtime,devel
+```
+
+The rebuilt library is at `libdsm-rebuild/sdk/lib/libdsm.so.3`. You can use a modified version that preserves public interface compatibility. For the standard deb package, close elder-terms before replacing `/usr/lib/elder-terms/libdsm.so.3`. No additional terms prohibit modification for your own use or reverse engineering to debug those modifications.

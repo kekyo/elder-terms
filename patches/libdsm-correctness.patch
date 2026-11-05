@@ -1,6 +1,16 @@
 --- a/src/smb_utils.c
 +++ b/src/smb_utils.c
-@@ -118,11 +118,11 @@
+@@ -1,3 +1,9 @@
++/*
++ * Modified for elder-terms by Kouji Matsui (LGPL-2.1-or-later).
++ * 2026-11-04: Use UTF-16LE for supplementary Unicode characters.
++ * 2026-11-05: Record modification notices.
++ */
++
+ /*****************************************************************************
+  *  __________________    _________  _____            _____  .__         ._.
+  *  \______   \______ \  /   _____/ /     \          /  _  \ |__| ____   | |
+@@ -118,11 +124,11 @@
  size_t      smb_to_utf16(const char *src, size_t src_len, char **dst)
  {
      return (smb_iconv(src, src_len, dst,
@@ -16,7 +26,17 @@
  }
 --- a/src/smb_types.h
 +++ b/src/smb_types.h
-@@ -122,7 +122,7 @@
+@@ -1,3 +1,9 @@
++/*
++ * Modified for elder-terms by Kouji Matsui (LGPL-2.1-or-later).
++ * 2026-11-04: Use the supported libtasn1 node type.
++ * 2026-11-05: Record modification notices.
++ */
++
+ /*****************************************************************************
+  *  __________________    _________  _____            _____  .__         ._.
+  *  \______   \______ \  /   _____/ /     \          /  _  \ |__| ____   | |
+@@ -122,7 +128,7 @@
      smb_srv_info        srv;
  
  
@@ -27,7 +47,17 @@
      smb_creds           creds;
 --- a/src/smb_spnego.c
 +++ b/src/smb_spnego.c
-@@ -97,7 +97,7 @@
+@@ -1,3 +1,9 @@
++/*
++ * Modified for elder-terms by Kouji Matsui (LGPL-2.1-or-later).
++ * 2026-11-04: Use the supported libtasn1 node type.
++ * 2026-11-05: Record modification notices.
++ */
++
+ /*****************************************************************************
+  *  __________________    _________  _____            _____  .__         ._.
+  *  \______   \______ \  /   _____/ /     \          /  _  \ |__| ____   | |
+@@ -97,7 +103,7 @@
      smb_message           *msg = NULL;
      smb_session_xsec_req  req;
      smb_buffer            ntlm;
@@ -36,7 +66,7 @@
      int                   res, der_size = 128;
      char                  der[128], err_desc[ASN1_MAX_ERROR_DESCRIPTION_SIZE];
  
-@@ -180,7 +180,7 @@
+@@ -180,7 +186,7 @@
      smb_message           msg;
      smb_session_xsec_resp *resp;
      smb_ntlmssp_challenge *challenge;
@@ -45,7 +75,7 @@
      int                   res, resp_token_size = sizeof(resp_token);
  
      assert(s != NULL);
-@@ -249,7 +249,7 @@
+@@ -249,7 +255,7 @@
      smb_message           *msg = NULL, resp;
      smb_session_xsec_req  req;
      smb_buffer            ntlm;
@@ -56,7 +86,16 @@
  
 --- a/config.h.meson
 +++ b/config.h.meson
-@@ -142,7 +142,9 @@
+@@ -1,2 +1,8 @@
++/*
++ * Modified for elder-terms by Kouji Matsui (LGPL-2.1-or-later).
++ * 2026-11-04: Preserve a toolchain-provided _FORTIFY_SOURCE definition.
++ * 2026-11-05: Record modification notices.
++ */
++
+ /* ... */
+ #mesondefine ASN1_ARRAY_TYPE
+@@ -142,7 +148,9 @@
  #mesondefine _FILE_OFFSET_BITS
  
  /* Define to 2 to get glibc warnings. */
@@ -68,7 +107,15 @@
  #mesondefine _ISOC99_SOURCE
 --- a/meson.build
 +++ b/meson.build
-@@ -5,7 +5,7 @@
+@@ -1,3 +1,7 @@
++# Modified for elder-terms by Kouji Matsui (LGPL-2.1-or-later).
++# 2026-11-04: Update Meson requirements and avoid duplicate warning flags.
++# 2026-11-05: Record modification notices.
++
+ project('libdsm', ['c'],
+     version: '0.4.3',
+     license: ['LGPL2'],
+@@ -5,7 +9,7 @@
                        'warning_level=2',
                        'buildtype=release',
                        'b_ndebug=if-release'],
@@ -77,7 +124,7 @@
  
  #Soname
  dsm_soname_version = '3.2.0'
-@@ -36,9 +36,7 @@
+@@ -36,9 +40,7 @@
  dep_rt = []
  
  optional_arguments = [
@@ -89,12 +136,20 @@
  
 --- a/meson_options.txt
 +++ b/meson_options.txt
-@@ -1 +1 @@
+@@ -1 +1,5 @@
 -option('binaries', type: 'boolean', value: 'true')
++# Modified for elder-terms by Kouji Matsui (LGPL-2.1-or-later).
++# 2026-11-04: Use a boolean default for the binaries option.
++# 2026-11-05: Record modification notices.
++
 +option('binaries', type: 'boolean', value: true)
 --- a/doc/meson.build
 +++ b/doc/meson.build
-@@ -1,7 +1,7 @@
+@@ -1,7 +1,11 @@
++# Modified for elder-terms by Kouji Matsui (LGPL-2.1-or-later).
++# 2026-11-04: Use the supported Meson project source directory API.
++# 2026-11-05: Record modification notices.
++
  doxygen_data = configuration_data()
  doxygen_data.set('PACKAGE_NAME', 'libdsm')
  doxygen_data.set('BDSM_PACKAGE_VERSION', meson.project_version())
@@ -105,7 +160,17 @@
    input: 'Doxyfile.in',
 --- a/src/smb_message.c
 +++ b/src/smb_message.c
-@@ -226,19 +226,22 @@
+@@ -1,3 +1,9 @@
++/*
++ * Modified for elder-terms by Kouji Matsui (LGPL-2.1-or-later).
++ * 2026-11-04: Update SMB flags without unaligned or over-wide accesses.
++ * 2026-11-05: Record modification notices.
++ */
++
+ /*****************************************************************************
+  *  __________________    _________  _____            _____  .__         ._.
+  *  \______   \______ \  /   _____/ /     \          /  _  \ |__| ____   | |
+@@ -226,19 +232,22 @@
  
  void            smb_message_flag(smb_message *msg, uint32_t flag, int value)
  {
@@ -135,7 +200,17 @@
  void            smb_message_set_andx_members(smb_message *msg)
 --- a/src/smb_trans2.c
 +++ b/src/smb_trans2.c
-@@ -90,24 +90,28 @@
+@@ -1,3 +1,9 @@
++/*
++ * Modified for elder-terms by Kouji Matsui (LGPL-2.1-or-later).
++ * 2026-11-04: Reject incomplete directory results and invalid names.
++ * 2026-11-05: Correct QUERY_PATH_INFORMATION framing; record modification notices.
++ */
++
+ /*****************************************************************************
+  *  __________________    _________  _____            _____  .__         ._.
+  *  \______   \______ \  /   _____/ /     \          /  _  \ |__| ____   | |
+@@ -90,24 +96,28 @@
   * Find management
   */
  
@@ -167,7 +242,7 @@
          }
          tmp->name[tmp->name_len] = 0;
  
-@@ -126,10 +130,10 @@
+@@ -126,10 +136,10 @@
          iter = (smb_tr2_find2_entry *)(((char *)iter) + iter->next_entry);
      }
  
@@ -180,7 +255,7 @@
  {
      smb_trans2_resp       *tr2;
      smb_tr2_findfirst2_params  *params;
-@@ -146,11 +150,10 @@
+@@ -146,11 +156,10 @@
      eod     = msg->packet->payload + msg->payload_size;
      count   = params->count;
  
@@ -194,7 +269,7 @@
  {
      smb_trans2_resp       *tr2;
      smb_tr2_findnext2_params  *params;
-@@ -166,8 +169,7 @@
+@@ -166,8 +175,7 @@
      iter    = (smb_tr2_find2_entry *)(tr2->payload + sizeof(smb_tr2_findnext2_params));
      eod     = msg->packet->payload + msg->payload_size;
      count   = params->count;
@@ -204,7 +279,7 @@
  }
  
  static smb_message  *smb_trans2_find_first (smb_session *s, smb_tid tid, const char *pattern)
-@@ -339,7 +341,12 @@
+@@ -339,7 +347,12 @@
      msg = smb_trans2_find_first(s,tid,pattern);
      if (msg)
      {
@@ -218,7 +293,7 @@
          if (files)
          {
              // Check if we shall send a FIND_NEXT request
-@@ -369,7 +376,12 @@
+@@ -369,7 +382,12 @@
                      error_offset     = findnext2_params->ea_error_offset;
  
                      // parse the result for files
@@ -232,7 +307,7 @@
                      smb_message_destroy(msg);
  
                      if (!files)
-@@ -448,5 +460,7 @@
+@@ -448,5 +466,7 @@
 -    tr2.data_offset        = 96; // Offset of pattern in packet
 +    tr2.data_offset        = 0; // There is no transaction data in this request.
      tr2.setup_count        = 1;
@@ -244,7 +319,17 @@
      SMB_MSG_PUT_PKT(msg, tr2);
 --- a/src/smb_share.c
 +++ b/src/smb_share.c
-@@ -203,8 +203,13 @@
+@@ -1,3 +1,9 @@
++/*
++ * Modified for elder-terms by Kouji Matsui (LGPL-2.1-or-later).
++ * 2026-11-04: Reject malformed, incomplete, and continuation share responses.
++ * 2026-11-05: Record modification notices.
++ */
++
+ /*****************************************************************************
+  *  __________________    _________  _____            _____  .__         ._.
+  *  \______   \______ \  /   _____/ /     \          /  _  \ |__| ____   | |
+@@ -203,8 +209,13 @@
      // Let's skip smb parameters and DCE/RPC stuff until we are at the begginning of
      // NetShareCtrl
  
@@ -258,7 +343,7 @@
      data        = msg->packet->payload + 72 + share_count * 12;
      eod         = msg->packet->payload + msg->payload_size;
  
-@@ -216,7 +221,7 @@
+@@ -216,7 +227,7 @@
      {
          uint32_t name_len, com_len;
  
@@ -267,7 +352,7 @@
          {
              BDSM_dbg("[smb_share_parse_enum]Malformed message\n");
              break;
-@@ -225,23 +230,38 @@
+@@ -225,23 +236,38 @@
          name_len = *((uint32_t *)data);   // Read 'Max Count', make it a multiple of 2
          data    += 3 * sizeof(uint32_t);  // Move pointer to beginning of Name.
  
@@ -308,7 +393,7 @@
      return i;
  }
  
-@@ -366,7 +386,7 @@
+@@ -366,7 +392,7 @@
  
      // Is the server throwing pile of shit back at me ?
      res = smb_session_recv_msg(s, &resp);
@@ -317,7 +402,7 @@
      {
          BDSM_dbg("[smb_share_get_list]Malformed message\n");
          ret = DSM_ERROR_NETWORK;
-@@ -464,17 +484,19 @@
+@@ -464,17 +490,19 @@
  
      // Is the server throwing pile of shit back at me ?
      res = smb_session_recv_msg(s, &resp);

@@ -1481,6 +1481,152 @@ process.stdout.write('INSTALLED-TERMINAL-READY');
     }
   });
 
+  it('rebuilds and replaces libdsm using the installed corresponding source', () => {
+    const destination = join(temporaryRoot, 'libdsm-source-install');
+    const buildDirectory = join(projectRoot, '.build');
+    const introspection = run('meson', [
+      'introspect',
+      '--buildoptions',
+      buildDirectory,
+    ]);
+    expectSuccess(introspection, 'Meson build option introspection failed');
+    const options = JSON.parse(introspection.stdout) as Array<{
+      name: string;
+      value: string;
+    }>;
+    const prefix = options.find((option) => option.name === 'prefix')!.value;
+    const libdir = options.find((option) => option.name === 'libdir')!.value;
+    expectSuccess(
+      run('meson', [
+        'install',
+        '-C',
+        buildDirectory,
+        '--no-rebuild',
+        '--destdir',
+        destination,
+      ]),
+      'Corresponding source installation failed'
+    );
+    const installedRoot = join(destination, prefix);
+    const licenses = join(
+      installedRoot,
+      'share/doc/elder-terms/licenses/libdsm'
+    );
+    const extracted = join(temporaryRoot, 'libdsm-corresponding-source');
+    mkdirSync(extracted);
+    expectSuccess(
+      run('tar', [
+        '-xzf',
+        join(licenses, 'libdsm-source.tar.gz'),
+        '-C',
+        extracted,
+      ]),
+      'Installed corresponding source extraction failed'
+    );
+    const source = join(extracted, 'source');
+    const patch = readFileSync(
+      join(licenses, 'libdsm-correctness.patch'),
+      'utf8'
+    );
+    const changed = Array.from(
+      patch.matchAll(/^\+\+\+ b\/(.+)$/gm),
+      (match) => match[1]
+    );
+    expect(changed.length).toBeGreaterThan(0);
+    for (const path of changed) {
+      const contents = readFileSync(join(source, path), 'utf8');
+      expect(
+        contents,
+        `Missing modification notice in distributed ${path}`
+      ).toMatch(/Modified for elder-terms by Kouji Matsui/);
+      expect(
+        contents,
+        `Missing modification dates in distributed ${path}`
+      ).toMatch(/20\d{2}-\d{2}-\d{2}: [^\r\n]+/);
+      expect(contents).toContain('LGPL-2.1-or-later');
+    }
+    expect(readFileSync(join(source, 'COPYING'), 'utf8')).toBe(
+      readFileSync(join(licenses, 'COPYING'), 'utf8')
+    );
+
+    // Rebuild only from the installed source, with no access to a submodule or
+    // project build script. A debug build distinguishes the replacement binary.
+    const rebuilt = join(extracted, 'build');
+    const sdk = join(extracted, 'sdk');
+    expectSuccess(
+      run('meson', [
+        'setup',
+        rebuilt,
+        source,
+        `--prefix=${sdk}`,
+        '--libdir=lib',
+        '--buildtype=debug',
+        '-Ddefault_library=shared',
+        '-Dbinaries=false',
+        '-Dwerror=true',
+      ]),
+      'Corresponding source configuration failed'
+    );
+    expectSuccess(
+      run('meson', ['compile', '-C', rebuilt, 'dsm']),
+      'Corresponding source compilation failed'
+    );
+    expectSuccess(
+      run('meson', [
+        'install',
+        '-C',
+        rebuilt,
+        '--no-rebuild',
+        '--tags=runtime,devel',
+      ]),
+      'Replacement library installation failed'
+    );
+    const replacement = join(sdk, 'lib/libdsm.so.3');
+    const installedLibrary = join(
+      installedRoot,
+      libdir,
+      'elder-terms/libdsm.so.3'
+    );
+    expect(
+      readFileSync(replacement).equals(readFileSync(installedLibrary))
+    ).toBe(false);
+    copyFileSync(replacement, installedLibrary);
+
+    // The client locates its worker beside itself, so this exercises the actual
+    // installed worker with the user's rebuilt library on both SMB1 transports.
+    const driver = join(
+      installedRoot,
+      libdir,
+      'elder-terms/elder-terms-file-transfer/smb1-client-test'
+    );
+    copyFileSync(
+      join(buildDirectory, 'elder-terms-file-transfer/smb1-client-test'),
+      driver
+    );
+    const environment = { ...process.env };
+    delete environment.LD_LIBRARY_PATH;
+    delete environment.LD_PRELOAD;
+    const transfers = run(
+      process.execPath,
+      [
+        join(
+          projectRoot,
+          'elder-terms-file-transfer/tests/smb/run-smb1-library.mts'
+        ),
+        driver,
+        '--client',
+      ],
+      environment
+    );
+    expectSuccess(
+      transfers,
+      'Installed SMB1 worker failed with the rebuilt library'
+    );
+    expect(transfers.stdout).toMatch(
+      /TCP:[\s\S]*PASS SMB1 client[\s\S]*NBT:[\s\S]*PASS SMB1 client/
+    );
+  }, 180_000);
+
   it('re-includes package data filtered by minimal distribution images', () => {
     const binDirectory = join(temporaryRoot, 'validation-bin');
     const invocationPath = join(temporaryRoot, 'dpkg-install.txt');
