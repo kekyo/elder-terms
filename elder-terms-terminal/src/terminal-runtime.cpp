@@ -1003,8 +1003,8 @@ static gboolean dispatch_frame(gpointer context) {
     boxrig_ui_hit_test_result pointer{};
     if (runtime->pointer_position)
       boxrig_gtk3_terminal_widget_hit_test(runtime->widget, runtime->pointer_position->first, runtime->pointer_position->second, &pointer);
-    // Publish hover before painting; pointer input still uses its original
-    // annotation generation until its selection/activation gesture completes.
+    // Publish hover before painting. Queued pointer hits are refreshed only
+    // while their grapheme identity remains unchanged.
     terminal_links_set_hover(runtime->links.get(), pointer);
   }
   // Stream and recognizer continuations do not necessarily change the view.

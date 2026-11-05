@@ -51,6 +51,9 @@ const selectConnectionRow = async (
     const bounds = await waitForResult(async () => {
       const cell = await element.cellAt(row, 0);
       expect(cell).toBeDefined();
+      // A removed row can remain in AT-SPI briefly without Component support.
+      // Wait for its replacement before capture, which cannot retry that error.
+      expect((await cell?.info())?.interfaces).toContain('Component');
       const current = (await cell?.capture())?.bounds;
       expect(current).toBeDefined();
       return current;
@@ -1034,6 +1037,7 @@ describe('elder-terms main window', () => {
               '端末の外観',
               '転送',
               'ログ',
+              'リンク',
             ]
           );
         });
@@ -1524,6 +1528,7 @@ describe('elder-terms main window', () => {
               'Terminal appearance',
               'Transfer',
               'Logging',
+              'Links',
             ]
           );
         });

@@ -266,6 +266,7 @@ struct TerminalLinkDecorations {
   /** Presentation of explicit OSC 8 ranges, including unsupported actions. */
   TerminalLinkDecoration osc8 = TerminalLinkDecoration::underline;
 
+  /** @return Whether both recognition sources use the same preferences. */
   bool operator==(const TerminalLinkDecorations &) const = default;
 };
 

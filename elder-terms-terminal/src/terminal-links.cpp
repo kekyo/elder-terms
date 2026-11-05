@@ -1006,8 +1006,8 @@ std::optional<std::string> terminal_links_copy_target(
     TerminalLinks *links, const boxrig_ui_hit_test_result &hit) {
   const auto resolved = resolve_link(links, hit);
   if (!resolved) return std::nullopt;
-  // Group zero owns the full text match or OSC 8 URI. Extract it only for
-  // copying, rather than allocating another string on every hover query.
+  // Copy the same normalized text target used for activation. Custom rules
+  // and OSC 8 retain their original group-zero text or URI.
   auto target = resolved->normalized_target ? resolved->normalized_target : regular_expression_capture(resolved->match.get(), "0");
   if (!target || target->empty() || target->find('\0') != std::string::npos) return std::nullopt;
   return target;

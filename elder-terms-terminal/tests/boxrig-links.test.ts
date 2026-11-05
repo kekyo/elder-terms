@@ -19,12 +19,12 @@ const appPath =
 
 describe('boxrig link actions', () => {
   for (const backend of ['opengl', 'cairo'] as const) {
-    it.each(['none', 'underline', 'validated'])(
+    it.each(['none', 'underline', 'hover', 'validated', 'defaults'])(
       `uses Unicode and OSC 8 captures on Ctrl+click with ${backend}/%s`,
       async (decoration) => {
         const fixture =
-          'https://first.test/　https://second.test/\r\n' +
-          '\x1b]8;;vscode://file/tmp/a%20b.cpp:12:3\x1b\\Open file\x1b]8;;\x1b\\\r\n' +
+          '\x1b[?25l\x1b[H\x1b[2Jhttps://first.test/　https://second.test/\r\n' +
+          '\x1b]8;;vscode://file/tmp/a%20b.cpp:12:3\x1b\\Open file\x1b]8;;\x1b\\\r\nplain text\r\n' +
           '\x1b[?1000h\x1b[?1006h';
         const launcher = createGtkAppLauncher({
           appPath,
@@ -37,13 +37,22 @@ describe('boxrig link actions', () => {
         try {
           const app = await launcher.launch([
             '--links',
-            `--regex-link-decoration=${decoration}`,
-            `--osc8-link-decoration=${decoration}`,
+            `--regex-link-decoration=${decoration === 'defaults' ? 'hover' : decoration}`,
+            `--osc8-link-decoration=${decoration === 'defaults' ? 'underline' : decoration}`,
             '--local',
             '--',
-            '/bin/sh',
-            '-c',
-            `stty raw -echo; printf '%s' '${fixture}'; exec cat`,
+            process.execPath,
+            '-e',
+            `process.stdin.setRawMode(true); process.stdin.resume();
+              const fixture = ${JSON.stringify(fixture)};
+              process.stdout.write(fixture);
+              process.stdin.on('data', (bytes) => {
+                const key = bytes.toString();
+                if (key === 'u') process.stdout.write('\\x1b[1;1H\\x1b[Kplain text');
+                else if (key === 'r') process.stdout.write(fixture);
+                else if (key === 's') process.stdout.write('\\x1b[?1000l\\x1b[?1006l\\x1b[24;1H' + '\\r\\n'.repeat(24));
+                else process.stdout.write(bytes);
+              });`,
           ]);
           const window = await app.getById('driver_window');
           if (window.kind !== 'window')
@@ -202,11 +211,11 @@ describe('boxrig link actions', () => {
           const finished = new Promise<number | null>((resolve) =>
             recorder.once('close', resolve)
           );
-          const region = (image: Buffer) => {
+          const region = (image: Buffer, row: number) => {
             const bytes: number[] = [];
             for (
-              let y = bounds.y + Number(cells[2]);
-              y < bounds.y + Number(cells[2]) * 2;
+              let y = bounds.y + row * Number(cells[2]);
+              y < bounds.y + Number(cells[2]) * (row + 1);
               y += 1
             )
               for (
@@ -224,8 +233,24 @@ describe('boxrig link actions', () => {
               if (recorderError !== undefined) throw recorderError;
               expect(frameNumber).toBeGreaterThan(0);
             });
-            const unhovered = region(frame);
+            const unhovered = region(frame, 1);
+            const regexUnhovered = region(frame, 0);
+            const plain = region(frame, 2);
+            const blank = region(frame, 3);
             const unhoveredFrame = frameNumber;
+            await app.input.moveMouseTo(
+              Math.trunc(bounds.x + 3.5 * Number(cells[1])),
+              Math.trunc(bounds.y + 0.5 * Number(cells[2]))
+            );
+            await toPass(async () => {
+              expect(frameNumber).toBeGreaterThan(unhoveredFrame);
+              if (decoration === 'hover' || decoration === 'defaults')
+                expect(region(frame, 0)).not.toEqual(regexUnhovered);
+              else expect(region(frame, 0)).toEqual(regexUnhovered);
+              expect(region(frame, 1)).toEqual(unhovered);
+            });
+            const regexHoveredFrame = frameNumber;
+            const regexHovered = region(frame, 0);
             await app.input.moveMouseTo(
               Math.trunc(bounds.x + 3.5 * Number(cells[1])),
               Math.trunc(bounds.y + 1.5 * Number(cells[2]))
@@ -236,8 +261,11 @@ describe('boxrig link actions', () => {
                 .reverse()
                 .find((line) => line.startsWith('backend='));
               expect(status).toContain('link_hover=1');
-              expect(frameNumber).toBeGreaterThan(unhoveredFrame);
-              expect(region(frame)).toEqual(unhovered);
+              expect(frameNumber).toBeGreaterThan(regexHoveredFrame);
+              expect(region(frame, 0)).toEqual(regexUnhovered);
+              if (decoration === 'hover')
+                expect(region(frame, 1)).not.toEqual(unhovered);
+              else expect(region(frame, 1)).toEqual(unhovered);
             });
             const hoveredFrame = frameNumber;
             await app.input.moveMouseTo(
@@ -251,12 +279,122 @@ describe('boxrig link actions', () => {
                 .find((line) => line.startsWith('backend='));
               expect(status).toContain('link_hover=0');
               expect(frameNumber).toBeGreaterThan(hoveredFrame);
-              expect(region(frame)).toEqual(unhovered);
+              expect(region(frame, 1)).toEqual(unhovered);
+              expect(region(frame, 0)).toEqual(regexUnhovered);
             });
+            if (decoration === 'hover' || decoration === 'defaults') {
+              await app.input.moveMouseTo(
+                Math.trunc(bounds.x + 3.5 * Number(cells[1])),
+                Math.trunc(bounds.y + 0.5 * Number(cells[2]))
+              );
+              await toPass(async () =>
+                expect(region(frame, 0)).toEqual(regexHovered)
+              );
+              await app.input.pressKey('u');
+              await toPass(async () => {
+                const status =
+                  (await app.output()).stdout
+                    .split('\n')
+                    .reverse()
+                    .find((line) => line.startsWith('backend=')) ?? '';
+                expect(
+                  Buffer.from(
+                    /text=(.*)/.exec(status)?.[1] ?? '',
+                    'base64'
+                  ).toString()
+                ).toContain('plain text');
+                expect(status).toContain('link_hover=0');
+                expect(region(frame, 0)).toEqual(plain);
+                expect(region(frame, 1)).toEqual(unhovered);
+              });
+              await app.input.pressKey('r');
+              await toPass(async () => {
+                const status =
+                  (await app.output()).stdout
+                    .split('\n')
+                    .reverse()
+                    .find((line) => line.startsWith('backend=')) ?? '';
+                expect(
+                  Buffer.from(
+                    /text=(.*)/.exec(status)?.[1] ?? '',
+                    'base64'
+                  ).toString()
+                ).toContain('https://first.test/');
+                expect(status).toContain('link_hover=1');
+                expect(region(frame, 0)).toEqual(regexHovered);
+                expect(region(frame, 1)).toEqual(unhovered);
+              });
+              // Output scrolls the hovered occurrence out of the viewport. The
+              // pointer stays still while wheel events bring it back and away.
+              await app.input.pressKey('s');
+              await toPass(async () => {
+                const status = (await app.output()).stdout
+                  .split('\n')
+                  .reverse()
+                  .find((line) => line.startsWith('backend='));
+                expect(status).toContain('link_hover=0');
+                expect(region(frame, 0)).toEqual(blank);
+              });
+              await app.input.scrollWheel(0, -80);
+              await toPass(async () => {
+                const status = (await app.output()).stdout
+                  .split('\n')
+                  .reverse()
+                  .find((line) => line.startsWith('backend='));
+                expect(status).toContain('link_hover=1');
+                expect(region(frame, 0)).toEqual(regexHovered);
+                expect(region(frame, 1)).toEqual(unhovered);
+              });
+              await app.input.scrollWheel(0, 80);
+              await toPass(async () => {
+                const status = (await app.output()).stdout
+                  .split('\n')
+                  .reverse()
+                  .find((line) => line.startsWith('backend='));
+                expect(status).toContain('link_hover=0');
+                expect(region(frame, 0)).toEqual(blank);
+              });
+              const disconnect = await app.getById('driver_disconnect');
+              const reconnect = await app.getById('driver_reconnect');
+              if (disconnect.kind !== 'button' || reconnect.kind !== 'button')
+                throw new Error('Missing connection controls');
+              await disconnect.click();
+              await toPass(async () =>
+                expect((await app.output()).stdout).toMatch(
+                  /connection=closed generation=1 .*cancelled=1 reaped=1/
+                )
+              );
+              await reconnect.click();
+              await toPass(async () => {
+                const output = (await app.output()).stdout;
+                expect(output).toContain('connection=connected generation=2');
+                const status = output
+                  .split('\n')
+                  .reverse()
+                  .find((line) => line.startsWith('backend='));
+                expect(status).toContain('link_hover=1');
+                expect(region(frame, 0)).toEqual(regexHovered);
+                expect(region(frame, 1)).toEqual(unhovered);
+              });
+              await app.input.moveMouseTo(
+                screenPng.width - 1,
+                screenPng.height - 1
+              );
+              await toPass(async () => {
+                const status = (await app.output()).stdout
+                  .split('\n')
+                  .reverse()
+                  .find((line) => line.startsWith('backend='));
+                expect(status).toContain('link_hover=0');
+                expect(region(frame, 0)).toEqual(regexUnhovered);
+                expect(region(frame, 1)).toEqual(unhovered);
+              });
+            }
             await writeFile(
               join(videoDirectory, `${backend}-${decoration}-frames.json`),
               JSON.stringify({
                 unhoveredFrame,
+                regexHoveredFrame,
                 hoveredFrame,
                 clearedFrame: frameNumber,
               })
