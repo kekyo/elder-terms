@@ -1208,8 +1208,12 @@ describe.concurrent('elder-terms-terminal main window', () => {
                     `ROUND ${round}`
                   );
                 });
+                // Connection and macro replies can precede the final draw.
+                const layout = await waitForResult(() =>
+                  readTerminalGridLayout(app)
+                );
                 await expectVideoFrame(
-                  (await readTerminalGridLayout(app)).terminalCapture,
+                  layout.terminalCapture,
                   `connected-${round}`
                 );
                 await waitForResult(async () => {
