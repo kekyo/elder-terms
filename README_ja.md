@@ -430,6 +430,33 @@ HTTPS証明書の検証に失敗した場合は、設定に応じて接続を拒
 共有内では、他のファイル転送と同じ画面で送受信やフォルダーの操作ができます。
 接続設定、署名と暗号化、ファイル操作の制限は[SMBの使用](./docs/ja/smb.md)を参照してください。
 
+### SMB1でWindows XPに接続する場合の制限と構成
+
+Windows XPへ接続するときは、SMBタブのバージョンを「SMB 1」にしてください。「自動・SMB 2/3」はSMB1を含みません。XPのIPv4アドレスとポート445を指定します。ポート139を使う場合は、XPのコンピューター名をNetBIOS名に指定してください。
+
+elder-termsのSMB1接続は、IPv6、445・139以外のポート、SSH proxy、署名・暗号化の要求には対応していません。[libdsmの公開接続API](https://github.com/videolabs/libdsm/blob/0f3edc6df6ab5950f2550d453035351440f71e31/include/bdsm/smb_session.h)の制約です。SMBタブでは署名と暗号化を必須にしない設定にし、接続の既定値から継承した設定も確認してください。
+
+XPの「簡易ファイルの共有」が有効な場合、ローカルユーザーの資格情報で接続してもGuestへ割り当てられます。この動作を指定する設定が`ForceGuest`です。elder-termsは、指定ユーザーの代わりにGuestとして認証されたSMB1接続を拒否するため、XP側で通常のユーザー認証へ変更してください。[MicrosoftのForceGuest解説](https://learn.microsoft.com/en-us/security-updates/securityadvisories/2005/906574)
+
+以下はWindows XP Professional向けの手順です。Home Editionでは簡易ファイルの共有を無効にできないため、この構成は利用できません。[Microsoft KB 307874の保存版](https://ftp.zx.net.nz/pub/archive/ftp.microsoft.com/MISC/KB/en-us/307/874.HTM)
+
+XPに管理者アカウントでログオンし、次のように設定します。
+
+1. ［スタート］→［ファイル名を指定して実行］で`secpol.msc`を開く。
+2. ［ローカル ポリシー］→［セキュリティ オプション］を開く。
+3. ［ネットワーク アクセス: ローカル アカウントの共有とセキュリティ モデル］を、［クラシック - ローカル ユーザーがローカル ユーザーとして認証する］へ変更する。
+
+コマンドで同じ変更を行う場合は、XPのコマンドプロンプトで次を実行してください。1行目で現在値を確認し、2行目で`ForceGuest`を`REG_DWORD`の`0`へ変更します。
+
+```bat
+reg query "HKLM\SYSTEM\CurrentControlSet\Control\Lsa" /v forceguest
+reg add "HKLM\SYSTEM\CurrentControlSet\Control\Lsa" /v forceguest /t REG_DWORD /d 0 /f
+```
+
+変更後、1行目を再実行して`0x0`になったことを確認し、elder-termsから切断して接続し直してください。XPの再起動は不要です。[Microsoftのポリシー設定説明](https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012/jj852218%28v%3Dws.11%29)
+
+接続には、パスワードを設定したXPのローカルユーザーを使います。そのユーザーに共有フォルダーの［共有］タブでアクセス許可を与えてください。NTFSの場合は［セキュリティ］タブのアクセス許可も必要です。送信や削除を行う場合は、共有とNTFSの両方で変更を許可してください。
+
 ## NFSの使用
 
 接続種別を「NFS」にし、サーバーのアドレスとNFSの版を指定します。NFS v2・v3・v4.0へTCPで接続し、公開ディレクトリの一覧、送受信、名前変更、削除を行えます。

@@ -511,6 +511,52 @@ browser as other transfer types to send, receive, and manage folders.
 See [Using SMB](./docs/en/smb.md) for connection settings,
 signing, encryption, and file operation limits.
 
+### Restrictions and configuration for connecting to Windows XP over SMB1
+
+Select "SMB 1" as the version on the SMB tab when connecting to Windows XP.
+Automatic selection does not include SMB1. Enter the XP computer's IPv4 address
+and port 445. To use port 139, also enter the XP computer name as the NetBIOS name.
+
+SMB1 connections in elder-terms do not support IPv6, ports other than 445 and 139,
+SSH proxy, or required signing or encryption. These are limitations of the
+[libdsm public connection API](https://github.com/videolabs/libdsm/blob/0f3edc6df6ab5950f2550d453035351440f71e31/include/bdsm/smb_session.h).
+Disable the signing and encryption requirements on the SMB tab, including any
+requirements inherited from connection defaults.
+
+When XP's Simple File Sharing is enabled, connections using local user credentials
+are mapped to Guest. The `ForceGuest` setting controls this behavior.
+elder-terms rejects SMB1 connections authenticated as Guest instead of the requested
+user, so configure XP to authenticate the specified user.
+See [Microsoft's explanation of ForceGuest](https://learn.microsoft.com/en-us/security-updates/securityadvisories/2005/906574).
+
+The following procedure is for Windows XP Professional. Home Edition cannot
+disable Simple File Sharing and does not support this configuration.
+See the [archived Microsoft KB 307874](https://ftp.zx.net.nz/pub/archive/ftp.microsoft.com/MISC/KB/en-us/307/874.HTM).
+
+Log on to XP with an administrator account and change the setting as follows.
+
+1. Open Start > Run and enter `secpol.msc`.
+2. Open Local Policies > Security Options.
+3. Set "Network access: Sharing and security model for local accounts" to
+   "Classic - local users authenticate as themselves".
+
+Alternatively, run these commands in XP's Command Prompt. The first reads the
+current value; the second sets `ForceGuest` to the `REG_DWORD` value `0`.
+
+```bat
+reg query "HKLM\SYSTEM\CurrentControlSet\Control\Lsa" /v forceguest
+reg add "HKLM\SYSTEM\CurrentControlSet\Control\Lsa" /v forceguest /t REG_DWORD /d 0 /f
+```
+
+Run the first command again to verify that the value is `0x0`, then disconnect
+and reconnect in elder-terms. XP does not need to restart.
+See [Microsoft's policy reference](https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012/jj852218%28v%3Dws.11%29).
+
+Connect with an XP local user account that has a password. Grant that user access
+on the shared folder's Sharing tab. On NTFS, permissions on the Security tab are
+also required. To upload or delete files, allow changes in both the share and
+NTFS permissions.
+
 ## Using NFS
 
 Choose "NFS" as the connection type and specify the server address and NFS version. NFS v2, v3, and v4.0 over TCP support listing public directories, transfers, renaming, and deletion.
