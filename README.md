@@ -1522,10 +1522,23 @@ Each rule selects one recognition source:
 
 The default local path rule recognizes paths starting with `/` or `~/`, with
 components containing letters, digits, combining marks, `_`, `.`, and `-`.
-A trailing `/` is allowed; `/foo//bar` and `/foo/bar$` are not recognized.
-Setting "Text boundaries" to "Whitespace, quotes or line ends" prevents partial
-links inside invalid candidates. The default local path rule enables this
-option. Custom rules can change both the expression and boundary setting.
+A trailing `/` is allowed. Substrings of `relative/foo/bar` or `/foo//bar` do not
+become links.
+Setting "Text boundaries" to "Whitespace, punctuation or line ends" requires
+delimiters around a match. The default local path rule enables this option.
+The following punctuation also acts as a delimiter, so only the path becomes a
+link in `user@host:~/dir$`, `path=/tmp;`, and `「/tmp」`.
+
+| Delimiter position | Accepted characters |
+| --- | --- |
+| Either side | Whitespace, quotes `'` and `"`, backticks, `:`, `=`, `;`, `\|`, `&`, `<`, `>`, `,`, `、`, `。`, and line ends |
+| Before the match only | `(`, `[`, `{`, `（`, `「`, `『` |
+| After the match only | `)`, `]`, `}`, `）`, `」`, `』`, `$` |
+
+Delimiter characters are excluded from copied links and launch targets.
+The same rules apply across screen line wraps. A period remains part of a
+filename; quote or otherwise enclose a path before adding a sentence-ending
+period. Custom rules can change both the expression and boundary setting.
 
 Link rules and received-text macros use [boxrig pattern syntax](https://github.com/kekyo/boxrig/blob/0.12.0/docs/en/regex.md).
 Character classes, groups, alternatives, repetition, and numbered or named captures are supported. Backreferences, lookahead, lookbehind, and expressions matching an empty string are not supported.
@@ -1607,8 +1620,9 @@ path=${path}
 ```
 
 `source` is `osc8` or `terminal-text` and defaults to `osc8` when omitted.
-`whole_token=true` requires whitespace, quotes or line ends around visible-text
-matches. It defaults to `false` and does not affect OSC 8 targets.
+`whole_token=true` requires the whitespace, punctuation or line-end boundaries
+listed above around visible-text matches. It defaults to `false` and does not
+affect OSC 8 targets.
 `path_validation` is `none` or `existing-local-path`; `path` is required for
 the latter. `[hyperlink.<rule-id>]` sections are evaluated in file order. Rule
 IDs may contain letters, digits, `-`, and `_`.
