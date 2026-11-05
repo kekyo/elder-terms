@@ -162,29 +162,21 @@ describe.concurrent('file transfer connection error recovery', () => {
                 expect((await reconnect.info()).states).toContain('showing');
                 expect((await reconnect.info()).states).toContain('sensitive');
                 expect(
-                  (await (await app.getById('file_transfer_local_tree')).info())
-                    .states
-                ).toContain('sensitive');
-              });
-              const localTree = expectElementKind(
-                await app.getById('file_transfer_local_tree'),
-                'table'
-              );
-              await writeFile(
-                join(directory, `offline-${attempt}.txt`),
-                'local browsing'
-              );
-              await expectElementKind(
-                await app.getById('file_transfer_local_refresh_button'),
-                'button'
-              ).click();
-              await waitForResult(async () => {
-                const names: string[] = [];
-                for (let row = 0; row < (await localTree.getRowCount()); ++row)
-                  names.push(
-                    (await (await localTree.cellAt(row, 0))?.info())?.name ?? ''
-                  );
-                expect(names).toContain(`offline-${attempt}.txt`);
+                  (
+                    await (
+                      await app.getById('file_transfer_dim_overlay')
+                    ).info()
+                  ).states
+                ).toContain('showing');
+                for (const id of [
+                  'file_transfer_local_tree',
+                  'file_transfer_remote_tree',
+                  'file_transfer_jobs_paned',
+                ]) {
+                  expect(
+                    (await (await app.getById(id)).info()).states
+                  ).not.toContain('sensitive');
+                }
               });
               if (attempt === 1) await reconnect.click();
             }
@@ -270,6 +262,14 @@ describe.concurrent('file transfer connection error recovery', () => {
               );
             expect(names).toContain('recovered.txt');
             expect((await reconnect.info()).states).not.toContain('showing');
+            expect(
+              (await (await app.getById('file_transfer_dim_overlay')).info())
+                .states
+            ).not.toContain('showing');
+            expect(
+              (await (await app.getById('file_transfer_jobs_paned')).info())
+                .states
+            ).toContain('sensitive');
           });
           await evidence.captureEvidence('initial-error-recovered', async () =>
             app.capture()
