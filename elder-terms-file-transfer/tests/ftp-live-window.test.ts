@@ -748,6 +748,32 @@ for (const testCase of [
           'button'
         ).click();
       }
+      if (rejectedCertificate || scenario === 'login-refused') {
+        await waitForResult(async () => {
+          expect(
+            (
+              await (
+                await app.getById('file_transfer_connection_notice_panel')
+              ).info()
+            ).states
+          ).toContain('showing');
+        });
+        await evidence.captureEvidence('connection-error-modal', async () =>
+          app.capture()
+        );
+        expect(
+          (await (await app.getById('file_transfer_dim_overlay')).info()).states
+        ).toContain('showing');
+        for (const id of [
+          'file_transfer_local_path_entry',
+          'file_transfer_remote_path_entry',
+          'file_transfer_jobs_paned',
+        ]) {
+          expect((await (await app.getById(id)).info()).states).not.toContain(
+            'sensitive'
+          );
+        }
+      }
       if (rejectedCertificate) {
         await waitForResult(async () =>
           expect(
@@ -1225,6 +1251,15 @@ for (const testCase of [
         );
       }
       if (testCase === 'passive' || testCase === 'ftps-explicit') {
+        const localTree = await app.getById('file_transfer_local_tree');
+        const connectedImage = PNG.sync.read((await localTree.capture()).image);
+        const sample =
+          (Math.floor(connectedImage.height * 0.8) * connectedImage.width +
+            Math.floor(connectedImage.width * 0.1)) *
+          4;
+        const connectedPixel = [
+          ...connectedImage.data.subarray(sample, sample + 3),
+        ];
         server.kill('SIGTERM');
         await serverFinished;
         const refresh = expectElementKind(
@@ -1255,11 +1290,42 @@ for (const testCase of [
         await evidence.captureEvidence('ftp-disconnected', async () =>
           window.capture()
         );
-        // The disconnected overlay must keep local browsing usable.
-        await expectElementKind(
-          await app.getById('file_transfer_local_refresh_button'),
-          'button'
-        ).click();
+        // A local modal notice must block both browsers and the transfer jobs.
+        expect(
+          (await (await app.getById('file_transfer_dim_overlay')).info()).states
+        ).toContain('showing');
+        for (const id of [
+          'file_transfer_local_path_entry',
+          'file_transfer_remote_path_entry',
+          'file_transfer_jobs_paned',
+        ]) {
+          expect((await (await app.getById(id)).info()).states).not.toContain(
+            'sensitive'
+          );
+        }
+        await waitForResult(async () => {
+          const dimmed = PNG.sync.read((await localTree.capture()).image);
+          for (let channel = 0; channel < 3; channel++) {
+            expect(dimmed.data[sample + channel]).toBeLessThan(
+              connectedPixel[channel]! * 0.75
+            );
+          }
+        });
+        const localPath = expectElementKind(
+          await app.getById('file_transfer_local_path_entry'),
+          'entry'
+        );
+        const previousPath = await localPath.text();
+        const pathBounds = (await localPath.capture()).bounds;
+        await app.input.moveMouseTo(
+          pathBounds.x + pathBounds.width / 2,
+          pathBounds.y + pathBounds.height / 2
+        );
+        await app.input.setMouseButton('left', true);
+        await app.input.setMouseButton('left', false);
+        await app.input.pressKey('a');
+        expect(await localPath.text()).toBe(previousPath);
+        expect((await localPath.info()).states).not.toContain('focused');
         const restartArgs = [
           ...server.spawnargs.slice(1),
           '--port=' + ready.slice(6),

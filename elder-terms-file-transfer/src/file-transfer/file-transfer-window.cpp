@@ -715,14 +715,13 @@ static void update_file_action_overlay_presentation(
       window->connection_state == FileTransferConnectionState::failed;
   set_widget_visible(window->reconnect_button, disconnected && static_cast<bool>(window->reconnect));
   set_widget_visible(window->connection_notice.panel, disconnected);
-  // A disconnected remote service must not prevent local browsing.
-  const bool connection_blocked =
-      window->connection_state == FileTransferConnectionState::connecting ||
-      window->connection_state ==
-          FileTransferConnectionState::authenticating;
-  set_widget_visible(window->dim_overlay,
-                     connection_blocked || window->certificate_confirmation ||
-                         window->browser_action_active);
+  // Every modal overlay blocks both browsers and the transfer jobs, including
+  // keyboard input that an event-box backdrop alone cannot intercept.
+  const bool blocked =
+      window->connection_state != FileTransferConnectionState::ready ||
+      window->certificate_confirmation || window->browser_action_active;
+  set_widget_visible(window->dim_overlay, blocked);
+  gtk_widget_set_sensitive(window->vertical_paned, !blocked);
   set_widget_visible(window->action_overlay,
                      window->browser_action_progress);
 }
@@ -775,6 +774,16 @@ static void on_file_transfer_reconnect_clicked(GtkButton *, gpointer data) {
        window->connection_state != FileTransferConnectionState::failed)) return;
   window->reconnect_task.reset();
   window->reconnect_task.emplace(reconnect_file_transfer_window_async(window->self.lock()));
+}
+
+static void on_file_transfer_connection_notice_map(GtkWidget *, gpointer data) {
+  auto *window = static_cast<FileTransferWindow *>(data);
+  auto *action = gtk_widget_get_visible(window->reconnect_button) &&
+                         gtk_widget_is_sensitive(window->reconnect_button)
+                     ? window->reconnect_button
+                     : window->connection_notice.cancel_button;
+  gtk_widget_grab_default(action);
+  gtk_widget_grab_focus(action);
 }
 
 static bool has_file_action_progress_operation(
@@ -3167,10 +3176,8 @@ create_file_transfer_window(FileTransferWindowOptions options) {
       create_file_transfer_pane(state.get(), &state->local, false);
   GtkWidget *remote =
       create_file_transfer_pane(state.get(), &state->remote, true);
-  GtkWidget *remote_overlay = gtk_overlay_new();
-  gtk_container_add(GTK_CONTAINER(remote_overlay), remote);
   gtk_paned_pack1(GTK_PANED(state->paned), local, TRUE, FALSE);
-  gtk_paned_pack2(GTK_PANED(state->paned), remote_overlay, TRUE, FALSE);
+  gtk_paned_pack2(GTK_PANED(state->paned), remote, TRUE, FALSE);
   gtk_paned_set_position(GTK_PANED(state->paned), 520);
 
   state->status_bar = gtk_event_box_new();
@@ -3264,7 +3271,7 @@ create_file_transfer_window(FileTransferWindowOptions options) {
   gtk_label_set_line_wrap(GTK_LABEL(state->connection_notice.title_label), TRUE);
   gtk_label_set_max_width_chars(GTK_LABEL(state->connection_notice.title_label), 40);
   gtk_label_set_max_width_chars(GTK_LABEL(state->connection_notice.message_label), 40);
-  gtk_overlay_add_overlay(GTK_OVERLAY(remote_overlay), state->connection_notice.panel);
+  gtk_overlay_add_overlay(GTK_OVERLAY(state->root_overlay), state->connection_notice.panel);
   state->reconnect_button = state->connection_notice.accept_button;
   gtk_button_set_label(GTK_BUTTON(state->reconnect_button), _("Reconnect"));
   gestament_gtk_assign_accessible_id(state->reconnect_button, "file_transfer_reconnect_button");
@@ -3274,6 +3281,8 @@ create_file_transfer_window(FileTransferWindowOptions options) {
   gtk_button_set_label(GTK_BUTTON(state->connection_notice.cancel_button), _("Close"));
   g_signal_connect_swapped(state->connection_notice.cancel_button, "clicked",
                            G_CALLBACK(gtk_widget_destroy), state->window);
+  g_signal_connect(state->connection_notice.panel, "map",
+                   G_CALLBACK(on_file_transfer_connection_notice_map), state.get());
 
   state->action_overlay =
       gtk_frame_new(nullptr);
