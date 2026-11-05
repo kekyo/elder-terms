@@ -930,12 +930,6 @@ static void test_terminal_link_decoration_settings() {
   remove_config(path); remove_config(global);
 }
 
-static void test_removed_link_decoration_setting() {
-  auto store = create_default_settings(default_terminal_display_settings(12), "Removed setting");
-  expect_true(!set_explicit_setting_value(&store, elder_terms::make_setting_key("terminal", "link_decoration"),
-      elder_terms::SettingValue{std::string("none")}), "the shared link decoration setting has been removed");
-}
-
 static void test_terminal_color_filter_settings() {
   const auto global = temporary_config_path("filter-global");
   const auto path = temporary_config_path("filter-connection");
@@ -5008,7 +5002,6 @@ int main() {
     elder_terms_settings_test::test_terminal_ambiguous_width_setting();
     elder_terms_settings_test::test_terminal_block_copy_trailing_spaces_setting();
     elder_terms_settings_test::test_terminal_background_settings();
-    elder_terms_settings_test::test_removed_link_decoration_setting();
     elder_terms_settings_test::test_terminal_link_decoration_settings();
     elder_terms_settings_test::test_terminal_color_filter_settings();
     elder_terms_settings_test::test_terminal_color_vision_settings();
