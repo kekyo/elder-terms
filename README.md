@@ -23,7 +23,7 @@ A terminal application, inspired by personal computing in the 1990s.
 
 ### Features
 
-- Uses Linux GTK3 and [boxrig](https://github.com/kekyo/boxrig), preferring OpenGL rendering and using Cairo when OpenGL is unavailable.
+- Runs on Linux desktops.
 - Supports local terminals, SSH, SFTP, FTP, WebDAV, and SMB as well as serial and TELNET
   connections, bringing that familiar terminal experience into the present.
 - Lets you manage multiple connections and launch terminals from the launcher.
@@ -48,11 +48,10 @@ A terminal application, inspired by personal computing in the 1990s.
 - Customizes the window exterior colors and terminal background for each
   connection.
 - Opens a specified connection with a single hotkey.
-- Start by opening your local terminal with a hotkey.
 - Starts the launcher automatically and can keep it running in the system tray.
 - Monitors received text with regular expressions and defines rules that
   automatically send text or run a specified command.
-- Recognizes OSC 8 targets or visible terminal text as links.
+- Opens URLs and file links displayed in the terminal.
 - Records logs to files and organizes them into directories by connection and
   date and time.
 - Supports multilingual display (English, Arabic, Spanish, French, Hindi,
@@ -81,6 +80,16 @@ A terminal application, inspired by personal computing in the 1990s.
 ## Environment
 
 - Linux GTK3 (Ubuntu/Debian preferred)
+
+Prebuilt packages support the following environments.
+
+| Distribution | Release | Architecture |
+| --- | --- | --- |
+| Debian | trixie | amd64, i386, arm64, armhf, riscv64 |
+| Ubuntu | 24.04 | amd64, arm64 |
+| Ubuntu | 26.04 | amd64, arm64 |
+
+Debian bookworm is not supported. See the [build guide](./docs/en/building.md) for library requirements.
 
 ---
 
@@ -125,18 +134,13 @@ In terminal and file transfer windows, the settings dialog stays open after Appl
 records the changes and closes it. Cancel discards edits since the last Apply
 or Save; already applied changes remain active.
 
-Apply and Save are unavailable while required input is missing or settings conflict.
-The affected controls show an error border or icon; hover over a control to read the reason.
-Tabs and macro or link rule rows also show errors, including unselected rules.
-Correcting the input clears the indicators and restores the usual help text.
-When an empty field means inheritance, validation uses the inherited value.
+Apply and Save are unavailable while required input is missing or settings conflict. Check the marked fields and tabs. Hover over a field to see what needs correction.
 
 Terminal settings are split into two tabs. "Terminal" contains encoding, character width, special
 keys, rows and columns, scrollback, BEL, shortcuts, screen-reader access, and copy settings.
 "Terminal appearance" contains fonts, text size, the cursor, background,
 and color correction. The same layout is used for individual connections and
-"Connection defaults". These tabs are normally hidden for file transfers.
-A tab remains available when it contains input that needs correction.
+"Connection defaults".
 Border visibility and width are configured on the "General" tab for both
 terminal and file transfer windows.
 
@@ -151,14 +155,12 @@ detail. Those settings are described in the following sections.
 To read terminal text with a screen reader, enable "Screen reader access" in the
 "Terminal" settings tab. It is disabled by default and can be changed while the
 terminal is running. Enabling it exposes the currently visible terminal text.
-In an INI file, set `accessibility_enabled=true` in `[terminal]`.
 This setting does not affect screen-reader access to menus or settings dialogs.
 
 To edit a saved connection's INI file directly, right-click its entry in the
 launcher and select "Edit in text editor". This uses your desktop's default
 application for plain text files.
-Changes saved in an external editor are reloaded automatically, including
-editors that replace the file when saving.
+Changes saved in an external editor are reloaded automatically.
 
 To choose the connection opened by "New Window" on the desktop icon of a terminal
 started without a connection, open "Application settings" in the launcher and select its name from
@@ -166,18 +168,7 @@ started without a connection, open "Application settings" in the launcher and se
 The list includes saved local shell, TELNET, SSH, and serial connections.
 The desktop action is named "New Window" in every system language.
 
-The selection is stored as an application setting in `global.ini`. Use the
-connection entry's name as the value:
-
-```ini
-[general]
-new_window=Local terminal
-```
-
-Renaming the connection in the launcher updates the selection. Deleting it or
-saving it as SFTP, FTP, WebDAV, or SMB clears the selection. When no connection is
-selected, the terminal uses built-in settings and global defaults. If the named
-connection is missing, unreadable, or not a terminal connection, startup fails.
+See the [INI settings reference](./docs/en/configuration.md) for editing configuration files directly.
 
 It is also useful to remember that `Ctrl`+`=` increases the font size and
 `Ctrl`+`-` decreases it. You can do the same with the mouse wheel while holding
@@ -220,10 +211,9 @@ in the list take precedence.
    connection's INI file overrides `global.ini`. Application-wide settings are
    edited with "Application settings", including the New Window connection.
    These settings are stored in `global.ini` and preserved for the next launch.
-3. Launch-session settings: If you launch a connection with unsaved changes in
-   the launcher, those changes are passed to the connection window as a
-   temporary launch profile. Changes made with "Apply" in the settings dialog
-   after launch also affect only the current session. These settings are not
+3. Settings for the current connection: Unsaved changes used to launch a
+   connection affect only that session. Changes made with "Apply" in the
+   settings dialog after launch work the same way. These settings are not
    recorded in an INI file unless you click "Save", and they are lost when the
    session ends.
 
@@ -234,76 +224,29 @@ option.
 
 Ordinary values without a source in parentheses were explicitly set in the
 connection's INI file or in the current launch session. The displayed value
-alone does not distinguish between the two. "Save" records explicit values in
-the connection's INI file, while "Apply" affects only the current session.
+alone does not distinguish between the two. Use "Save" to keep changes for the next launch.
 
 Clearing a text field or selecting the default item in a selection field
 removes the explicit value, causing the setting to inherit the global or
 built-in default again.
 
+For the settings below, "Apply" changes the current connection, "Save" keeps changes for the next launch, and "Cancel" discards unapplied edits.
+See the [INI settings reference](./docs/en/configuration.md) for file syntax and examples.
+
 ## Configuring Connection Icons
 
 ![Connection icon picker](./images/connection-icon-picker.png)
 
-Open "Choose icon…" on a connection's "General" tab to display a popup grid.
-Switch between Noto Color Emoji and Material Icons, scroll through the images,
-and click one to select it. "Choose image file…" also accepts PNG and JPEG files.
-"Default icon" restores the elder-terms image. Presets are bundled and do not
-require a download when selected.
+Open "Choose icon…" on a connection's "General" tab to select a Noto Color Emoji or Material Icons preset.
+Material Icons offer black or white glyphs. "Choose image file…" lets you select a PNG or JPEG.
+"Default icon" restores the elder-terms image. Presets are bundled and need no download.
 
-For Material Icons, choose Black or White under "Glyph color". The background is
-transparent, with an outline in the opposite color. Changing the color updates
-the grid previews; clicking an image selects both its glyph and color.
+The icon appears in the title bar, launcher connection list, and tray connection menu.
+It is specific to each connection and does not inherit from "Connection defaults".
+Keep custom image files at the same path so they remain available for future launches.
 
-Apply updates the current window; Save records the selection for the next launch.
-Cancel discards edits made since the last apply. The image appears at the left
-edge of terminal and file-transfer title bars. The launcher's connection list
-and tray connection menu show saved icons. Icons are specific to each connection
-and do not inherit from "Connection defaults".
-
-Selected files are read from their original paths. Keep the file somewhere it
-will remain available on subsequent launches. Both the file and decoded RGBA
-image are limited to 64 MiB, with each dimension limited to 16384 pixels.
-Images retain their aspect ratio within a square, with transparent padding.
-An unspecified or unreadable image uses the default icon. The settings page
-shows loading errors without preventing the connection from opening.
-Missing files and unknown preset IDs do not automatically clear the saved selection.
-
-Saved connections also use individual dock icons. Windows for the same connection
-are grouped together, separately from other connections. Renaming a connection
-preserves its identity; duplicating it creates a separate identity. A window
-started from unsaved edits forms a separate temporary group. Pinning that group
-and relaunching it opens the launcher. The launcher's own window, dock, and tray
-icons remain unchanged.
-
-Window icon support is detected from the running display environment and GTK
-capabilities. On X11, elder-terms supplies multiple image sizes to GTK. On Wayland,
-it sends icons when the public API and `xdg-toplevel-icon-v1` are available.
-The title-bar and connection-list icons remain available in unsupported environments.
-Dock presentation also depends on the desktop environment; see the
-[GTK icon documentation](https://docs.gtk.org/gtk3/method.Window.set_icon_list.html).
-Testing on Ubuntu GNOME 46 confirmed that the dock updates on the first launch
-after an icon change without reopening the connection. The previous image may
-remain for a few seconds while [GNOME refreshes its cache](https://github.com/GNOME/gnome-shell/blob/46.0/src/shell-app-cache.c).
-If GNOME still holds an image reference from before this fix, reopen the connection
-window once after upgrading. Subsequent icon changes do not require reopening it.
-
-Dock integration generates files in `$XDG_DATA_HOME/applications/` and
-`$XDG_DATA_HOME/icons/hicolor/256x256/apps/`, normally under `~/.local/share/`
-when `XDG_DATA_HOME` is unset. Generated images and desktop files are retained,
-including after deleting a connection, to preserve running windows and pinned entries.
-Launching a pinned entry for a deleted connection reports an error; it cannot
-open a different connection created with the same name.
-
-In an INI file, `[general] icon` accepts these forms:
-
-| Value | Image |
-| --- | --- |
-| `default` or omitted | elder-terms default |
-| `noto:emoji_u1f44d` | Example Noto Color Emoji preset |
-| `material:action/home` | Black Material Icons glyph with a white outline |
-| `material:white:action/home` | White Material Icons glyph with a black outline |
-| `file:/home/user/Pictures/server.png` | PNG or JPEG at an absolute path |
+Windows from the same saved connection form one dock group on supporting desktops.
+See [connection icon details](./docs/en/connection-icons.md) for image limits, dock behavior, and INI syntax.
 
 ## Finding a Host with IP Scan
 
@@ -317,7 +260,7 @@ WebDAV HTTPS (443), SMB (445), implicit FTPS (990), and NFS (2049) TCP ports.
 All connection settings scan the same eight ports.
 
 For example, a `/24` interface scans every address whose final octet is 0 through 255.
-A range wider than `/24` is limited to its first 256 addresses by treating the additional upper host bits as zero.
+A network wider than `/24` is limited to its first 256 addresses.
 For example, an address on `172.20.0.0/16` scans `172.20.0.0` through `172.20.0.255`.
 
 You can select discovered hosts while the scan is still running. Resolved host names appear as they become available.
@@ -339,18 +282,10 @@ Only local interfaces with an IPv4 address are scanned.
 Scanning runs from this machine even when SSH proxy is configured.
 Loopback interfaces scan only their assigned addresses.
 
-Name lookup uses the system resolver first, then mDNS and LLMNR in parallel,
-preferring mDNS if both return names. It keeps `.local` and single-label names unchanged.
-Name lookup has a shared three-second deadline per host,
-including up to one second for the initial system lookup.
-
-Explicit mDNS/LLMNR lookup requires `systemd-resolved`
-with those protocols enabled on the relevant network interface.
-Normal hostname resolution must also reach `systemd-resolved` to connect using the discovered names.
-The application does not change your system's resolver configuration.
-
-If the service or protocol is unavailable, scanning still works with system-resolved names or numeric addresses.
-See the [systemd resolver API documentation](https://github.com/systemd/systemd/blob/v257/man/org.freedesktop.resolve1.xml) for protocol availability and interface selection requirements.
+You can still select a host by its numeric IP address when its name cannot be obtained.
+mDNS and LLMNR lookup require systemd-resolved with those protocols enabled.
+To connect using a discovered name, the operating system's normal name resolution must also resolve it.
+See the [systemd resolver API documentation](https://github.com/systemd/systemd/blob/v257/man/org.freedesktop.resolve1.xml) for environment requirements.
 
 ## Using SSH and SFTP
 
@@ -455,22 +390,7 @@ After login, FTP uses the same two-pane file browser and transfer controls as SF
 FTP sends commands, user names, passwords, directory listings, and file data without encryption.
 elder-terms uses [FTP (RFC 959)](https://www.rfc-editor.org/rfc/rfc959) or [FTPS](https://everything.curl.dev/ftp/ftps.html).
 
-The corresponding INI settings have the following form:
-
-```ini
-[general]
-type=ftp
-
-[ftp]
-address=ftp.example.com
-port=21
-username=
-data_connection_mode=passive
-local_directory=
-remote_directory=.
-```
-
-For more information about FTPS and FTP details, see [the document](./docs/ja/ftp-ftps.md).
+See the [FTP/FTPS guide](./docs/en/ftp-sftp.md) for further details and INI settings.
 
 ## Receiving over HTTP/HTTPS
 
@@ -513,51 +433,7 @@ browser as other transfer types to send, receive, and manage folders.
 See [Using SMB](./docs/en/smb.md) for connection settings,
 signing, encryption, and file operation limits.
 
-### Restrictions and configuration for connecting to Windows XP over SMB1
-
-Select "SMB 1" as the version on the SMB tab when connecting to Windows XP.
-Automatic selection does not include SMB1. Enter the XP computer's IPv4 address
-and port 445. To use port 139, also enter the XP computer name as the NetBIOS name.
-
-SMB1 connections in elder-terms do not support IPv6, ports other than 445 and 139,
-SSH proxy, or required signing or encryption. These are limitations of the
-[libdsm public connection API](https://github.com/videolabs/libdsm/blob/0f3edc6df6ab5950f2550d453035351440f71e31/include/bdsm/smb_session.h).
-Disable the signing and encryption requirements on the SMB tab, including any
-requirements inherited from connection defaults.
-
-When XP's Simple File Sharing is enabled, connections using local user credentials
-are mapped to Guest. The `ForceGuest` setting controls this behavior.
-elder-terms rejects SMB1 connections authenticated as Guest instead of the requested
-user, so configure XP to authenticate the specified user.
-See [Microsoft's explanation of ForceGuest](https://learn.microsoft.com/en-us/security-updates/securityadvisories/2005/906574).
-
-The following procedure is for Windows XP Professional. Home Edition cannot
-disable Simple File Sharing and does not support this configuration.
-See the [archived Microsoft KB 307874](https://ftp.zx.net.nz/pub/archive/ftp.microsoft.com/MISC/KB/en-us/307/874.HTM).
-
-Log on to XP with an administrator account and change the setting as follows.
-
-1. Open Start > Run and enter `secpol.msc`.
-2. Open Local Policies > Security Options.
-3. Set "Network access: Sharing and security model for local accounts" to
-   "Classic - local users authenticate as themselves".
-
-Alternatively, run these commands in XP's Command Prompt. The first reads the
-current value; the second sets `ForceGuest` to the `REG_DWORD` value `0`.
-
-```bat
-reg query "HKLM\SYSTEM\CurrentControlSet\Control\Lsa" /v forceguest
-reg add "HKLM\SYSTEM\CurrentControlSet\Control\Lsa" /v forceguest /t REG_DWORD /d 0 /f
-```
-
-Run the first command again to verify that the value is `0x0`, then disconnect
-and reconnect in elder-terms. XP does not need to restart.
-See [Microsoft's policy reference](https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-server-2012-r2-and-2012/jj852218%28v%3Dws.11%29).
-
-Connect with an XP local user account that has a password. Grant that user access
-on the shared folder's Sharing tab. On NTFS, permissions on the Security tab are
-also required. To upload or delete files, allow changes in both the share and
-NTFS permissions.
+For Windows XP, select SMB1 and follow the [XP connection requirements and setup](./docs/en/smb.md#restrictions-and-configuration-for-connecting-to-windows-xp-over-smb1).
 
 ## Using NFS
 
@@ -619,13 +495,11 @@ but the process is started directly without a shell.
 Environment-variable expansion, globbing, redirection, and pipelines are therefore not performed.
 Start a shell explicitly when those features are required, for example:
 
-```ini
-[local]
-command_line=/bin/sh -lc 'exec tmux new-session -A -s elder-terms'
+```text
+/bin/sh -lc 'exec tmux new-session -A -s elder-terms'
 ```
 
-The same `[local]` setting can be saved as a global default or overridden for an individual connection.
-Clearing "Startup command" restores inheritance.
+See the [settings reference](./docs/en/configuration.md#local-startup-command) for the INI form.
 
 ## Selecting a Serial Device
 
@@ -656,21 +530,7 @@ even if the `/dev/serial/by-id` link name changes.
 If multiple candidates have the same USB serial number,
 it waits for a connection instead of selecting the wrong device.
 
-The values are stored in the INI file as follows.
-`device_match_mode` is one of `path`, `by-id`, or `by-path`, and defaults to `by-id` when omitted.
-`device_usb_serial` is supplementary information that is saved when the settings screen can obtain it.
-
-```ini
-[serial]
-device_match_mode=by-id
-device=/dev/serial/by-id/usb-Example_Serial_Device_1234-if00
-device_usb_serial=1234
-```
-
-If a legacy INI file without `device_match_mode` stores a `device` such as `/dev/ttyUSB0`,
-that path continues to be used.
-When selecting the device again in the settings screen,
-choose the identification method above that suits your use case.
+See the [settings reference](./docs/en/configuration.md#serial-connections) for INI syntax and existing configuration behavior.
 
 ## Monitoring Serial Connections
 
@@ -685,13 +545,6 @@ and that state cannot trigger "Close window when session ends".
 The serial session remains available for sending and receiving.
 Removing the device itself, or a read/write error,
 is still treated as an actual disconnection as before.
-
-The setting is stored in the INI file as follows:
-
-```ini
-[serial]
-carrier_detect=ignore
-```
 
 ## Character Encoding and Special Key Settings
 
@@ -727,12 +580,7 @@ The built-in defaults for each connection type are as follows:
 | TELNET | UTF-8 | `Auto` | `Normal` | `Auto` |
 | Serial | UTF-8 | `BS` | `TRS80` | `CR` |
 
-When editing the INI file directly, set `return_code` to one of `auto`, `cr`, `lf`, or `crlf`.
-
-```ini
-[terminal]
-return_code=crlf
-```
+See the [settings reference](./docs/en/configuration.md#terminal-controls) for INI syntax.
 
 ## Selecting and Copying Terminal Text
 
@@ -757,31 +605,10 @@ A normal selection follows text order; a block selection is a rectangle aligned 
 When a terminal application uses mouse input, Shift + drag overrides it for normal selection, and Ctrl + drag for block selection.
 Ctrl + Shift + drag also makes a block selection. Ctrl + wheel changes the text size as usual when no selection gesture is active.
 
-Completing a selection also stores its text in the primary selection (PRIMARY), which you can paste with the middle mouse button.
-This is separate from the regular clipboard (CLIPBOARD). Escape and left click clear the selection without erasing previously copied text.
-During IME composition, Escape cancels composition first; the next Escape clears the selection.
-If an IME consumes Escape before the widget receives it, the IME takes priority. [IBus key snooping](https://github.com/ibus/ibus/blob/1.5.29/client/gtk2/ibusimcontext.c#L643-L752)
-
-Block selections can span more history than fits on screen. Copying preserves whole wide characters, combining sequences, and emoji.
-By default, whitespace continuing to the right edge of each display row is removed within the selection. If text remains to the right of the selection, spaces before it are preserved.
-Only empty cells and standalone ASCII spaces are removed. Full-width spaces, nonbreaking spaces (NBSP), and spaces with combining characters are preserved.
-Each display row, including a soft-wrapped row, is separated by a newline. Rows emptied by trimming are retained, without an extra final newline. Bidirectional text is copied in logical order within each row.
-Reducing the width to zero retains the anchor, so you can expand the rectangle again while holding the button.
-
-To preserve spaces, disable "Trim trailing spaces in block copies" on the "Terminal" tab. In an INI file, use:
-
-```ini
-[terminal]
-block_copy_trim_trailing_spaces=false
-```
-
-An inherited setting uses its parent's value. When no value is specified, the built-in default is `true`.
-Changes also apply while the terminal is running, so you can copy the same selection again with the new policy. Normal selection text and the displayed block selection are unchanged.
-The setting applies to both PRIMARY and CLIPBOARD. A valid selection with positive width that becomes empty after trimming replaces the clipboard contents with an empty string.
-
-“Copy” is disabled for a zero-width rectangle or a selection invalidated by text changes, and existing clipboard contents are preserved.
-Exceeding a selection or copy limit also preserves the previous result instead of publishing partial text; select a smaller range and try again.
-Focus changes, menus, and disconnection end an active drag. Changing focus alone does not clear a completed selection.
+Selected text can also be pasted with the middle mouse button.
+Block copies trim trailing spaces by default. To preserve them, disable "Trim trailing spaces in block copies" on the "Terminal" tab.
+Normal selection is unaffected.
+See [selection and copying details](./docs/en/text-selection.md) for clipboard differences, copy results, and what to do when copying is unavailable.
 
 ## Newlines When Sending and Pasting Text
 
@@ -791,22 +618,12 @@ Focus changes, menus, and disconnection end an active drag. Changing focus alone
 macro output, and all text pasted from the clipboard or primary selection through a keyboard shortcut or the context menu.
 The built-in default is enabled.
 
-When enabled, CRLF, a lone CR, and a lone LF in the input are first read as a single logical newline,
-and each newline is then sent according to the "Enter/Return code" setting.
-With "Auto", text sending uses CR. When a file is read in multiple chunks,
-this processing also treats a CRLF split across a chunk boundary as one newline.
+When enabled, CR, LF, and CRLF newlines are converted to the format selected by "Enter/Return code".
+"Auto" sends CR. When disabled, the original newline format is preserved.
 
-When disabled, the original sequence of CR, LF, and CRLF in the input is not changed.
-For a TELNET connection, the CR framing and IAC escaping required by TELNET NVT are still applied afterward.
-
-Pasting does not add Bracketed Paste control sequences.
-It uses the same send-rate control, character encoding conversion, and newline processing as sending a text file.
-Specify this setting in the INI file as follows:
-
-```ini
-[transfer]
-text_send_follow_return_code=true
-```
+Pasting uses the same send-rate, character encoding, and newline settings as text-file sending.
+Bracketed Paste, which identifies pasted text to the remote application, is not supported.
+See the [settings reference](./docs/en/configuration.md#sending-and-pasting-text) for INI syntax.
 
 ## Sending BREAK
 
@@ -830,13 +647,6 @@ Each connection type sends the following:
 | Serial | Asserts the line's BREAK state for 500 milliseconds, then clears it |
 | SSH | Sends an SSH BREAK request for 500 milliseconds |
 
-When editing the INI file directly, specify the shortcut as follows:
-
-```ini
-[terminal]
-send_break_key=F12
-```
-
 ## Notes on Character Encodings
 
 Character encodings accept names defined by iconv, but be aware that several
@@ -855,13 +665,6 @@ If you use a different encoding, receiving extended or altered characters can pr
 "Scrollback lines" on the "Terminal" tab sets the normal-screen history, from 1,000 to 100,000 lines.
 The built-in default is 10,000 lines.
 
-When editing the INI file directly, specify the value as follows:
-
-```ini
-[terminal]
-scrollback_lines=20000
-```
-
 ## Configuring the BEL Sound
 
 ![BEL sound settings](./images/bel-sound-settings.png)
@@ -872,43 +675,14 @@ The built-in `default` value uses the desktop environment's beep.
 For a custom sound, enter the absolute path of an existing file or use the "Select file" button to choose it.
 Supported formats are Ogg Vorbis (`.oga`, with the legacy `.ogg` extension also accepted) and WAV (PCM).
 
-```ini
-[terminal]
-bell_sound=/home/user/.local/share/sounds/terminal-bell.oga
-```
-
 ## Title-Bar Notifications
 
-When the terminal receives BEL, the title-bar background briefly changes brightness
-and returns to its original color, regardless of the selected sound or playback success.
-Receiving data moves a subtle band from left to right across the background.
-This works in both terminals and file-transfer windows. Reception during a cycle
-keeps it running for another cycle; when reception stops, the effect finishes its final cycle
-and fades back to the original background.
-Title text still updates immediately during the effect.
+Receiving BEL briefly changes the title bar's brightness.
+Receiving data moves a subtle band across the title bar. Receive notifications work in both terminals and file-transfer windows.
 
-In terminals, BEL-only input does not start or extend the gradient.
-An effect already in progress keeps its current cycle and any scheduled continuation.
-Input containing BEL together with other data, and file-transfer data, still triggers the gradient.
-
-Use "Visual BEL notification" on the "Terminal appearance" tab and "Titlebar receive effect"
-on the "General" tab to select Disabled, Weak, Medium or Strong independently.
-Both default to Medium. Weak is the original intensity, Medium is 1.5 times Weak,
-and Strong is twice Weak. Choose the default to inherit global settings, or override
-each preference for a connection. Accepted configuration values are `disabled`,
-`weak`, `medium` and `strong`.
-This example disables visual BEL and sets the receive effect to Strong, leaving BEL audio unchanged:
-
-```ini
-[general]
-receive_effect=strong
-[terminal]
-visual_bell=disabled
-```
-
-The effects use the connection's exterior color, or the current GTK theme when no
-exterior color is set. Notifications received while minimized or hidden are not
-replayed when the window returns. Disabling GTK animations also stops both effects.
+Use "Visual BEL notification" on the "Terminal appearance" tab and "Titlebar receive effect" on the "General" tab to select Disabled, Weak, Medium, or Strong independently.
+Both default to Medium. Disabling visual BEL leaves the BEL sound setting unchanged.
+Disabling desktop animations stops both effects.
 
 ## Compact Mode
 
@@ -922,14 +696,7 @@ built-in default is off.
 
 Enable window side borders on the "General" tab to show borders of the chosen
 width on both sides of the window. Compact mode also shows a bottom border
-of the same width. In INI files, use `show_border` and `border_width` in
-`[general]` to set visibility and width in pixels. Widths from 1 to 1000px are
-accepted, with a default of 4px. Borders are disabled by default.
-
-```ini
-[general]
-compact_mode=true
-```
+of the same width.
 
 ## Configuring Indicator Color
 
@@ -938,22 +705,11 @@ compact_mode=true
 On the "General" tab, set "Active indicator color" and "Inactive indicator color" independently.
 Each applies to CONN, LOG, SD, RD, and all serial line indicators.
 SFTP, FTP/FTPS, WebDAV, and SMB windows use the same settings for their CONN, SD, and RD indicators.
-Applying colors preserves their current states, blinking, and latched activity.
 The lamps retain their shading and highlights; choose different colors if you want to distinguish active from inactive lamps.
 
-Connection defaults can provide a shared color, and each connection can override it.
-"Default color" restores green for active lamps and gray for inactive lamps, independently of the other color.
-Configuring only the active color leaves the inactive color gray unless a global inactive color is inherited.
-Choose the inherited option to follow connection defaults. Save to keep both colors after restarting.
-
-```ini
-[general]
-indicator_color=#3584E4
-indicator_off_color=#808080
-```
-
-The value must be `default` or an RGB color in `#RRGGBB` form.
-Invalid values produce a warning and use the next valid inherited or built-in value.
+"Default color" restores green for active lamps and gray for inactive lamps.
+Set shared colors in connection defaults and override them per connection as needed.
+See the [settings reference](./docs/en/configuration.md#windows-and-notifications) for INI colors.
 
 ## Configuring Text Size
 
@@ -963,31 +719,16 @@ Invalid values produce a warning and use the next valid inherited or built-in va
 You can also use `Ctrl`+`=`, `Ctrl`+`-`, or the mouse wheel while holding `Ctrl`. The committed size is saved in the connection settings.
 Zooming preserves the row and column counts reported to the connection. Resizing the window manually reports the new counts.
 
-```ini
-[terminal]
-font_size_dip=14.5
-```
-
 ## Configuring the Cursor and Background
 
 ![Cursor and background settings](./images/cursor-background-settings.png)
 
 Cursor, background, and color correction options are on the "Terminal appearance" tab.
-They can inherit connection defaults or be overridden for each connection.
-"Apply" changes the current terminal; "Save" also keeps the settings for its next start.
-"Cancel" discards edits made since the last Apply. Previously applied changes remain active.
-If image loading or saving fails, the error is shown and the previously applied appearance is retained.
-
-The left side of the settings footer shows the active renderer and display connection, such as
-`OpenGL / X11` or `Cairo / Wayland`. It also reflects a fallback from OpenGL to Cairo.
-Action buttons remain on the right.
-Scrollbars use colors that remain distinguishable from their background.
+If image loading fails, the error is shown and the previously applied appearance is retained.
 
 Choose "Full box", "Vertical box", or "Underline box" for the cursor.
 The cursor is filled while the terminal has input focus and outlined in the same shape when focus leaves.
-The vertical width and underline height are based on 4 DIP, with a 1 DIP outline, scaled with the display.
 Blinking is a separate option. An unfocused outline stays steady.
-Remote cursor hiding and composition handling remain effective.
 
 Background modes are "Opaque", "Transparent", and "Frosted glass".
 Lower "Background opacity (%)" to reveal more of the background image or desktop.
@@ -1003,7 +744,7 @@ Images also work in opaque mode; lower the background opacity if the image is di
 
 "Clear image" explicitly selects no image for this connection. "Inherit" follows connection defaults.
 The file is neither moved nor embedded, so keep it available at the same path for future starts.
-Both the file and decoded RGBA pixels are limited to 64 MiB, with a maximum of 16384 pixels per edge.
+See the [settings reference](./docs/en/configuration.md#background-and-color-correction) for image size limits and INI syntax.
 
 Desktop transparency requires a compositor that combines the windows on your desktop.
 Frosted glass requests a compositor effect that blurs the desktop behind the terminal; text and background images remain sharp.
@@ -1017,23 +758,9 @@ See [boxrig's background effects](https://github.com/kekyo/boxrig/blob/0.12.0/do
 
 Select "Improve visibility (Oklch)" under "Color filter" on the "Terminal appearance" tab to improve contrast for text and markers that are difficult to distinguish from their background. All hues, including red, green, and blue, and neutral gray, black, and white are included.
 Oklch represents color using separate lightness, chroma, and hue components. This correction preserves hue and primarily adjusts lightness.
-Colors with a contrast ratio of at least 4.5:1 against the background are retained; only colors below that threshold are adjusted. Chroma is reduced when necessary to fit the displayable color range, and neutral colors remain neutral. The default is "No correction".
+Colors with sufficient contrast are retained; difficult-to-read colors are adjusted. The default is "No correction".
 Oklch alone leaves background colors unchanged. Background images, communication, copied text, and logs are also unchanged.
 Correction uses the cell's background color as its reference; it does not adapt to individual pixels in a background image or transparent desktop.
-
-```ini
-[terminal]
-cursor_shape=bar
-cursor_blink=false
-background_mode=blur
-background_opacity=40
-background_tint_color=#203040
-background_tint_opacity=20
-background_image=/home/user/Pictures/terminal.png
-background_image_opacity=70
-background_image_fit=cover
-color_filter=oklch
-```
 
 ## Reversing Background and Text Polarity
 
@@ -1043,15 +770,13 @@ Choose one of five modes under "Color filter" on the "Terminal appearance" tab. 
 
 A palette maps color numbers to RGB values. CAM16, used in D, is a model of color appearance under different viewing conditions.
 
-| Choice | Configuration value | Behavior |
-|---|---|---|
-| Reverse lightness (A) | `reverse-lightness` | Reflects perceptual lightness while preserving hue. Bright yellow and green become nearly black |
-| Reverse contrast (B) | `reverse-contrast` | Approximately preserves the original contrast ratios, including poorly readable combinations |
-| Reverse text and background (C) | `reverse-roles` | Reverses backgrounds and adjusts chromatic text for readability while retaining hue and tone differences |
-| Reverse appearance (D, CAM16) | `reverse-cam16` | Compensates for changes in color appearance under assumed dark-to-light viewing conditions |
-| Reverse optimized palette (E) | `reverse-palette` | Adjusts color separation across the terminal palette and smoothly extends the result to directly specified RGB colors |
-
-C, D, and E adjust text, underlines, and markers to at least 4.5:1 contrast against the transformed solid background. D uses fixed viewing assumptions; it does not measure room lighting. E follows terminal palette changes and does not change colors merely because you scroll. Unused palette entries can also influence E's adjustments.
+| Choice | Behavior |
+|---|---|
+| Reverse lightness (A) | Reflects perceptual lightness while preserving hue. Bright yellow and green become nearly black |
+| Reverse contrast (B) | Approximately preserves the original contrast ratios, including poorly readable combinations |
+| Reverse text and background (C) | Reverses backgrounds and adjusts chromatic text for readability while retaining hue and tone differences |
+| Reverse appearance (D, CAM16) | Compensates for changes in color appearance under assumed dark-to-light viewing conditions |
+| Reverse optimized palette (E) | Adjusts color separation across the terminal palette |
 
 E's preview uses the standard palette. The actual display can differ when the connected application changes that palette.
 
@@ -1059,12 +784,7 @@ Only one color filter can be selected, so reversal and the existing Oklch filter
 
 Background images, the desktop behind transparent windows, Kitty images, and intrinsic color-emoji pixels are not reversed. Check the actual display when combining reversal with transparency or images. See [boxrig's supported filtering scope](https://github.com/kekyo/boxrig/blob/0.12.0/docs/en/color-filters.md).
 
-```ini
-[terminal]
-color_filter=reverse-roles
-```
-
-Use `none` to disable the filter or `oklch` for the existing visibility correction. Global and per-connection settings, inheritance, Apply, Save, and Cancel work as with other display preferences.
+See the [settings reference](./docs/en/configuration.md#background-and-color-correction) for INI syntax.
 
 ## Helping Distinguish Colors
 
@@ -1088,21 +808,10 @@ Recoloring applies to text, application-specified cell backgrounds, underlines, 
 It preserves the connection's default background.
 Combine it with "Improve visibility (Oklch)" to adjust text and marker contrast against the recolored background.
 Oklch remains independent when recoloring strength is zero.
-Save preferences globally or per connection; clear an entry or select inheritance to restore the parent setting.
-Use Apply or Save to apply previewed changes to the terminal. Cancel discards the current edits.
 
 Correction affects display only. Communication, logical terminal colors, copied text, and logs remain unchanged.
 Background images, the desktop behind transparent windows, Kitty images, and intrinsic color-emoji pixels are excluded.
 See [boxrig's display color filters](https://github.com/kekyo/boxrig/blob/0.12.0/docs/en/color-filters.md) for the supported scope.
-
-```ini
-[terminal]
-color_vision=deutan
-color_vision_strength=60
-color_filter=oklch
-```
-
-Accepted `color_vision` values are `none`, `protan`, `deutan`, and `tritan`.
 
 ## Ambiguous Character Width
 
@@ -1110,25 +819,11 @@ Characters such as "①" can occupy one or two terminal columns. These are calle
 On the "Terminal" tab, choose "1 column", "2 columns", or "Font dependent" for "Ambiguous character width". The default is "1 column".
 This setting controls the number of columns used for text placement, separately from font size.
 
-To use two columns, select that option and click "Save", or add the following to the INI file:
-
-```ini
-[terminal]
-ambiguous_width=wide
-```
-
-`narrow` means one column, `wide` means two, and `font` means font dependent. Omitting the key inherits the parent's value, falling back to one column if no parent specifies it. Explicit two-column or font-dependent settings are preserved.
-Invalid values produce a warning and use a valid inherited value or the built-in default.
-
-Font dependent divides the actual font advance by the cell width and rounds up to a whole number of columns.
-The advance is the distance to the next character, including spacing within the font; fallback fonts are measured too.
-A character with a 2.1-cell advance occupies three columns and keeps its natural width, centered with a 0.45-cell margin on each side.
-The next character starts three columns later, and centering adds no spaces to copied text.
-The block cursor covers all columns occupied by the character.
+Font dependent uses the number of columns needed by the actual font.
 
 Changes to this width policy apply to newly opened terminals. Save the setting, then reopen the terminal.
 "Apply" and reconnection in the same window retain the existing terminal's width policy.
-Changing the font itself in a font-dependent terminal remeasures and reflows its text and history while keeping the connection.
+Changing the font in a font-dependent terminal also changes text placement.
 
 A font's width cannot determine the column count expected by the remote application.
 If input positions or borders become misaligned, select one or two columns to match that application.
@@ -1153,22 +848,11 @@ including later global changes.
 "Specify for this connection" sets its own list.
 The global editor offers "App defaults" and "Specify fonts".
 Connection overrides replace the global list rather than extending it.
-Apply changes the current settings, Save persists them, and Cancel discards changes made since the last apply.
 
 These settings save only the font families; they do not include font size, weight, or style.
 Font size follows "Text size (DIP)", `Ctrl`+`=`, `Ctrl`+`-`, or the mouse wheel while holding `Ctrl`.
 
-When editing the INI file directly, specify the values as follows:
-
-```ini
-[terminal]
-font_families=DejaVu Sans Mono;Noto Sans Mono CJK JP;Monospace;
-```
-
-Omit the key to inherit, or use `font_families=` to explicitly restore the built-in list.
-Names are trimmed and must be non-empty and unique, with no commas or control characters.
-Semicolons and backslashes inside a name use the [GLib KeyFile escaping rules](https://docs.gtk.org/glib/struct.KeyFile.html)
-(`\;` and `\\`). Invalid lists produce a warning and use the next valid inherited or built-in value.
+See the [settings reference](./docs/en/configuration.md#fonts-and-character-width) for INI list syntax and escaping.
 
 ## Configuring Hotkeys
 
@@ -1207,129 +891,9 @@ Assigning a key combination to "Open connection shortcut" for a connection
 lets you open it directly with that hotkey even while the launcher is hidden.
 "Open application shortcut" under "Application settings" shows the launcher; its default is `Ctrl+Alt+T`.
 
-### Hotkeys on Wayland
-
-On Wayland, the launcher first tries the XDG Global Shortcuts portal. If it cannot register the configured hotkeys,
-it detects a Sway or labwc session, saves the hotkeys to the user's compositor configuration, and requests a reload.
-
-Because [Global Shortcuts has been officially supported since GNOME 48](https://release.gnome.org/48/developers/#global-shortcuts),
-portal registration is unavailable in Wayland sessions on GNOME 47 or earlier.
-Distributions using the standard GNOME desktop are supported starting with [Ubuntu 25.04](https://discourse.ubuntu.com/t/ubuntu-25-04-plucky-puffin-released/59303) and [Debian 13](https://www.debian.org/News/2025/20250809),
-which adopted GNOME 48 or later.
-
-The default GNOME Wayland sessions on Ubuntu 24.10 or earlier and Debian 12 or earlier have no automatic registration route through this portal or the Sway/labwc fallback.
-Automatic configuration in other Wayland environments also requires the Global Shortcuts portal or the corresponding compositor settings.
-In these environments, you may need to enable custom hotkeys (below).
-
-### Manually Enabling Hotkeys
-
-Saving application or connection hotkeys immediately updates the running launcher's registration when the desktop accepts the new bindings.
-The Global Shortcuts portal may ask you to approve the changed bindings.
-On Sway and labwc, the launcher also synchronizes its compositor bindings and requests a reload when direct registration is unavailable.
-Use `etctl setup` to check registration or retry compositor synchronization after a failure.
-
-> Normally, when you launch the elder-terms launcher, it automatically performs a process internally that is equivalent to `etctl setup`.
-> Therefore, you do not need to run this command manually,
-> but if you encounter issues with hotkeys, running this command may provide more detailed results.
-
-The command checks the running launcher's X11 or Global Shortcuts portal registration result. If it starts the launcher,
-the portal may display an approval screen. When registration fails in a Sway or labwc Wayland session,
-it saves the current hotkeys to the user's configuration file and requests the compositor to reload them.
-
-Since hotkey hooking is performed within the user session, do not run this command with `sudo`:
-
-```sh
-etctl setup
-```
-
-The command starts the launcher if needed.
-Manually configured desktop shortcuts are managed in your desktop settings and are not changed by saving elder-terms settings.
-
-Automatic setup and repeated command runs replace only the bindings managed by elder-terms. When there is no user compositor configuration,
-they preserve the system configuration they find.
-
-- For labwc, this copies the current system configuration into the user file, so later system configuration updates are not inherited automatically.
-  See [labwc configuration search and reload rules](https://labwc.github.io/labwc-config.5.html).
-- Sway sessions launched with a custom config path may require adding the generated bindings to that config for persistence.
-  See the [Sway configuration reference](https://github.com/swaywm/sway/blob/master/sway/sway.5.scd).
-
-Run `etctl unsetup` to remove hotkeys saved by the launcher or `etctl setup` in user Sway or labwc configuration.
-
-It leaves other shortcuts and the configuration files in place.
-The command works without a running launcher or graphical session.
-In an active Sway or labwc session, it also reloads the compositor; otherwise, reload the compositor or log in again to apply the change.
-X11 and Global Shortcuts portal registrations belong to the running launcher and are unaffected by this command.
-If configured hotkeys remain enabled, the launcher may recreate Sway or labwc bindings the next time it starts.
-
-```sh
-etctl unsetup
-```
-
-### Custom Enabling Hotkeys
-
-Below the version in the About panel, you can check the detected hotkey transport and whether `etctl` requests are available.
-The transport label describes X11 or portal detection, so it may show "Unavailable" even when Sway or labwc bindings are active.
-
-X11 sessions register hotkeys directly with X11 and do not require D-Bus.
-On Wayland, the launcher uses the Global Shortcuts portal first, then supported Sway or labwc configuration when necessary.
-If `etctl setup` does not support your desktop, assign a desktop shortcut to one of these commands:
-
-```sh
-# Open elder-terms launcher window
-etctl open-application
-
-# open 'Local Terminal' connection window
-etctl open-connection 'Local Terminal'
-```
-
-Replace `Local Terminal` with the exact saved connection name displayed in the launcher, without the `.ini` extension.
-Quote names containing spaces or shell characters.
-
-The launcher must already be running. Use its existing login autostart entry;
-"Background only" is useful without a system tray.
-
-Both processes must run as the same user with the same `XDG_RUNTIME_DIR`,
-pointing to an existing private runtime directory.
-`etctl` requires neither a display connection nor D-Bus.
-
-It returns 0 when the launcher accepts a request, 1 for a communication or request error,
-and 2 for invalid arguments.
-Acceptance does not mean the terminal's connection to a remote host has succeeded.
-
-For [labwc](https://labwc.github.io/labwc-actions.5.html), add this binding inside the existing `<keyboard>` section of `~/.config/labwc/rc.xml`,
-then reload your configuration with `labwc --reconfigure`:
-
-```xml
-<keybind key="C-A-T">
-  <action name="Execute" command="etctl open-application" />
-</keybind>
-```
-
-For [Sway](https://github.com/swaywm/sway/blob/master/sway/sway.5.scd),
-add this to your existing configuration and reload it:
-
-```text
-bindsym Ctrl+Mod1+t exec etctl open-application
-```
-
-For [Hyprland's Lua configuration](https://wiki.hypr.land/Configuring/Basics/Binds/):
-
-```lua
-hl.bind("CTRL + ALT + T", hl.dsp.exec_cmd("etctl open-application"))
-```
-
-For [Hyprland 0.54 and earlier using hyprlang](https://wiki.hypr.land/0.54.0/Configuring/Binds/):
-
-```text
-bind = CTRL ALT, T, exec, etctl open-application
-```
-
-Replace an existing binding for the same key combination if necessary.
-The launcher and `etctl setup` modify the user's Sway or labwc configuration. Avoid adding the same binding again when configuring shortcuts manually.
-
-Other desktops can use the same commands through their shortcut settings.
-If your compositor provides an [`XDG_ACTIVATION_TOKEN`](https://gitlab.freedesktop.org/wayland/wayland-protocols/-/blob/main/staging/xdg-activation/xdg-activation-v1.xml),
-the command forwards it for window activation; focus remains subject to your compositor's policy.
+Automatic hotkey registration depends on the desktop environment.
+On Sway and labwc, the launcher saves hotkeys in your compositor configuration files.
+See [desktop-specific hotkey setup](./docs/en/hotkeys.md) for troubleshooting, manual registration, and removal.
 
 ## Configuring the Terminal Type
 
@@ -1365,9 +929,7 @@ that are already open do not change language immediately either.
 ![Version in the About dialog](./images/about-dialog.png)
 
 Open the application menu in either the launcher or a terminal window and
-select "About elder-terms". Both entries open the same launcher-owned dialog,
-whose "About" page shows the version embedded in the running build or deb
-package.
+select "About elder-terms". The "About" page shows the version of elder-terms currently running.
 
 > Note: The elder-terms project owner is a native Japanese speaker who
 > understands Japanese and English but cannot read any of the other languages.
@@ -1412,237 +974,31 @@ character encoding has been converted for display.
 
 ![Macro settings](./images/macro-settings.png)
 
-Macros (automatic macros) monitor text received from the remote host with
-regular expressions. When a match is found, they either send text to the host
-or run a specified command. They are available for local terminal, TELNET,
-serial, and SSH connections, but cannot be defined for file transfer connections
-or Connection defaults.
+Macros automate sending text or running external commands in response to received text.
+For example, they can send Enter when a prompt appears or record an error message in a log.
+They work with local terminal, TELNET, serial, and SSH connections.
 
-In text to send, commands, and command arguments, `${0}` refers to the entire
-regular-expression match, `${1}` and `${2}` refer to numbered captures, and
-`${name}` refers to a named capture. Write a literal `$` as `$$`.
-
-Macro rules are evaluated from top to bottom. Even if multiple regular
-expressions match the same received line, only the first matching rule runs.
-Use "Move up" and "Move down" to place higher-priority rules nearer the top.
-When editing the INI file directly, the order in which `[macro.<rule-id>]`
-sections appear determines their priority.
-
-The following examples show the format used when editing a connection's INI
-file directly. You can configure the same values on the "Macro" tab in the
-settings dialog.
-
-This rule automatically sends Enter when the remote host displays
-`Press ENTER to continue`:
-
-```ini
-[macro.continue]
-regex=^Press ENTER to continue$
-send=\r\n
-```
-
-This rule extracts a token from text such as `CHALLENGE TOKEN` and responds
-with `RESPONSE TOKEN` followed by a newline:
-
-```ini
-[macro.challenge]
-regex=^CHALLENGE (?<token>[A-Z]+)$
-send=RESPONSE ${token}\r\n
-```
-
-When a line such as `ERROR: Connection failed` is received, this rule passes
-the message portion to the `logger` command and records it in the system log.
-`arguments` is semicolon-delimited, and each item becomes a separate command
-argument.
-
-```ini
-[macro.log-error]
-regex=^ERROR: (.+)$
-command=/usr/bin/logger
-arguments=-t;elder-terms;${1};
-```
-
-Commands are launched directly without a shell, so shell syntax such as pipes
-and redirections is not interpreted. Specify each required value as a separate
-item in `arguments`.
+On the connection's "Macro" tab, specify a regular expression for the received text and the action to perform.
+Rules are evaluated from top to bottom, and only the first matching rule runs.
+See [macro details](./docs/en/terminal-links.md#configuring-macros) for examples and capture syntax.
 
 ## Configuring Terminal Link Actions
 
 ![Terminal link action settings](./images/terminal-link-actions.png)
 
-Hold `Ctrl` and left-click a recognized link to run its configured external
-command. A rule can inspect either the target of an OSC 8 escape sequence or a
-matching substring in visible terminal text. Rules are evaluated in their
-displayed order, and only the first matching rule is run.
+Hold Ctrl and click a link to open it in the configured application.
+Right-click and choose "Copy Link" to copy the target.
 
-Right-click a recognized link and choose "Copy Link" to copy its target to the
-clipboard. For visible-text links, this copies the entire matched text. For
-OSC 8 links, it copies the original target URI. If terminal output changes while
-the menu is open, the target from when you opened the menu is still copied.
+The defaults recognize HTTP/HTTPS URLs, existing absolute and home-relative local paths, and VS Code links.
+Local paths refer to files on the computer running elder-terms.
 
-Select a connection in the launcher and open its "Links" tab to enable or
-disable link actions, add and remove rules, change their order, edit command
-arguments, and restore the built-in defaults. The same tab is available from
-the settings dialog in a running terminal. Link rules are saved separately
-for each connection.
+Use the connection's "Links" tab to enable or disable links, change their display, and define custom rules.
+Links recognized in visible text are underlined on hover by default.
+OSC 8 links, whose targets and display ranges are explicitly supplied by the connection, are always underlined by default.
+With existence-checked display, local paths remain dimmed until they are confirmed valid.
 
-When a connection defines no link rules, the built-in rules recognize:
-
-- HTTP and HTTPS URLs in OSC 8 targets and visible terminal text, opened with
-  `xdg-open` in the desktop's default application.
-- OSC 8 targets in `vscode://file/absolute/path:line` and
-  `vscode://file/absolute/path:line:column` form, opened with `code
-  --reuse-window --goto`.
-- Absolute paths such as `/foo/bar/baz` and home-relative paths such as
-  `~/Downloads/` in visible terminal text, opened with
-  `xdg-open` when they name a local file or directory. Surrounding quotes are
-  excluded from the link.
-
-The built-in HTTP/HTTPS recognition excludes following Japanese punctuation and
-closing brackets without a matching opening bracket. For example,
-`参照: https://host/a、詳細は後述` and `[label](https://host/a)` both open and
-copy `https://host/a`.
-Balanced brackets inside a URL, IPv6 address brackets, percent escapes, queries,
-and fragments are preserved. A URL continues across screen-width wrapping;
-an explicit newline ends it.
-Punctuation in prose cannot always be distinguished from part of a URL. For
-example, commas in a query are retained as values. These boundaries apply to
-the built-in URL expression. They do not trim matches of an edited expression
-or the URI explicitly supplied by OSC 8.
-
-URI escapes in captures, such as `%20`, can be decoded before a value is
-passed to the command. "Restore defaults" removes the connection's explicit
-link settings, so later built-in default changes also take effect.
-
-Each rule selects one recognition source:
-
-- "OSC 8 target" applies the regular expression to the complete raw target.
-- "Visible terminal text" finds a matching substring under the pointer. The
-  expression must not match an empty string.
-
-The default local path rule recognizes paths starting with `/` or `~/`, with
-components containing letters, digits, combining marks, `_`, `.`, and `-`.
-A trailing `/` is allowed. Substrings of `relative/foo/bar` or `/foo//bar` do not
-become links.
-Setting "Text boundaries" to "Whitespace, punctuation or line ends" requires
-delimiters around a match. The default local path rule enables this option.
-The following punctuation also acts as a delimiter, so only the path becomes a
-link in `user@host:~/dir$`, `path=/tmp;`, and `「/tmp」`.
-
-| Delimiter position | Accepted characters |
-| --- | --- |
-| Either side | Whitespace, quotes `'` and `"`, backticks, `:`, `=`, `;`, `\|`, `&`, `<`, `>`, `,`, `、`, `。`, and line ends |
-| Before the match only | `(`, `[`, `{`, `（`, `「`, `『` |
-| After the match only | `)`, `]`, `}`, `）`, `」`, `』`, `$` |
-
-Delimiter characters are excluded from copied links and launch targets.
-The same rules apply across screen line wraps. A period remains part of a
-filename; quote or otherwise enclose a path before adding a sentence-ending
-period. Custom rules can change both the expression and boundary setting.
-
-Link rules and received-text macros use [boxrig pattern syntax](https://github.com/kekyo/boxrig/blob/0.12.0/docs/en/regex.md).
-Character classes, groups, alternatives, repetition, and numbered or named captures are supported. Backreferences, lookahead, lookbehind, and expressions matching an empty string are not supported.
-`\d`, `\s`, and `\w` cover ASCII. Use Unicode general categories such as `\p{L}` for letters and `\p{Nd}` for decimal digits.
-`.` also matches newlines, and `^` and `$` anchor the complete input. Matching is case-sensitive and chooses the longest match at the same starting position.
-A complete match cannot split a visible character composed of multiple Unicode characters. Use an expression such as `[\p{L}\p{M}]+` to include combining marks.
-
-The command is a fixed executable name or path. It is launched directly without a shell,
-so pipes, redirections, and other shell syntax are not interpreted. Capture
-templates are expanded only in arguments and in the optional validation path.
-An expanded argument or validation path starting with `~/` uses the home
-directory specified by `HOME` on the computer running elder-terms. If `HOME`
-is unset or is not an absolute path, the home-relative link cannot be opened.
-A tilde inside a URL or path is preserved, and copying a link retains its
-original text.
-
-Each rule's "Path validation" setting can be switched between "Do not validate"
-and "Existing local file or directory". In the latter
-mode, the expanded path must be absolute and must name an existing regular
-file or directory on the computer running elder-terms; otherwise the command
-is not run. Relative paths are rejected because terminal display text does not
-provide a reliable local working directory, particularly for remote sessions.
-
-The top of the "Links" tab offers separate "Regex link display" and "OSC 8 link
-display" settings. Regex links are found by regular expressions in visible
-terminal text. OSC 8 links have a target and display range explicitly supplied
-by the connection.
-The defaults are "Underline on hover" for regex links and "Always underline"
-for OSC 8 links. Each setting offers four choices:
-
-| Choice | Display |
-| --- | --- |
-| No decoration | Adds no link styling. |
-| Always underline | Adds underlines without changing brightness. |
-| Underline on hover | Underlines only the link under the pointer. Holding Ctrl is unnecessary. |
-| Validate links (with dimming) | Adds underlines and dims local paths until confirmed valid. Valid paths return to normal brightness; other links look the same as always underline. |
-
-Recognition, copying, and Ctrl+click remain available in every display mode.
-When the two sources overlap, the OSC 8 display setting takes precedence.
-OSC 8 links without a matching action rule also receive the chosen display;
-a display setting does not authorize additional targets to open.
-Original text and background colors, inverse, bold, and existing underline styles
-are preserved. Dimming operates on corrected display colors in Oklch, halving
-the lightness difference from the background. Hue is retained; chroma is reduced
-only when needed to fit the display gamut.
-The built-in local path rules enable path validation. OSC 8 also recognizes
-absolute paths, home-relative paths starting with `~/`, and URIs starting with
-`file:///` or `file://localhost/`. The decoded URI path is validated and its
-visible label is decorated. Terminal input and drawing continue
-while existence checks run. `Ctrl`+click checks the path again, running the
-command if valid or showing a modal dialog with the reason if invalid.
-Both display settings inherit independently from global settings into connection
-settings. Each can also be changed in a running terminal: Apply reflects the
-changes, and Cancel discards unapplied changes.
-In INI files, set `regex_link_decoration` and `osc8_link_decoration` under
-`[terminal]` to `none`, `underline`, `hover`, or `validated`. This example
-matches the built-in defaults:
-
-```ini
-[terminal]
-regex_link_decoration=hover
-osc8_link_decoration=underline
-```
-
-The same settings can be edited directly in a connection's INI file. This
-example recognizes an absolute local source path followed by a line number:
-
-```ini
-[hyperlink]
-enabled=true
-
-[hyperlink.local-source]
-source=terminal-text
-regex=(?<path>/[^\s:]+):(?<line>[1-9][0-9]*)
-command=code
-arguments=--reuse-window;--goto;${path}:${line};
-path_validation=existing-local-path
-path=${path}
-```
-
-`source` is `osc8` or `terminal-text` and defaults to `osc8` when omitted.
-`whole_token=true` requires the whitespace, punctuation or line-end boundaries
-listed above around visible-text matches. It defaults to `false` and does not
-affect OSC 8 targets.
-`path_validation` is `none` or `existing-local-path`; `path` is required for
-the latter. `[hyperlink.<rule-id>]` sections are evaluated in file order. Rule
-IDs may contain letters, digits, `-`, and `_`.
-
-`arguments` is semicolon-delimited, and each item becomes a separate command
-argument. `${0}` refers to the entire match, `${1}` and `${2}` to numbered
-captures, and `${name}` to a named capture. `${path|uri-decode}` decodes URI
-escapes in that capture. Write a literal `$` as `$$`.
-
-Defining at least one `[hyperlink.<rule-id>]` section replaces all built-in
-rules for that connection. When no rule section is defined, the built-in rules
-apply. To disable all link actions, set `[hyperlink]` `enabled=false` in the
-connection file. Link sections in `global.ini` are ignored. A temporary launch
-profile similarly uses its own rules, or the built-in rules when it defines
-none.
-
-OSC 8 targets and visible text may be supplied by a remote host. Restrict each
-regular expression to the formats you intend to accept. Invalid rules,
-undefined captures, invalid URI escapes, and failed path validation do not run
-the command.
+Only the first matching custom rule runs. Since rules launch external commands, restrict the accepted formats to those you need.
+See [terminal link details](./docs/en/terminal-links.md) for punctuation boundaries, display choices, regular expressions, and INI syntax.
 
 ## INI File Locations
 
@@ -1660,162 +1016,16 @@ and values changed for an individual connection take precedence over them.
 
 ---
 
-## Building from Source
+## Using the Source
 
-NFS requires system [libnfs](https://github.com/sahlberg/libnfs) 5.0.2 or later and its development headers.
-
-WebDAV requires libcurl 7.88.1 or newer with HTTP/HTTPS and asynchronous DNS, plus [libxml2](https://gnome.pages.gitlab.gnome.org/libxml2/) 2.9.14 or newer.
-
-The FTP client requires [libcurl](https://curl.se/libcurl/) 7.88.1 or newer
-with FTP and asynchronous DNS support. FTPS additionally requires a
-[TLS-enabled libcurl build](https://curl.se/libcurl/c/libcurl-tutorial.html).
-The Debian/Ubuntu packages use OpenSSL-backed libcurl and depend on
-`ca-certificates` for the default trust store. Source builds also need OpenSSL
-headers and libraries. Certificate confirmation must use the same OpenSSL
-version as libcurl; the application checks this before connecting.
-
-To build on Ubuntu or Debian, install a C++20-capable compiler, Meson, Ninja,
-gettext, and the development packages for the libraries used by elder-terms:
-
-Rendering requires GTK3 3.24 or later, Pango 1.50 or later, Cairo 1.18 or later, IBus 1.5.29 or later, and Wayland client 1.22 or later. See the [boxrig build requirements](https://github.com/kekyo/boxrig/blob/0.12.0/docs/en/building.md).
-
-```bash
-sudo apt update
-sudo apt install build-essential git meson ninja-build pkg-config gettext imagemagick libgdk-pixbuf2.0-bin librsvg2-common \
-  libglib2.0-dev libgtk-3-dev libgdk-pixbuf-2.0-dev libcanberra-dev libx11-dev libxfixes-dev \
-  libxkbcommon-dev liburing-dev libudev-dev libsystemd-dev libssh-dev libnfs-dev libcurl4-openssl-dev \
-  libcairo2-dev libpango1.0-dev libfontconfig1-dev libepoxy-dev libibus-1.0-dev \
-  libwayland-dev libgl-dev libegl-dev libssl-dev libxml2-dev libtasn1-6-dev libtasn1-bin doxygen patch ca-certificates xz-utils xdg-utils
-```
-
-Node.js 22.18 or later is also required for
-[direct TypeScript execution](https://nodejs.org/docs/latest-v22.x/api/typescript.html).
-
-Material Icons are rendered to PNG using `gdk-pixbuf-thumbnailer` with SVG support
-and ImageMagick's `convert` during the build.
-The generated images are included in the distribution; these generation tools
-are not needed at runtime.
-
-Check the installed Node.js version when using your distribution's package:
-
-```bash
-sudo apt install nodejs
-node --version
-```
-
-If the distribution's Node.js is too old, use an
-[official Node.js distribution](https://nodejs.org/en/download) or a version
-manager of your choice, such as [nvm](https://github.com/nvm-sh/nvm).
-
-> You may find it unusual to use Node.js in a GTK project. It is required
-> because the GTK UI tests use
-> [gestament](https://github.com/kekyo/gestament/).
-
-When cloning the source for the first time, include the submodules to obtain
-the [cardio](https://github.com/kekyo/cardio/),
-[libxyzm](https://github.com/kekyo/libxyzm/), and [boxrig](https://github.com/kekyo/boxrig/) dependencies:
-
-```bash
-git clone --recurse-submodules https://github.com/kekyo/elder-terms.git
-```
-
-If you have already cloned the repository, initialize and update its
-submodules with:
-
-```bash
-git submodule update --init --recursive
-```
-
-Install the npm dependencies and build all workspaces:
-
-```bash
-npm ci
-npm run build
-```
-
-Run the built launcher from the repository root with the following command.
-The launcher automatically detects the terminal and shared SFTP/FTP file
-transfer executables in the same build directory.
-
-```bash
-./.build/elder-terms/elder-terms
-```
-
-Alternatively:
-
-```bash
-npm run dev
-```
-
-To run the tests (which take a very long time because they include UI tests):
-
-```bash
-npm run test
-```
-
-## Building deb Packages
-
-The package-building scripts combine the launcher, terminal, and shared
-SFTP/FTP file transfer executables; dedicated shared library and UI data;
-translation catalogs; desktop and XDG autostart entries; icons;
-documentation; and license notices into a single `elder-terms` deb package.
-
-The following package combinations are supported:
-
-| Distribution | Release | Architectures |
-| :--- | :--- | :--- |
-| Debian | trixie | amd64, i386, arm64, armhf, riscv64 |
-| Ubuntu | 24.04 | amd64, arm64 |
-| Ubuntu | 26.04 | amd64, arm64 |
-
-Debian bookworm is excluded because its standard [Cairo 1.16](https://packages.debian.org/bookworm/libcairo2-dev) and [IBus 1.5.27](https://packages.debian.org/bookworm/libibus-1.0-dev) are below the rendering library's required versions.
-
-The host requires Podman, binfmt/QEMU for non-native targets, `dpkg-deb`,
-`readelf`, GNU Make, Node.js 22.18 or later, npm, and `npx`.
-Preparing preset images also requires `gdk-pixbuf-thumbnailer` with SVG support,
-ImageMagick's `convert`, and GLib's `glib-compile-resources`. Run `npm ci` first.
-From the repository root, generate the
-reusable prerequisite images once, then build packages for every combination:
-
-```sh
-./prereq.sh
-./build_package_all.sh
-```
-
-Regenerate the images after changing the prerequisite package configuration:
-
-```sh
-./prereq.sh --force
-```
-
-Both commands support filtering with `--distro`, `--release`, `--arch`, and
-`--jobs`. For example, to build only for Ubuntu 24.04 amd64, matching the host:
-
-```sh
-./prereq.sh \
-  --distro ubuntu --release 24.04 --arch amd64
-./build_package.sh \
-  --target deb --distro ubuntu --release 24.04 --arch amd64
-```
-
-Architecture aliases such as `amd64`, `i386`, `armhf`, and `aarch64` are also
-accepted. `noble` and `resolute` are treated as Ubuntu 24.04 and 26.04,
-respectively. Pass `--debug` to preserve debugging information. If `--version`
-is omitted, the version is determined by
-`npx screw-up format -e '{version}' -f`.
-
-Artifacts are stored in `artifacts/deb/`, with names such as
-`elder-terms-VERSION-ubuntu-24.04-amd64.deb`. Each package is inspected for its
-control metadata, runtime dependencies, installed layout, symbolic-link
-targets, and ELF architecture. It is then installed in a fresh container for
-the same distribution and architecture to verify the required files and
-dynamic-library resolution.
+To build and run from source, see the [build guide](./docs/en/building.md).
+It covers requirements, building and running, tests, and deb package generation.
 
 ## License
 
 Under MIT.
 
 Bundled connection artwork and emoji names are covered by their respective
-licenses. See [artwork sources and licenses](./data/connection-icons/SOURCES.md).
+licenses. See [artwork sources and licenses](./docs/ja/connection-icon-artwork.md).
 Distribution packages include the licenses and notices under
 `/usr/share/doc/elder-terms/licenses/connection-icons/`.
