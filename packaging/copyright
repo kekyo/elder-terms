@@ -12,6 +12,10 @@ Comment: The bundled boxrig runtime includes third-party code and data under
  See https://github.com/sahlberg/libsmb2/tree/727feaaa6d0f4fed1bae57745fbc2c5db9a30e64
  The bundled libdsm license, correctness patch, and corresponding patched
  source archive are installed in /usr/share/doc/elder-terms/licenses/libdsm/.
+ The library and this project's modifications are provided under LGPL-2.1+.
+ Each modified file records the changes and their dates. Rebuilding and
+ replacement instructions are in docs/ja/smb.md and docs/en/smb.md within
+ this documentation directory.
  See https://github.com/videolabs/libdsm/tree/0f3edc6df6ab5950f2550d453035351440f71e31
 
 Files: *

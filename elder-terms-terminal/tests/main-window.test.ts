@@ -1208,8 +1208,12 @@ describe.concurrent('elder-terms-terminal main window', () => {
                     `ROUND ${round}`
                   );
                 });
+                // Connection and macro replies can precede the final draw.
+                const layout = await waitForResult(() =>
+                  readTerminalGridLayout(app)
+                );
                 await expectVideoFrame(
-                  (await readTerminalGridLayout(app)).terminalCapture,
+                  layout.terminalCapture,
                   `connected-${round}`
                 );
                 await waitForResult(async () => {
@@ -1254,8 +1258,11 @@ describe.concurrent('elder-terms-terminal main window', () => {
                 }
               }
 
-              const { bounds } = (await readTerminalGridLayout(app))
-                .terminalCapture;
+              // New frames may be pending after recording; selection only
+              // needs the terminal bounds, not settled rendering metrics.
+              const { bounds } = await (
+                await app.getById('terminal_view')
+              ).capture();
               await selectTerminalCells(
                 app,
                 bounds,

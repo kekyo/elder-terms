@@ -186,11 +186,11 @@ validate_installed_package() {
 		/usr/share/doc/elder-terms/licenses/boxrig/Wayland-protocols-NOTICES.md \
 		/usr/share/doc/elder-terms/licenses/jemalloc/COPYING \
 		/usr/share/doc/elder-terms/licenses/libdsm/COPYING \
-		/usr/share/doc/elder-terms/licenses/libdsm/libdsm-source.tar.gz \
+		/usr/share/doc/elder-terms/licenses/libdsm/libdsm-source.tar.xz \
 		/usr/share/doc/elder-terms/licenses/libdsm/libdsm-correctness.patch \
 		/usr/share/doc/elder-terms/licenses/libsmb2/COPYING \
 		/usr/share/doc/elder-terms/licenses/libsmb2/LICENCE-LGPL-2.1.txt \
-		/usr/share/doc/elder-terms/licenses/libsmb2/libsmb2-source.tar.gz \
+		/usr/share/doc/elder-terms/licenses/libsmb2/libsmb2-source.tar.xz \
 		/usr/share/doc/elder-terms/copyright; do
 		assert_file "$installed_file"
 	done
@@ -239,6 +239,8 @@ require_command cmake
 require_command autoconf
 require_command meson
 require_command pkg-config
+require_command tar
+require_command xz
 
 for pkg_config_module in \
 	gio-2.0 \
@@ -344,11 +346,11 @@ for staged_file in \
 	usr/share/doc/elder-terms/licenses/boxrig/Wayland-protocols-NOTICES.md \
 	usr/share/doc/elder-terms/licenses/jemalloc/COPYING \
 	usr/share/doc/elder-terms/licenses/libdsm/COPYING \
-	usr/share/doc/elder-terms/licenses/libdsm/libdsm-source.tar.gz \
+	usr/share/doc/elder-terms/licenses/libdsm/libdsm-source.tar.xz \
 	usr/share/doc/elder-terms/licenses/libdsm/libdsm-correctness.patch \
 	usr/share/doc/elder-terms/licenses/libsmb2/COPYING \
 	usr/share/doc/elder-terms/licenses/libsmb2/LICENCE-LGPL-2.1.txt \
-	usr/share/doc/elder-terms/licenses/libsmb2/libsmb2-source.tar.gz \
+	usr/share/doc/elder-terms/licenses/libsmb2/libsmb2-source.tar.xz \
 	usr/share/doc/elder-terms/copyright; do
 	assert_file "$stage_dir/$staged_file"
 done

@@ -85,6 +85,7 @@ try {
     name,
   ]).trim();
   for (const mode of [
+    'stat-framing',
     'cancel',
     'timeout',
     'disconnect',

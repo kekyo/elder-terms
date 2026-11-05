@@ -162,7 +162,16 @@ static cardio::promise<void> exercise_response(const std::string &mode) {
   auto client = co_await open_smb_server_async(options, {});
   std::cout << "READY fault" << std::endl;
   co_await input_byte();
-  if (mode == "partial-shares") {
+  if (mode == "stat-framing") {
+    const auto file = co_await client->lstat_async("/names/before.txt", {});
+    require(file && file->size == 7, "A strict SMB1 server must return file metadata");
+    require((co_await client->lstat_async("/names/絵文字😀.txt", {})).has_value(),
+            "A strict SMB1 server must inspect Unicode paths");
+    require(!(co_await client->lstat_async("/names/missing.txt", {})),
+            "A strict SMB1 server must distinguish absent files from invalid requests");
+    require(!(co_await client->lstat_async("/names/x", {})),
+            "A strict SMB1 server must accept short paths with no transaction data");
+  } else if (mode == "partial-shares") {
     bool failed = false;
     try { (void)co_await client->load_directory_async("/", {}); }
     catch (const RemoteFileError &error) { failed = !error.connection_lost; }
@@ -199,13 +208,22 @@ static cardio::promise<void> exercise_response(const std::string &mode) {
   std::cout << "PASS SMB1 fault " << mode << std::endl;
 }
 
-static cardio::promise<void> exercise(const std::string &transport) {
+static cardio::promise<void> exercise(const std::string &address, const std::string &transport) {
+  const auto setting = [](const char *name, const char *fallback) {
+    const char *value = std::getenv(name);
+    return std::string(value ? value : fallback);
+  };
+  const auto share = "/" + setting("ELDER_SMB_SHARE", "probe");
+  const auto empty = "/" + setting("ELDER_SMB_EMPTY_SHARE", "empty");
+  const auto names_share = "/" + setting("ELDER_SMB_NAMES_SHARE", "names");
+  const auto denied_share = "/" + setting("ELDER_SMB_DENIED_SHARE", "denied");
+  const auto unicode_share = setting("ELDER_SMB_UNICODE_SHARE", "日本語 space");
   SmbClientOpenOptions options;
-  options.connection.address = "127.0.0.1";
-  options.connection.domain = "WORKGROUP";
+  options.connection.address = address;
+  options.connection.domain = setting("ELDER_SMB_NETBIOS_NAME", "WORKGROUP");
   options.connection.port = transport == "NBT" ? 139 : 445;
-  options.connection.netbios_name = "ELDERTEST";
-  options.connection.username = "elder";
+  options.connection.netbios_name = setting("ELDER_SMB_NETBIOS_NAME", "ELDERTEST");
+  options.connection.username = setting("ELDER_SMB_USER", "elder");
   options.connection.require_signing = false;
   options.password = std::getenv("ELDER_SMB_PASSWORD");
   options.connection.version = "1";
@@ -222,8 +240,14 @@ static cardio::promise<void> exercise(const std::string &transport) {
   rejected_options.connection.username = "unknown-plan18-user";
   rejected = false;
   try { (void)co_await open_smb_server_async(rejected_options, {}); }
-  catch (const RemoteFileError &error) { rejected = std::string(error.what()).find("guest") != std::string::npos; }
-  require(rejected && children().empty(), "Guest mapping must not count as requested-user authentication");
+  catch (const RemoteFileError &error) {
+    // Windows can either reject an unknown user or map it to Guest.
+    const std::string message = error.what();
+    rejected = message.find("guest") != std::string::npos ||
+      (std::getenv("ELDER_SMB_WINDOWS") && message.find("login failed") != std::string::npos);
+    if (!rejected) std::cerr << "Unexpected unknown-user error: " << message << std::endl;
+  }
+  require(rejected && children().empty(), "Unknown users must not count as requested-user authentication");
   auto client = co_await open_smb_server_async(options, {});
   require(actual_version == "SMB 1", "SMB1 must report its actual protocol");
   if (std::getenv("ELDER_SMB_DENY_ENUMERATION")) {
@@ -240,24 +264,32 @@ static cardio::promise<void> exercise(const std::string &transport) {
                                std::to_string(listing->entries.size()) + " of " + std::to_string(std::stoul(bulk) + 5));
   } else {
     auto shares = co_await client->load_directory_async("/", {});
-    require(std::any_of(shares.entries.begin(), shares.entries.end(), [](const auto &item) {
-      return item.name == "日本語 space" && item.role == RemoteFileRole::smb_share;
+    require(std::any_of(shares.entries.begin(), shares.entries.end(), [&](const auto &item) {
+      return item.name == unicode_share && item.role == RemoteFileRole::smb_share;
     }), "The browser must expose Unicode shares");
   }
-  const auto names = co_await client->load_directory_async("/names", {});
+  const auto names = co_await client->load_directory_async(names_share, {});
   require(names.entries.size() == 3, "Listing must retain every Unicode name");
-  require((co_await client->load_directory_async("/empty", {})).entries.empty(), "Empty share must remain browsable");
+  require((co_await client->load_directory_async(empty, {})).entries.empty(), "Empty share must remain browsable");
   bool denied = false;
-  try { (void)co_await client->load_directory_async("/denied", {}); }
+  try { (void)co_await client->load_directory_async(denied_share, {}); }
   catch (const RemoteFileError &error) { denied = !error.connection_lost; }
   require(denied, "A denied share must report an operation error");
-  (void)co_await client->load_directory_async("/probe", {});
-  co_await client->make_directory_async("/probe/folder", std::nullopt, {});
+  if (const char *readonly = std::getenv("ELDER_SMB_READONLY_SHARE")) {
+    const auto path = "/" + std::string(readonly);
+    (void)co_await client->load_directory_async(path, {});
+    bool refused = false;
+    try { co_await client->make_directory_async(path + "/must-not-create", {}, {}); }
+    catch (const RemoteFileError &error) { refused = !error.connection_lost; }
+    require(refused, "Read-only shares must refuse creation without disconnecting");
+  }
+  (void)co_await client->load_directory_async(share, {});
+  co_await client->make_directory_async(share + "/folder", std::nullopt, {});
   std::vector<std::byte> bytes(8 * 1024 * 1024 + 123);
   for (std::size_t index = 0; index < bytes.size(); ++index)
     bytes[index] = static_cast<std::byte>(index % 251);
-  const std::string temporary = "/probe/folder/upload.tmp";
-  const std::string destination = "/probe/folder/日本語😀.txt";
+  const std::string temporary = share + "/folder/upload.tmp";
+  const std::string destination = share + "/folder/日本語😀.txt";
   auto writer = std::move(co_await client->open_write_async(temporary, bytes.size(), std::nullopt, {}));
   co_await writer->write_all_async(bytes, {});
   co_await writer->close_async({});
@@ -284,18 +316,18 @@ static cardio::promise<void> exercise(const std::string &transport) {
   co_await client->commit_upload_async(temporary, destination, true, {});
   require((co_await client->lstat_async(destination, {}))->size == 0, "Replacement must commit an empty upload");
   bool protected_root = false;
-  try { co_await client->remove_directory_async("/probe", {}); }
+  try { co_await client->remove_directory_async(share, {}); }
   catch (const RemoteFileError &error) { protected_root = !error.connection_lost; }
   require(protected_root, "A share root must not be removed");
-  co_await client->rename_async(destination, "/probe/folder/renamed.txt", {});
-  co_await client->remove_file_async("/probe/folder/renamed.txt", {});
-  co_await client->remove_directory_async("/probe/folder", {});
-  require(!(co_await client->lstat_async("/probe/folder", {})), "Deleted directory must be absent");
+  co_await client->rename_async(destination, share + "/folder/renamed.txt", {});
+  co_await client->remove_file_async(share + "/folder/renamed.txt", {});
+  co_await client->remove_directory_async(share + "/folder", {});
+  require(!(co_await client->lstat_async(share + "/folder", {})), "Deleted directory must be absent");
   co_await stop_smb_client_async(client);
   require(children().empty(), "Normal stop must reap its worker");
   require(parent_locale == std::setlocale(LC_ALL, nullptr), "The parent locale must remain unchanged");
   client = co_await open_smb_server_async(options, {});
-  require((co_await client->load_directory_async("/empty", {})).entries.empty(), "Reconnect must create a usable worker");
+  require((co_await client->load_directory_async(empty, {})).entries.empty(), "Reconnect must create a usable worker");
   co_await stop_smb_client_async(client);
   std::cout << "PASS SMB1 client" << std::endl;
 }
@@ -307,12 +339,12 @@ int main(int argc, char **argv) {
   int status = 0;
   const auto run = [&]() -> cardio::promise<void> {
     try {
-      if (argc == 2 && (std::string_view(argv[1]) == "short-write" || std::string_view(argv[1]) == "invalid-name" || std::string_view(argv[1]) == "connect-timeout" || std::string_view(argv[1]) == "partial-shares"))
+      if (argc == 2 && (std::string_view(argv[1]) == "short-write" || std::string_view(argv[1]) == "invalid-name" || std::string_view(argv[1]) == "connect-timeout" || std::string_view(argv[1]) == "partial-shares" || std::string_view(argv[1]) == "stat-framing"))
         co_await exercise_response(argv[1]);
       else if (argc == 2 && std::string_view(argv[1]).find('-') != std::string_view::npos && std::string_view(argv[1]) != "worker-exit")
         co_await exercise_upload_fault(argv[1]);
       else if (argc == 2) co_await exercise_fault(argv[1]);
-      else co_await exercise(argc > 2 ? argv[2] : "TCP");
+      else co_await exercise(argc > 2 ? argv[1] : "127.0.0.1", argc > 2 ? argv[2] : "TCP");
     }
     catch (const std::exception &error) { std::cerr << error.what() << std::endl; status = 1; }
     group.shutdown();
