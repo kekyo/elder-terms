@@ -73,6 +73,67 @@ int main() {
       return *resolved->action;
     };
 
+    const std::string pipewire_docs = "https://docs.pipewire.org/page_module_combine_stream.html";
+    const std::string pipewire_code = "https://github.com/PipeWire/pipewire/blob/1.0.5/src/modules/module-combine-stream.c";
+    const std::vector<std::pair<std::string, std::vector<std::string>>> prose_cases = {
+        {"参照: https://host/a、詳細は後述", {"https://host/a"}},
+        {"url=\"https://host/a\" status=200", {"https://host/a"}},
+        {"(https://host/a) [label](https://host/b)", {"https://host/a", "https://host/b"}},
+        {"https://host/a_(b) https://host/a_(b_(c))", {"https://host/a_(b)", "https://host/a_(b_(c))"}},
+        {"https://host/a)、次の文章", {"https://host/a"}},
+        {"https://[2001:db8::1]/a", {"https://[2001:db8::1]/a"}},
+        {"https://host/a%28b%29?q=a,b&x=%5D#part", {"https://host/a%28b%29?q=a,b&x=%5D#part"}},
+        {"https://host/a,https://host/b;https://host/c.", {"https://host/a", "https://host/b", "https://host/c"}},
+        {"https://host/a?q=a,b,", {"https://host/a?q=a,b,"}},
+        {"https://例え.test/日本語_(説明)。後続", {"https://例え.test/日本語_(説明)"}},
+        {"\"[Combine Streamの仕様](" + pipewire_docs + ")、[PipeWire 1.0.5のcombine-stream実装](" + pipewire_code + ")\"",
+            {pipewire_docs, pipewire_code}},
+        {std::string(90, ' ') + "https://host/" + std::string(120, 'a') + ") end",
+            {"https://host/" + std::string(120, 'a')}},
+    };
+    for (const auto &[input, targets] : prose_cases) {
+      feed("\x1b[2J\x1b[H" + input);
+      scan();
+      const boxrig_text_snapshot_options options{BOXRIG_TEXT_SCREEN_PRIMARY, nullptr, 8192, 8};
+      boxrig_text_snapshot *snapshot = nullptr;
+      expect(boxrig_terminal_create_text_snapshot(terminal, &options, &snapshot) == BOXRIG_STATUS_OK, "snapshot prose");
+      const std::unique_ptr<boxrig_text_snapshot, decltype(&boxrig_text_snapshot_destroy)> owner(snapshot, boxrig_text_snapshot_destroy);
+      std::size_t length = 0;
+      const auto *bytes = reinterpret_cast<const char *>(boxrig_text_snapshot_data(snapshot, &length));
+      const std::string_view displayed(bytes, length);
+      std::vector<std::pair<std::size_t, std::string>> expected;
+      std::size_t offset = 0;
+      for (const auto &target : targets) {
+        offset = displayed.find(target, offset);
+        expect(offset != std::string::npos, "fixture target exists");
+        expected.emplace_back(offset, target);
+        offset += target.size();
+      }
+      for (std::size_t row = 0; row < 3; ++row) for (std::size_t column = 0; column < 100; ++column) {
+        const auto current = hit(row, column);
+        std::size_t byte = 0;
+        const bool projected = boxrig_text_snapshot_byte_offset_at_position(snapshot, &current.leading_position, &byte) == BOXRIG_STATUS_OK;
+        std::optional<std::string> target;
+        for (const auto &[start, value] : expected)
+          if (projected && byte >= start && byte < start + value.size()) target = value;
+        const auto copied = terminal_links_copy_target(links.get(), current);
+        if (copied != target) throw std::runtime_error("prose target at " + std::to_string(byte) + ": expected " +
+            target.value_or("<none>") + ", got " + copied.value_or("<none>") + "; " + input);
+        const auto resolved = terminal_links_resolve(links.get(), current);
+        expect(target ? resolved && resolved->action && resolved->action->arguments == std::vector<std::string>{*target} : !resolved,
+            "decoration, launch and copy share the exact prose URL range");
+      }
+    }
+    feed("\x1b[2J\x1b[H");
+
+    feed("https://host/a\r\nb\r\n\x1b]8;;https://host/a)、https://host/b\x1b\\explicit\x1b]8;;\x1b\\");
+    scan();
+    expect(action(0, 2).arguments == std::vector<std::string>{"https://host/a"}, "hard newline ends a URL");
+    expect(!terminal_links_copy_target(links.get(), hit(1, 0)), "hard newline continuation is not a link");
+    expect(action(2, 2).arguments == std::vector<std::string>{"https://host/a)、https://host/b"} &&
+        terminal_links_copy_target(links.get(), hit(2, 2)) == "https://host/a)、https://host/b", "OSC 8 retains its complete explicit URI");
+    feed("\x1b[2J\x1b[H");
+
     feed("前 https://example.みんな/　https://second.test/\r\n");
     expect(!terminal_links_resolve(links.get(), hit(0, 4)), "unscanned text is not a complete link");
     scan();
@@ -205,6 +266,16 @@ int main() {
     expect(first.command == "first" && first.arguments == std::vector<std::string>{"https", "example.みんな", "example.みんな", "$https://example.みんな"}, "screen captures retain UTF-8 offsets and rule priority");
     expect(terminal_links_copy_target(links.get(), hit(0, 4)) == "https://example.みんな",
         "copy the full rule match rather than any expanded action argument");
+
+    links.reset();
+    custom.pattern = R"(https://[^ ]+)";
+    custom.arguments = {"${0}"};
+    links.reset(create_terminal_links(view, {custom}));
+    feed("\x1b[2J\x1b[Hhttps://host/a)、後続");
+    scan();
+    expect(action(0, 3).arguments == std::vector<std::string>{"https://host/a)、後続"} &&
+        terminal_links_copy_target(links.get(), hit(0, 3)) == "https://host/a)、後続",
+        "an edited rule keeps exact captures even with the built-in identifier");
 
     links.reset();
     custom.pattern = "x";

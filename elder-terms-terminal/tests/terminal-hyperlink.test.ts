@@ -6,15 +6,103 @@
 import { withTemporaryDirectory } from '../../shared/tests/connection-test-helpers.ts';
 import { chmod, mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { execFile } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
 import { describe, expect, it } from 'vitest';
 import { waitForResult } from 'gestament/testing';
 import { PNG } from 'pngjs';
-import { defaultColumns, defaultRows, runGtkTest } from './gtk-test-helpers';
+import {
+  defaultColumns,
+  defaultRows,
+  readWindowCellLayout,
+  runGtkTest,
+} from './gtk-test-helpers.ts';
 
 const shellQuote = (value: string): string =>
   `'${value.split("'").join("'\\''")}'`;
 
 describe.concurrent('elder-terms-terminal terminal links', () => {
+  it('opens and copies only the URL in prose, logs and wrapped Markdown text', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const docs = 'https://docs.pipewire.org/page_module_combine_stream.html';
+      const code =
+        'https://github.com/PipeWire/pipewire/blob/1.0.5/src/modules/module-combine-stream.c';
+      const prose = `"[Combine Streamの仕様](${docs})、[PipeWire 1.0.5のcombine-stream実装](${code})"`;
+      const peer = join(directory, 'prose.mjs');
+      const config = join(directory, 'connection.ini');
+      const recorded = join(directory, 'opened.txt');
+      const opener = join(directory, 'xdg-open');
+      const fixture = `\x1b[?25l参照: https://host/a、詳細は後述\r\nurl="https://host/b" status=200\r\n${prose}`;
+      await writeFile(
+        peer,
+        `process.stdin.setRawMode(true); process.stdin.resume(); process.stdout.write(${JSON.stringify(fixture)});`
+      );
+      await writeFile(
+        config,
+        `[local]\ncommand_line=${process.execPath} ${peer}\n`
+      );
+      await writeFile(
+        opener,
+        `#!/bin/sh\nprintf '%s' "$1" > ${shellQuote(recorded)}\n`
+      );
+      await chmod(opener, 0o755);
+      await runGtkTest(
+        context,
+        ['-c', config],
+        async (app, evidence) => {
+          const terminal = await app.getById('terminal_view');
+          const { bounds } = await terminal.capture();
+          const layout = await readWindowCellLayout(app);
+          const readClipboard = promisify(execFile);
+          const reader = fileURLToPath(
+            new URL(
+              '../../.build/elder-terms-terminal/clipboard-read-helper',
+              import.meta.url
+            )
+          );
+          for (const [row, column, target] of [
+            [0, 8, 'https://host/a'],
+            [1, 8, 'https://host/b'],
+            [2, 25, docs],
+            [3, 42, code],
+          ] as const) {
+            await app.input.moveMouseTo(
+              Math.trunc(bounds.x + layout.cellWidth * (column + 0.5)),
+              Math.trunc(bounds.y + layout.cellHeight * (row + 0.5))
+            );
+            await app.input.setModifier('control', true);
+            try {
+              await app.input.setMouseButton('left', true);
+              await app.input.setMouseButton('left', false);
+            } finally {
+              await app.input.setModifier('control', false);
+            }
+            await waitForResult(async () =>
+              expect(await readFile(recorded, 'utf8')).toBe(target)
+            );
+            await app.input.setMouseButton('right', true);
+            await app.input.setMouseButton('right', false);
+            const copy = await app.getById('terminal_context_copy_link_item');
+            if (copy.kind !== 'menuItem')
+              throw new Error('Missing copy link command');
+            await copy.click();
+            await waitForResult(async () => {
+              const result = await readClipboard(reader, [], {
+                env: await app.environment(),
+              });
+              expect(result.stdout).toBe(target);
+            });
+          }
+          await evidence.captureEvidence('prose-url-boundaries', async () =>
+            app.capture()
+          );
+        },
+        { env: { PATH: `${directory}:${process.env.PATH ?? ''}` } }
+      );
+    });
+  });
+
   it('runs the configured argv after Ctrl+clicking an OSC 8 link', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const actionPath = join(directory, 'record-link-action.sh');
