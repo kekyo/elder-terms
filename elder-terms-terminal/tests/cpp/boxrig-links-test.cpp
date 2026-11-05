@@ -73,6 +73,67 @@ int main() {
       return *resolved->action;
     };
 
+    const std::string pipewire_docs = "https://docs.pipewire.org/page_module_combine_stream.html";
+    const std::string pipewire_code = "https://github.com/PipeWire/pipewire/blob/1.0.5/src/modules/module-combine-stream.c";
+    const std::vector<std::pair<std::string, std::vector<std::string>>> prose_cases = {
+        {"参照: https://host/a、詳細は後述", {"https://host/a"}},
+        {"url=\"https://host/a\" status=200", {"https://host/a"}},
+        {"(https://host/a) [label](https://host/b)", {"https://host/a", "https://host/b"}},
+        {"https://host/a_(b) https://host/a_(b_(c))", {"https://host/a_(b)", "https://host/a_(b_(c))"}},
+        {"https://host/a)、次の文章", {"https://host/a"}},
+        {"https://[2001:db8::1]/a", {"https://[2001:db8::1]/a"}},
+        {"https://host/a%28b%29?q=a,b&x=%5D#part", {"https://host/a%28b%29?q=a,b&x=%5D#part"}},
+        {"https://host/a,https://host/b;https://host/c.", {"https://host/a", "https://host/b", "https://host/c"}},
+        {"https://host/a?q=a,b,", {"https://host/a?q=a,b,"}},
+        {"https://例え.test/日本語_(説明)。後続", {"https://例え.test/日本語_(説明)"}},
+        {"\"[Combine Streamの仕様](" + pipewire_docs + ")、[PipeWire 1.0.5のcombine-stream実装](" + pipewire_code + ")\"",
+            {pipewire_docs, pipewire_code}},
+        {std::string(90, ' ') + "https://host/" + std::string(120, 'a') + ") end",
+            {"https://host/" + std::string(120, 'a')}},
+    };
+    for (const auto &[input, targets] : prose_cases) {
+      feed("\x1b[2J\x1b[H" + input);
+      scan();
+      const boxrig_text_snapshot_options options{BOXRIG_TEXT_SCREEN_PRIMARY, nullptr, 8192, 8};
+      boxrig_text_snapshot *snapshot = nullptr;
+      expect(boxrig_terminal_create_text_snapshot(terminal, &options, &snapshot) == BOXRIG_STATUS_OK, "snapshot prose");
+      const std::unique_ptr<boxrig_text_snapshot, decltype(&boxrig_text_snapshot_destroy)> owner(snapshot, boxrig_text_snapshot_destroy);
+      std::size_t length = 0;
+      const auto *bytes = reinterpret_cast<const char *>(boxrig_text_snapshot_data(snapshot, &length));
+      const std::string_view displayed(bytes, length);
+      std::vector<std::pair<std::size_t, std::string>> expected;
+      std::size_t offset = 0;
+      for (const auto &target : targets) {
+        offset = displayed.find(target, offset);
+        expect(offset != std::string::npos, "fixture target exists");
+        expected.emplace_back(offset, target);
+        offset += target.size();
+      }
+      for (std::size_t row = 0; row < 3; ++row) for (std::size_t column = 0; column < 100; ++column) {
+        const auto current = hit(row, column);
+        std::size_t byte = 0;
+        const bool projected = boxrig_text_snapshot_byte_offset_at_position(snapshot, &current.leading_position, &byte) == BOXRIG_STATUS_OK;
+        std::optional<std::string> target;
+        for (const auto &[start, value] : expected)
+          if (projected && byte >= start && byte < start + value.size()) target = value;
+        const auto copied = terminal_links_copy_target(links.get(), current);
+        if (copied != target) throw std::runtime_error("prose target at " + std::to_string(byte) + ": expected " +
+            target.value_or("<none>") + ", got " + copied.value_or("<none>") + "; " + input);
+        const auto resolved = terminal_links_resolve(links.get(), current);
+        expect(target ? resolved && resolved->action && resolved->action->arguments == std::vector<std::string>{*target} : !resolved,
+            "decoration, launch and copy share the exact prose URL range");
+      }
+    }
+    feed("\x1b[2J\x1b[H");
+
+    feed("https://host/a\r\nb\r\n\x1b]8;;https://host/a)、https://host/b\x1b\\explicit\x1b]8;;\x1b\\");
+    scan();
+    expect(action(0, 2).arguments == std::vector<std::string>{"https://host/a"}, "hard newline ends a URL");
+    expect(!terminal_links_copy_target(links.get(), hit(1, 0)), "hard newline continuation is not a link");
+    expect(action(2, 2).arguments == std::vector<std::string>{"https://host/a)、https://host/b"} &&
+        terminal_links_copy_target(links.get(), hit(2, 2)) == "https://host/a)、https://host/b", "OSC 8 retains its complete explicit URI");
+    feed("\x1b[2J\x1b[H");
+
     feed("前 https://example.みんな/　https://second.test/\r\n");
     expect(!terminal_links_resolve(links.get(), hit(0, 4)), "unscanned text is not a complete link");
     scan();
@@ -207,6 +268,16 @@ int main() {
         "copy the full rule match rather than any expanded action argument");
 
     links.reset();
+    custom.pattern = R"(https://[^ ]+)";
+    custom.arguments = {"${0}"};
+    links.reset(create_terminal_links(view, {custom}));
+    feed("\x1b[2J\x1b[Hhttps://host/a)、後続");
+    scan();
+    expect(action(0, 3).arguments == std::vector<std::string>{"https://host/a)、後続"} &&
+        terminal_links_copy_target(links.get(), hit(0, 3)) == "https://host/a)、後続",
+        "an edited rule keeps exact captures even with the built-in identifier");
+
+    links.reset();
     custom.pattern = "x";
     custom.arguments = {"${0}"};
     links.reset(create_terminal_links(view, {custom}));
@@ -222,6 +293,7 @@ int main() {
     feed("\x1b[2J\x1b[Hhttps://evicted.test/\r\nhttps://retained.test/\x1b[8;1H");
     links.reset(create_terminal_links(view, default_hyperlink_action_rules()));
     scan();
+    terminal_links_set_decorations(links.get(), {TerminalLinkDecoration::underline, TerminalLinkDecoration::underline});
     const auto annotation_at = [&](std::size_t row) {
       boxrig_ui_text_annotation_visual_range ranges[2]{};
       std::size_t count = 0;
@@ -287,6 +359,85 @@ int main() {
     annotations = 0;
     expect(boxrig_ui_view_query_text_annotation_visual_ranges(view, 0, nullptr, 0, &annotations) == BOXRIG_UI_OK && annotations == 0,
         "changed link text loses its decoration before recognition completes");
+    links.reset();
+    links.reset(create_terminal_links(view, default_hyperlink_action_rules()));
+    feed("\x1b[2J\x1b[Hhttps://hover.test/\r\n\x1b]8;;custom://unhandled\x1b\\explicit\x1b]8;;\x1b\\");
+    scan();
+    terminal_links_refresh_viewport(links.get());
+    const auto style_at = [&](std::size_t row, std::size_t column) {
+      const auto point = hit(row, column);
+      boxrig_ui_text_annotation found[32]{};
+      std::size_t count = 0;
+      boxrig_ui_text_annotation_style style{};
+      expect(boxrig_ui_view_query_text_annotation_hits(view, &point, BOXRIG_UI_ANNOTATION_HIT_ALL,
+          found, 32, &count, &style) == BOXRIG_UI_OK, "read link presentation");
+      return style;
+    };
+    expect(style_at(0, 2).underline_style == BOXRIG_UNDERLINE_NONE,
+        "default regex decoration waits for hover");
+    expect(style_at(1, 2).underline_style == BOXRIG_UNDERLINE_SINGLE &&
+        !terminal_links_resolve(links.get(), hit(1, 2)), "explicit OSC 8 is decorated without granting an unsupported action");
+
+    feed("\x1b[2J\x1b[Hhttps://same.test/ https://same.test/\r\n"
+        "\x1b]8;;https://osc.test/)\x1b\\https://same.test/\x1b]8;;\x1b\\\r\n"
+        "\x1b]8;;custom://unhandled\x1b\\explicit\x1b]8;;\x1b\\\r\n"
+        "\x1b[4:2mhttps://double.test/\x1b[0m\r\n" + std::string(90, ' ') + wrapped_url);
+    scan();
+    terminal_links_refresh_viewport(links.get());
+    const auto cache_before_hover = terminal_links_cache_statistics(links.get());
+    const std::vector modes{TerminalLinkDecoration::none, TerminalLinkDecoration::underline,
+        TerminalLinkDecoration::hover, TerminalLinkDecoration::validated};
+    const auto expected_underline = [](TerminalLinkDecoration mode, bool hovered) {
+      return mode == TerminalLinkDecoration::underline || mode == TerminalLinkDecoration::validated ||
+          (mode == TerminalLinkDecoration::hover && hovered) ? BOXRIG_UNDERLINE_SINGLE : BOXRIG_UNDERLINE_NONE;
+    };
+    for (const auto regex : modes) for (const auto osc8 : modes) {
+      terminal_links_set_decorations(links.get(), {regex, osc8});
+      terminal_links_set_hover(links.get(), {});
+      expect(style_at(0, 2).underline_style == expected_underline(regex, false) &&
+          style_at(1, 2).underline_style == expected_underline(osc8, false), "independent nonhovered modes");
+      terminal_links_set_hover(links.get(), hit(0, 2));
+      expect(style_at(0, 2).underline_style == expected_underline(regex, true) &&
+          style_at(0, 22).underline_style == expected_underline(regex, false) &&
+          style_at(1, 2).underline_style == expected_underline(osc8, false), "only the pointed occurrence is hovered");
+      terminal_links_set_hover(links.get(), hit(1, 2));
+      expect(style_at(0, 2).underline_style == expected_underline(regex, false) &&
+          style_at(1, 2).underline_style == expected_underline(osc8, true), "OSC 8 display wins over regex in every combination");
+      terminal_links_set_hover(links.get(), hit(2, 2));
+      expect(style_at(2, 2).underline_style == expected_underline(osc8, true) &&
+          !terminal_links_resolve(links.get(), hit(2, 2)), "hover never grants an unsupported action");
+      boxrig_cell_view cell{};
+      expect(boxrig_terminal_get_cell(terminal, 3, 2, &cell) == BOXRIG_STATUS_OK, "read terminal double underline");
+      for (const bool hovered : {true, false}) {
+        terminal_links_set_hover(links.get(), hovered ? hit(3, 2) : boxrig_ui_hit_test_result{});
+        const auto style = style_at(3, 2);
+        expect(boxrig_ui_annotation_underline_style(&cell, &style) == BOXRIG_UNDERLINE_DOUBLE,
+            "hover preserves the terminal's double underline");
+      }
+    }
+    expect(terminal_links_cache_statistics(links.get()).matcher_creations == cache_before_hover.matcher_creations,
+        "hover changes reuse recognition and URI matching");
+    terminal_links_set_decorations(links.get(), {});
+    terminal_links_set_hover(links.get(), hit(5, 5));
+    expect(style_at(4, 95).underline_style == BOXRIG_UNDERLINE_SINGLE &&
+        style_at(5, 5).underline_style == BOXRIG_UNDERLINE_SINGLE, "hover highlights every wrapped fragment");
+    const auto stale_hover = hit(0, 2);
+    feed("\x1b[1;1H\x1b[2Kremoved");
+    terminal_links_refresh_viewport(links.get());
+    terminal_links_set_hover(links.get(), stale_hover);
+    expect(style_at(5, 5).underline_style == BOXRIG_UNDERLINE_NONE, "stale hover clears the previous occurrence");
+    terminal_links_attach_view(links.get(), nullptr);
+    terminal_links_attach_view(links.get(), view);
+    scan();
+    terminal_links_refresh_viewport(links.get());
+    expect(style_at(5, 5).underline_style == BOXRIG_UNDERLINE_NONE &&
+        style_at(1, 2).underline_style == BOXRIG_UNDERLINE_SINGLE, "reattachment restores preferences without stale hover");
+
+    links.reset();
+    links.reset(create_terminal_links(view, {}));
+    terminal_links_refresh_viewport(links.get());
+    expect(style_at(1, 2).underline_style == BOXRIG_UNDERLINE_SINGLE &&
+        !terminal_links_resolve(links.get(), hit(1, 2)), "an empty rule list still displays explicit OSC 8 labels");
     std::puts("boxrig links: Unicode boundaries, captures, annotations and stale hits passed");
     return 0;
   } catch (const std::exception &error) {

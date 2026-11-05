@@ -217,8 +217,8 @@ static bool validate_color_filter(const SettingValue &value, std::string *reason
 
 static bool validate_link_decoration(const SettingValue &value, std::string *reason) {
   const auto *text = std::get_if<std::string>(&value);
-  if (text && (*text == "none" || *text == "underline" || *text == "validated")) return true;
-  *reason = "must be none, underline, or validated";
+  if (text && (*text == "none" || *text == "underline" || *text == "hover" || *text == "validated")) return true;
+  *reason = "must be none, underline, hover, or validated";
   return false;
 }
 
@@ -338,11 +338,15 @@ SettingKey terminal_font_families_setting_key() {
 SettingKey terminal_cursor_shape_setting_key() { return terminal_key("cursor_shape"); }
 SettingKey terminal_cursor_blink_setting_key() { return terminal_key("cursor_blink"); }
 SettingKey terminal_color_filter_setting_key() { return terminal_key("color_filter"); }
-SettingKey terminal_link_decoration_setting_key() { return terminal_key("link_decoration"); }
-TerminalLinkDecoration terminal_link_decoration(const SettingsStore &store) {
-  const auto value = setting_string_value_or_default(store, terminal_link_decoration_setting_key(), "underline");
-  return value == "none" ? TerminalLinkDecoration::none :
-      value == "validated" ? TerminalLinkDecoration::validated : TerminalLinkDecoration::underline;
+SettingKey terminal_regex_link_decoration_setting_key() { return terminal_key("regex_link_decoration"); }
+SettingKey terminal_osc8_link_decoration_setting_key() { return terminal_key("osc8_link_decoration"); }
+TerminalLinkDecorations terminal_link_decorations(const SettingsStore &store) {
+  const auto read = [&](const SettingKey &key, const char *fallback) {
+    const auto value = setting_string_value_or_default(store, key, fallback);
+    return value == "none" ? TerminalLinkDecoration::none : value == "hover" ? TerminalLinkDecoration::hover :
+        value == "validated" ? TerminalLinkDecoration::validated : TerminalLinkDecoration::underline;
+  };
+  return {read(terminal_regex_link_decoration_setting_key(), "hover"), read(terminal_osc8_link_decoration_setting_key(), "underline")};
 }
 TerminalColorFilter terminal_color_filter(const SettingsStore &store) {
   const auto value = setting_string_value_or_default(store, terminal_color_filter_setting_key(), "none");
@@ -518,7 +522,8 @@ terminal_setting_definitions(TerminalDisplaySettings terminal_defaults) {
        .validate = validate_terminal_cursor_shape},
       {.key = terminal_cursor_blink_setting_key(), .default_value = SettingValue{true}, .validate = nullptr},
       {.key = terminal_color_filter_setting_key(), .default_value = SettingValue{std::string("none")}, .validate = validate_color_filter},
-      {.key = terminal_link_decoration_setting_key(), .default_value = SettingValue{std::string("underline")}, .validate = validate_link_decoration},
+      {.key = terminal_regex_link_decoration_setting_key(), .default_value = SettingValue{std::string("hover")}, .validate = validate_link_decoration},
+      {.key = terminal_osc8_link_decoration_setting_key(), .default_value = SettingValue{std::string("underline")}, .validate = validate_link_decoration},
       {.key = terminal_color_vision_setting_key(), .default_value = SettingValue{std::string("none")}, .validate = validate_color_vision},
       {.key = terminal_color_vision_strength_setting_key(), .default_value = SettingValue{gint64{100}}, .validate = validate_background_percent},
       {.key = terminal_background_mode_setting_key(), .default_value = SettingValue{std::string("opaque")}, .validate = validate_background_mode},

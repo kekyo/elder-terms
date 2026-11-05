@@ -244,9 +244,10 @@ bool apply_terminal_presentation(TerminalPresentation *presentation, const Setti
   auto *widget = terminal_runtime_widget(window->runtime);
   const auto display = terminal_display_settings(settings);
   const auto vision = terminal_color_vision_settings(settings);
+  const auto links = terminal_link_decorations(settings);
   if (!apply_colors(presentation, {general_color_settings(settings).background,
       terminal_color_filter(settings), vision.profile, vision.strength / 100.0, {},
-      terminal_link_decoration(settings) == TerminalLinkDecoration::validated})) return false;
+      links.regex == TerminalLinkDecoration::validated || links.osc8 == TerminalLinkDecoration::validated})) return false;
   if (!apply_cursor(presentation, terminal_cursor_settings(settings))) return false;
   if (!apply_copy_policy(presentation, terminal_block_copy_trim_trailing_spaces(settings))) return false;
   if (!apply_terminal_background(presentation->background, settings, std::move(image))) return false;

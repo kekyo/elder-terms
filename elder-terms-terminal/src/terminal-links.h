@@ -70,9 +70,18 @@ void terminal_links_attach_view(TerminalLinks *links, boxrig_ui_view *view);
 /**
  * Changes decoration without resetting recognition, validation or activation.
  * @param links Live link state.
- * @param decoration Presentation shared by text and OSC 8 links.
+ * @param decorations Independent text and OSC 8 preferences.
  */
-void terminal_links_set_decoration(TerminalLinks *links, TerminalLinkDecoration decoration);
+void terminal_links_set_decorations(TerminalLinks *links, TerminalLinkDecorations decorations);
+
+/**
+ * Updates hover presentation without restarting recognition or path validation.
+ * @param links Live link state.
+ * @param hit Current pointer hit, or an empty hit to clear hover.
+ * @remarks Updating annotations invalidates the hit's annotation generation.
+ * Obtain a fresh hit before any subsequent operation that requires authority.
+ */
+void terminal_links_set_hover(TerminalLinks *links, const boxrig_ui_hit_test_result &hit);
 
 /**
  * Refreshes OSC 8 annotations and retains unchanged visible link decoration.

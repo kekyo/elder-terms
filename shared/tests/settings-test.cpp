@@ -898,25 +898,35 @@ static void test_terminal_background_settings() {
 static void test_terminal_link_decoration_settings() {
   const auto global = temporary_config_path("link-decoration-global");
   const auto path = temporary_config_path("link-decoration-connection");
-  const auto key = elder_terms::make_setting_key("terminal", "link_decoration");
+  const auto regex_key = elder_terms::make_setting_key("terminal", "regex_link_decoration");
+  const auto osc8_key = elder_terms::make_setting_key("terminal", "osc8_link_decoration");
   const SettingsLoadOptions options{.config_path = path, .startup_config_path = std::nullopt, .global_config_path = global};
   write_config(global, ""); write_config(path, "");
   auto loaded = load_settings(options, 1.0);
-  expect_true(elder_terms::setting_string_value_or_default(loaded.store, key, "missing") == "underline",
-      "link decoration defaults to always underline");
-  write_config(global, "[terminal]\nlink_decoration=none\n");
+  expect_true(elder_terms::setting_string_value_or_default(loaded.store, regex_key, "missing") == "hover" &&
+      elder_terms::setting_string_value_or_default(loaded.store, osc8_key, "missing") == "underline",
+      "regex defaults to hover and OSC 8 to always underline");
+  write_config(global, "[terminal]\nregex_link_decoration=none\nosc8_link_decoration=validated\n");
   loaded = load_settings(options, 1.0);
-  expect_true(elder_terms::setting_string_value_or_default(loaded.store, key, "missing") == "none" &&
-      setting_value_source(loaded.store, key) == SettingValueSource::global, "link decoration inherits normally");
-  for (const auto *value : {"none", "underline", "validated"}) {
-    expect_true(set_explicit_setting_value(&loaded.store, key, elder_terms::SettingValue{std::string(value)}) &&
-        save_settings(loaded.store, path).saved, "link decoration selection saves");
-    loaded = load_settings(options, 1.0);
-    expect_true(elder_terms::setting_string_value_or_default(loaded.store, key, "missing") == value,
-        "link decoration survives restart");
+  for (const auto &key : {regex_key, osc8_key}) {
+    expect_true(setting_value_source(loaded.store, key) == SettingValueSource::global, "each decoration inherits normally");
+    const auto other = key.name == regex_key.name ? osc8_key : regex_key;
+    const auto unchanged = elder_terms::setting_string_value_or_default(loaded.store, other, "missing");
+    for (const auto *value : {"none", "underline", "hover", "validated"}) {
+      expect_true(set_explicit_setting_value(&loaded.store, key, elder_terms::SettingValue{std::string(value)}) &&
+          save_settings(loaded.store, path).saved, "link decoration selection saves");
+      loaded = load_settings(options, 1.0);
+      expect_true(elder_terms::setting_string_value_or_default(loaded.store, key, "missing") == value &&
+          elder_terms::setting_string_value_or_default(loaded.store, other, "missing") == unchanged,
+          "one decoration survives restart without changing the other");
+    }
+    expect_true(!set_explicit_setting_value(&loaded.store, key, elder_terms::SettingValue{std::string("unknown")}),
+        "unknown decoration is rejected");
+    clear_explicit_setting_value(&loaded.store, key);
+    expect_true(setting_value_source(loaded.store, key) == SettingValueSource::global,
+        "clearing one decoration restores only its inherited value");
+    expect_true(save_settings(loaded.store, path).saved, "save inherited decoration");
   }
-  expect_true(!set_explicit_setting_value(&loaded.store, key, elder_terms::SettingValue{std::string("unknown")}),
-      "unknown decoration is rejected");
   remove_config(path); remove_config(global);
 }
 

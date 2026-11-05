@@ -79,12 +79,13 @@ int main() {
     };
 
     feed("/foo/bar/baz\r\n\"/foo/bar/baz\"\r\n/tmp\r\n/proc/self/exe\r\nhttps://example.test/tmp\r\n");
-    expect(link_style(0).field_mask == (BOXRIG_UI_ANNOTATION_UNDERLINE_STYLE | BOXRIG_UI_ANNOTATION_UNDERLINE_FALLBACK),
-        "the default decoration underlines unconfirmed paths without dimming");
-    terminal_links_set_decoration(links.get(), TerminalLinkDecoration::none);
-    expect(link_style(0).field_mask == 0 && terminal_links_copy_target(links.get(), hit(0, 2)) == "/foo/bar/baz",
+    expect(link_style(0).underline_style == BOXRIG_UNDERLINE_NONE && link_style(0).color_tag == 0,
+        "the default decoration leaves unhovered paths unchanged");
+    terminal_links_set_decorations(links.get(), {TerminalLinkDecoration::none, TerminalLinkDecoration::none});
+    expect(link_style(0).underline_style == BOXRIG_UNDERLINE_NONE && link_style(0).color_tag == 0 &&
+        terminal_links_copy_target(links.get(), hit(0, 2)) == "/foo/bar/baz",
         "no decoration preserves recognition without changing terminal attributes");
-    terminal_links_set_decoration(links.get(), TerminalLinkDecoration::validated);
+    terminal_links_set_decorations(links.get(), {TerminalLinkDecoration::validated, TerminalLinkDecoration::validated});
     wait_checks();
     for (const std::size_t row : {0u, 1u}) {
       const auto point = hit(row, 2);
@@ -170,21 +171,20 @@ int main() {
     expect(link_style(3).underline_style == BOXRIG_UNDERLINE_SINGLE,
         "the same OSC 8 target is decorated independently on every logical line");
     for (const auto mode : {TerminalLinkDecoration::none, TerminalLinkDecoration::underline}) {
-      terminal_links_set_decoration(links.get(), mode);
+      terminal_links_set_decorations(links.get(), {mode, mode});
       for (std::size_t row = 0; row < 3; ++row)
-        expect(link_style(row).field_mask == (mode == TerminalLinkDecoration::none ? 0u :
-            static_cast<unsigned>(BOXRIG_UI_ANNOTATION_UNDERLINE_STYLE | BOXRIG_UI_ANNOTATION_UNDERLINE_FALLBACK)),
+        expect(link_style(row).field_mask == (static_cast<unsigned>(BOXRIG_UI_ANNOTATION_UNDERLINE_STYLE | BOXRIG_UI_ANNOTATION_UNDERLINE_FALLBACK | BOXRIG_UI_ANNOTATION_COLOR_TAG)),
             "OSC 8 decoration follows the selected mode without pointer movement");
       expect(terminal_links_copy_target(links.get(), hit(2, 2)) == "/foo/bar/baz",
           "changing OSC 8 decoration keeps its target recognizable");
     }
 
-    terminal_links_set_decoration(links.get(), TerminalLinkDecoration::validated);
+    terminal_links_set_decorations(links.get(), {TerminalLinkDecoration::validated, TerminalLinkDecoration::validated});
     feed("\x1b[2J\x1b[H\x1b]8;;/foo/bar/baz\x1b\\https://example.test/ label\x1b]8;;\x1b\\");
     wait_checks();
     expect(terminal_links_copy_target(links.get(), hit(0, 2)) == "https://example.test/" &&
-        link_style(0).color_tag == 0,
-        "a higher-priority URL retains normal brightness inside a larger invalid OSC 8 path label");
+        link_style(0).color_tag == terminal_dim_link_color_tag,
+        "OSC 8 display wins over an overlapping text URL while action priority stays unchanged");
 
     links.reset();
     std::vector<std::shared_ptr<cardio::promise_source<std::string>>> requests;
@@ -196,7 +196,7 @@ int main() {
           requested_paths.push_back(std::move(path));
           return request->get_promise();
         }));
-    terminal_links_set_decoration(links.get(), TerminalLinkDecoration::validated);
+    terminal_links_set_decorations(links.get(), {TerminalLinkDecoration::validated, TerminalLinkDecoration::validated});
     feed("\x1b[2J\x1b[H/foo/bar/baz\r\n/foo/bar/baz\r\nhttps://example.test/");
     while (g_main_context_pending(nullptr)) g_main_context_iteration(nullptr, FALSE);
     expect(requested_paths == std::vector<std::string>{"/foo/bar/baz"},

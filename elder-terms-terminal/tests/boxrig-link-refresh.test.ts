@@ -17,7 +17,7 @@ const appPath = fileURLToPath(
 
 describe('links in an updating process table', () => {
   for (const backend of ['cairo', 'opengl']) {
-    it.each(['underline', 'validated'])(
+    it.each(['underline', 'hover', 'validated'])(
       `keeps unchanged command paths stable in every video frame with ${backend}/%s`,
       async (decoration) => {
         const paths = Array.from({ length: 20 }, (_, row) =>
@@ -51,7 +51,8 @@ describe('links in an updating process table', () => {
         try {
           const app = await launcher.launch([
             '--links',
-            `--link-decoration=${decoration}`,
+            `--regex-link-decoration=${decoration}`,
+            `--osc8-link-decoration=${decoration}`,
             '--local',
             '--',
             process.execPath,
@@ -81,6 +82,13 @@ describe('links in an updating process table', () => {
             const cell = /cell=(\d+)x(\d+)/.exec(status)!;
             width = Number(cell[1]);
             height = Number(cell[2]);
+            if (decoration === 'hover') {
+              const { bounds } = await terminal.capture();
+              await app.input.moveMouseTo(
+                Math.trunc(bounds.x + 12.5 * width),
+                Math.trunc(bounds.y + 0.5 * height)
+              );
+            }
             const frame = PNG.sync.read((await terminal.capture()).image);
             for (let row = 0; row < paths.length; ++row) {
               const value = decoration === 'validated' && row % 2 ? 99 : 255;
@@ -101,7 +109,9 @@ describe('links in an updating process table', () => {
                 }
                 return true;
               });
-              expect(underline, `initial underline on row ${row}`).toBe(true);
+              expect(underline, `initial underline on row ${row}`).toBe(
+                decoration !== 'hover' || row === 0
+              );
             }
           });
           const baselineCapture = await terminal.capture();

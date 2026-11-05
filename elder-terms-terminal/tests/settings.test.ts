@@ -753,6 +753,188 @@ const connectionStatusTextMask = async (
 };
 
 describe.concurrent('elder-terms-terminal settings', () => {
+  it('applies and cancels independent link displays on the Links page', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const peer = join(directory, 'links.mjs');
+      const config = join(directory, 'links.ini');
+      const target = 'https://example.test/';
+      const fixture =
+        '\x1b[?25l' +
+        target +
+        '\r\n\x1b]8;;' +
+        target +
+        '\x1b\\' +
+        target +
+        '\x1b]8;;\x1b\\';
+      await writeFile(
+        peer,
+        'process.stdin.setRawMode(true); process.stdin.resume(); process.stdout.write(' +
+          JSON.stringify(fixture) +
+          ');'
+      );
+      const settings =
+        '[local]\ncommand_line=' + process.execPath + ' ' + peer + '\n';
+      await writeFile(config, settings);
+      await runGtkTest(context, ['-c', config], async (app, evidence) => {
+        const terminal = await app.getById('terminal_view');
+        const layout = await readWindowCellLayout(app);
+        const { bounds } = await terminal.capture();
+        await app.input.moveMouseTo(
+          Math.trunc(bounds.x + 3 * layout.cellWidth),
+          Math.trunc(bounds.y + 5 * layout.cellHeight)
+        );
+        const rowPixels = (frame: PngImage, row: number): Buffer => {
+          const rows: Buffer[] = [];
+          for (
+            let y = row * layout.cellHeight;
+            y < (row + 1) * layout.cellHeight;
+            y++
+          ) {
+            const start = y * frame.width * 4;
+            rows.push(
+              frame.data.subarray(
+                start,
+                start + target.length * layout.cellWidth * 4
+              )
+            );
+          }
+          return Buffer.concat(rows);
+        };
+        const initial = await waitForResult(async () => {
+          const frame = PNG.sync.read((await terminal.capture()).image);
+          const plain = rowPixels(frame, 0);
+          const underlined = rowPixels(frame, 1);
+          expect(plain).not.toEqual(underlined);
+          return { plain, underlined };
+        });
+        const checkRows = async (regex: Buffer, osc8: Buffer) => {
+          await toPass(async () => {
+            const frame = PNG.sync.read((await terminal.capture()).image);
+            expect(rowPixels(frame, 0)).toEqual(regex);
+            expect(rowPixels(frame, 1)).toEqual(osc8);
+          });
+        };
+        const regexId = 'settings_terminal_regex_link_decoration_combo';
+        const osc8Id = 'settings_terminal_osc8_link_decoration_combo';
+        await openSettingsDialog(app);
+        await showTerminalAppearanceSettingsPage(app);
+        expect(
+          (await (await app.getById(regexId)).info()).states
+        ).not.toContain('showing');
+        const appearance = await (
+          await app.getById('settings_dialog')
+        ).capture();
+        await app.input.moveMouseTo(
+          appearance.bounds.x + 10,
+          appearance.bounds.y + 110
+        );
+        await app.input.scrollWheel(0, 80);
+        await expectElementKind(
+          await app.getById('settings_terminal_color_preview'),
+          'expander'
+        ).click();
+        await app.input.scrollWheel(0, 80);
+        await toPass(async () =>
+          expect(
+            (
+              await (
+                await app.getById('settings_terminal_color_preview_after')
+              ).info()
+            ).states
+          ).toContain('showing')
+        );
+        await expectSelectedComboValue(
+          app,
+          'settings_terminal_color_vision_combo',
+          'No correction (built-in default)'
+        );
+        await evidence.captureEvidence('appearance-color-preview', async () =>
+          app.capture()
+        );
+        await selectSettingsNotebookTab(app, 'Links', regexId);
+        await expectSelectedComboValue(
+          app,
+          regexId,
+          'Underline on hover (built-in default)'
+        );
+        await expectSelectedComboValue(
+          app,
+          osc8Id,
+          'Always underline (built-in default)'
+        );
+        await evidence.captureEvidence(
+          'independent-link-display-settings',
+          async () => app.capture()
+        );
+        await expectElementKind(
+          await app.getById(regexId),
+          'comboBox'
+        ).selectChildAt(2);
+        await expectSelectedComboValue(
+          app,
+          osc8Id,
+          'Always underline (built-in default)'
+        );
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        await closeSettingsDialogAfterApply(app);
+        await checkRows(initial.underlined, initial.underlined);
+
+        await openSettingsDialog(app);
+        await selectSettingsNotebookTab(app, 'Links', regexId);
+        await expectSelectedComboValue(app, regexId, 'Always underline');
+        await expectElementKind(
+          await app.getById(osc8Id),
+          'comboBox'
+        ).selectChildAt(1);
+        await expectElementKind(
+          await app.getById('settings_cancel_button'),
+          'button'
+        ).click();
+        await checkRows(initial.underlined, initial.underlined);
+
+        await openSettingsDialog(app);
+        await selectSettingsNotebookTab(app, 'Links', osc8Id);
+        await expectSelectedComboValue(
+          app,
+          osc8Id,
+          'Always underline (built-in default)'
+        );
+        await expectElementKind(
+          await app.getById(osc8Id),
+          'comboBox'
+        ).selectChildAt(1);
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        await closeSettingsDialogAfterApply(app);
+        await checkRows(initial.underlined, initial.plain);
+
+        await openSettingsDialog(app);
+        await selectSettingsNotebookTab(app, 'Links', regexId);
+        await expectElementKind(
+          await app.getById(regexId),
+          'comboBox'
+        ).selectChildAt(0);
+        await expectSelectedComboValue(app, osc8Id, 'No decoration');
+        await expectElementKind(
+          await app.getById(osc8Id),
+          'comboBox'
+        ).selectChildAt(0);
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        await closeSettingsDialogAfterApply(app);
+        await checkRows(initial.plain, initial.underlined);
+        await expectConnectionIdentityOnly(config, settings);
+      });
+    });
+  });
+
   for (const backend of ['cairo', 'opengl']) {
     // Two application launches and three settings dialogs need more than the
     // default minute when the full UI suite shares the host.

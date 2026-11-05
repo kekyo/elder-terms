@@ -1346,6 +1346,7 @@ describe.concurrent('shared settings widget', () => {
           '端末の外観',
           '転送',
           'ログ',
+          'リンク',
         ]);
         const pages = [
           {
@@ -1476,6 +1477,10 @@ describe.concurrent('shared settings widget', () => {
             ],
           },
           {
+            id: 'global_settings_link_display_page',
+            labels: ['regexリンクの表示', 'OSC 8リンクの表示'],
+          },
+          {
             id: 'global_settings_logging_page',
             labels: [
               'ログを有効にする',
@@ -1488,6 +1493,16 @@ describe.concurrent('shared settings widget', () => {
 
         for (const page of pages) {
           await expectPageLabels(app, page.id, page.labels);
+        }
+        for (const id of [
+          'global_settings_terminal_regex_link_decoration_combo',
+          'global_settings_terminal_osc8_link_decoration_combo',
+        ]) {
+          const choices = await comboOptionNames(app, id);
+          expect(choices).toContain('無装飾');
+          expect(choices).toContain('常に下線');
+          expect(choices).toContain('ホバー時に下線を表示');
+          expect(choices).toContain('リンク有効判定（減光あり）');
         }
         await expectSelectedComboValue(
           app,
@@ -7699,6 +7714,7 @@ describe.concurrent('shared settings widget', () => {
           'Terminal appearance',
           'Transfer',
           'Logging',
+          'Links',
         ]);
         await expect(
           app.getById('global_settings_general_name_entry')

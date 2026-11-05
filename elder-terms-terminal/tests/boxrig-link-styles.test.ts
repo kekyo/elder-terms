@@ -16,7 +16,7 @@ const appPath = fileURLToPath(
 
 describe('link styling retains terminal attributes', () => {
   for (const backend of ['opengl', 'cairo']) {
-    for (const decoration of ['none', 'underline', 'validated']) {
+    for (const decoration of ['none', 'underline', 'hover', 'validated']) {
       it(`preserves colors, inverse and double underlines with ${backend}/${decoration}`, async () => {
         const targets = [
           'file:///tmp',
@@ -51,7 +51,8 @@ describe('link styling retains terminal attributes', () => {
         try {
           const app = await launcher.launch([
             '--defer-link-validation',
-            `--link-decoration=${decoration}`,
+            `--regex-link-decoration=${decoration}`,
+            `--osc8-link-decoration=${decoration}`,
             '--local',
             '--',
             process.execPath,
@@ -128,6 +129,25 @@ describe('link styling retains terminal attributes', () => {
               capture.image
             );
           });
+          if (decoration === 'hover') {
+            const { bounds } = await terminal.capture();
+            for (const row of [0, 1, 2, 3, 4, 6]) {
+              await app.input.moveMouseTo(
+                Math.trunc(bounds.x + width),
+                Math.trunc(bounds.y + (row + 0.5) * height)
+              );
+              await toPass(async () => {
+                const capture = await terminal.capture();
+                const frame = PNG.sync.read(capture.image);
+                for (let line = 0; line < targets.length; line++)
+                  expect(compare(frame, line)).toBe(0);
+                await writeFile(
+                  `${directory}${backend}-hover-row-${row}.png`,
+                  capture.image
+                );
+              });
+            }
+          }
         } finally {
           await launcher.release();
         }

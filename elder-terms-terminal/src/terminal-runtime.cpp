@@ -38,7 +38,7 @@ struct TerminalRuntime {
   std::function<void(TerminalHyperlinkResolution)> activate_link;
   std::optional<std::pair<boxrig_ui_fixed, boxrig_ui_fixed>> pointer_position;
   bool link_hover = false;
-  TerminalLinkDecoration link_decoration = TerminalLinkDecoration::underline;
+  TerminalLinkDecorations link_decorations;
   bool links_pending = false;
   std::unique_ptr<TerminalReceivedMacros, decltype(&destroy_terminal_received_macros)> macros{
       nullptr, destroy_terminal_received_macros};
@@ -166,6 +166,7 @@ static void update_link_cursor(TerminalRuntime *runtime, const boxrig_ui_hit_tes
 static gboolean pointer_left(GtkWidget *, GdkEventCrossing *, gpointer context) {
   auto *runtime = static_cast<TerminalRuntime *>(context);
   runtime->pointer_position.reset();
+  if (runtime->links) terminal_links_set_hover(runtime->links.get(), {});
   update_link_cursor(runtime, {});
   return FALSE;
 }
@@ -231,6 +232,18 @@ static bool same_text_boundary(const boxrig_text_position &left, const boxrig_te
       left.line_id.serial == right.line_id.serial && left.line_revision == right.line_revision && left.column == right.column;
 }
 
+static bool same_pointer_target(const boxrig_ui_hit_test_result &left, const boxrig_ui_hit_test_result &right) {
+  return left.inside_grid && left.text_position_valid && right.inside_grid && right.text_position_valid &&
+      left.row == right.row && left.visual_column == right.visual_column &&
+      left.logical_column == right.logical_column && left.trailing_half == right.trailing_half &&
+      left.hyperlink_handle == right.hyperlink_handle &&
+      !(left.overlay_roles & (BOXRIG_UI_OVERLAY_IME | BOXRIG_UI_OVERLAY_CANDIDATES)) &&
+      !(right.overlay_roles & (BOXRIG_UI_OVERLAY_IME | BOXRIG_UI_OVERLAY_CANDIDATES)) &&
+      same_text_boundary(left.leading_position, right.leading_position) &&
+      same_text_boundary(left.trailing_position, right.trailing_position) &&
+      same_text_boundary(left.position, right.position);
+}
+
 static bool refresh_selection_press(TerminalRuntime *runtime) {
   auto &pressed = runtime->selection_press.hit;
   boxrig_ui_hit_test_result current{};
@@ -239,14 +252,7 @@ static bool refresh_selection_press(TerminalRuntime *runtime) {
   // after text replacement, scrolling, bidi changes or a transient overlay.
   if (boxrig_ui_view_hit_test_with_composition(boxrig_gtk3_terminal_widget_view(runtime->widget),
       boxrig_gtk3_terminal_widget_composition(runtime->widget), pressed.x, pressed.y, &current) != BOXRIG_UI_OK ||
-      !current.inside_grid || !current.text_position_valid ||
-      (current.overlay_roles & (BOXRIG_UI_OVERLAY_IME | BOXRIG_UI_OVERLAY_CANDIDATES)) ||
-      current.row != pressed.row || current.visual_column != pressed.visual_column ||
-      current.logical_column != pressed.logical_column || current.trailing_half != pressed.trailing_half ||
-      current.hyperlink_handle != pressed.hyperlink_handle ||
-      !same_text_boundary(current.leading_position, pressed.leading_position) ||
-      !same_text_boundary(current.trailing_position, pressed.trailing_position) ||
-      !same_text_boundary(current.position, pressed.position)) return false;
+      !same_pointer_target(current, pressed)) return false;
   pressed = current;
   // Borrowed hyperlink storage must not survive this synchronous hit.
   pressed.hyperlink_uri = nullptr;
@@ -415,6 +421,13 @@ static boxrig_input_mouse_route route_mouse(
     void *context) {
   auto *runtime = static_cast<TerminalRuntime *>(context);
   auto *view = boxrig_gtk3_terminal_widget_view(runtime->widget);
+  boxrig_ui_hit_test_result refreshed{};
+  // Native events can wait in the component queue while hover annotations
+  // advance. Refresh presentation authority only for the identical grapheme;
+  // changed text, scrolling and OSC 8 replacement never retarget the event.
+  if (runtime->links && boxrig_ui_view_hit_test_with_composition(view,
+      boxrig_gtk3_terminal_widget_composition(runtime->widget), hit->x, hit->y, &refreshed) == BOXRIG_UI_OK &&
+      same_pointer_target(refreshed, *hit)) hit = &refreshed;
   const bool press = event->action == BOXRIG_MOUSE_PRESS && event->button == BOXRIG_MOUSE_BUTTON_LEFT;
   const bool release = event->action == BOXRIG_MOUSE_RELEASE && event->button == BOXRIG_MOUSE_BUTTON_LEFT;
   if (press && runtime->selection_release_pending) cancel_selection_gesture(runtime);
@@ -443,6 +456,7 @@ static boxrig_input_mouse_route route_mouse(
   if (runtime->links) {
     runtime->pointer_position = {hit->x, hit->y};
     update_link_cursor(runtime, *hit);
+    request_frame(runtime);
   }
   if (runtime->selection_release_pending && event->action == BOXRIG_MOUSE_MOTION)
     return BOXRIG_INPUT_MOUSE_ROUTE_TERMINAL;
@@ -972,7 +986,8 @@ static gboolean dispatch_frame(gpointer context) {
   // Long/custom matches continue in smaller background slices; filesystem
   // validation remains asynchronous and never holds presentation here.
   const std::size_t link_budget = runtime->widget_frame_requested &&
-      runtime->link_decoration == TerminalLinkDecoration::validated ? 65536 : 4096;
+      (runtime->link_decorations.regex == TerminalLinkDecoration::validated ||
+       runtime->link_decorations.osc8 == TerminalLinkDecoration::validated) ? 65536 : 4096;
   runtime->links_pending = runtime->links && terminal_links_dispatch(runtime->links.get(), link_budget);
   if (runtime->links_pending) request_continuation(runtime);
   // Communication and stream finalization continue while the window is hidden.
@@ -983,7 +998,15 @@ static gboolean dispatch_frame(gpointer context) {
     fail_ui(runtime);
     return G_SOURCE_REMOVE;
   }
-  if (runtime->links) terminal_links_refresh_viewport(runtime->links.get());
+  if (runtime->links) {
+    terminal_links_refresh_viewport(runtime->links.get());
+    boxrig_ui_hit_test_result pointer{};
+    if (runtime->pointer_position)
+      boxrig_gtk3_terminal_widget_hit_test(runtime->widget, runtime->pointer_position->first, runtime->pointer_position->second, &pointer);
+    // Publish hover before painting. Queued pointer hits are refreshed only
+    // while their grapheme identity remains unchanged.
+    terminal_links_set_hover(runtime->links.get(), pointer);
+  }
   // Stream and recognizer continuations do not necessarily change the view.
   // Widget callbacks and received input request component frames,
   // which also publish accessible text; matching alone does not need one.
@@ -1254,21 +1277,21 @@ void terminal_runtime_set_host_callbacks(TerminalRuntime *runtime, TerminalRunti
   if (runtime->has_title && runtime->host.title) runtime->host.title(runtime->title);
 }
 
-void terminal_runtime_set_hyperlink_rules(TerminalRuntime *runtime,
+void terminal_runtime_set_hyperlink_rules(TerminalRuntime *runtime, bool enabled,
     std::vector<HyperlinkActionRule> rules, std::function<void(TerminalHyperlinkResolution)> activate,
     TerminalHyperlinkPathValidator validate) {
   runtime->links.reset();
   update_link_cursor(runtime, {});
-  if (!rules.empty()) runtime->links.reset(create_terminal_links(
+  if (enabled) runtime->links.reset(create_terminal_links(
       boxrig_gtk3_terminal_widget_view(runtime->widget), std::move(rules), std::move(validate)));
-  if (runtime->links) terminal_links_set_decoration(runtime->links.get(), runtime->link_decoration);
+  if (runtime->links) terminal_links_set_decorations(runtime->links.get(), runtime->link_decorations);
   runtime->activate_link = std::move(activate);
   request_frame(runtime);
 }
 
-void terminal_runtime_set_link_decoration(TerminalRuntime *runtime, TerminalLinkDecoration decoration) {
-  runtime->link_decoration = decoration;
-  if (runtime->links) terminal_links_set_decoration(runtime->links.get(), decoration);
+void terminal_runtime_set_link_decorations(TerminalRuntime *runtime, TerminalLinkDecorations decorations) {
+  runtime->link_decorations = decorations;
+  if (runtime->links) terminal_links_set_decorations(runtime->links.get(), decorations);
   request_frame(runtime);
 }
 

@@ -68,13 +68,14 @@ struct Fixture {
 };
 
 static Fixture create_fixture(const char *type, SettingsWidgetMode mode,
-                              SettingsWidgetCallbacks callbacks = {}) {
+                              SettingsWidgetCallbacks callbacks = {}, bool is_runtime = false) {
   SettingsWidgetOptions options;
   options.store = create_default_settings(default_terminal_display_settings(12),
                                           "Tab test");
   set_explicit_setting_value(&options.store, general_type_setting_key(),
                              SettingValue{std::string(type)});
   options.mode = mode;
+  options.is_runtime = is_runtime;
   options.id_prefix = mode == SettingsWidgetMode::global_defaults
                           ? "global_settings" : "settings";
   options.callbacks = std::move(callbacks);
@@ -155,8 +156,7 @@ static void verify_tab_structure(const Fixture &fixture, bool terminal_visible) 
       "terminal_background_image_entry", "terminal_background_image_opacity_entry",
       "terminal_background_image_fit_combo", "terminal_color_filter_combo",
       "terminal_color_vision_combo", "terminal_color_vision_strength_entry",
-      "terminal_visual_bell_combo",
-      "terminal_link_decoration_combo", "terminal_color_preview"};
+      "terminal_visual_bell_combo", "terminal_color_preview"};
   for (const char *field : behavior_fields) {
     const std::string name = id(field);
     GtkWidget *widget = find_widget(fixture.root, name.c_str());
@@ -170,6 +170,13 @@ static void verify_tab_structure(const Fixture &fixture, bool terminal_visible) 
     require(widget != nullptr && count_widgets(fixture.root, name.c_str()) == 1 &&
                 belongs_to(widget, appearance) && !belongs_to(widget, behavior),
             "Appearance field is missing, duplicated, or on the wrong tab");
+  }
+  auto *links = find_widget(fixture.root, id("link_page").c_str());
+  require(links != nullptr, "Links tab is missing");
+  for (const auto *field : {"terminal_regex_link_decoration_combo", "terminal_osc8_link_decoration_combo"}) {
+    auto *widget = find_widget(fixture.root, id(field).c_str());
+    require(widget && belongs_to(widget, links) && !belongs_to(widget, appearance) &&
+        count_widgets(fixture.root, id(field).c_str()) == 1, "Link decoration must appear only on the links tab");
   }
   auto *scrollbar = gtk_scrolled_window_get_vscrollbar(
       GTK_SCROLLED_WINDOW(appearance));
@@ -212,6 +219,42 @@ static void verify_titlebar_controls(SettingsWidgetMode mode) {
   gtk_button_clicked(GTK_BUTTON(find_widget(fixture.root, (fixture.prefix + "_cancel_button").c_str())));
   const auto restored = terminal_titlebar_effects_settings(settings_widget_draft_store(fixture.state));
   require(restored.bell == TitlebarEffectStrength::disabled && restored.receive == TitlebarEffectStrength::disabled, "Cancel did not restore applied titlebar preferences");
+  destroy_fixture(&fixture);
+}
+
+static void verify_link_controls(SettingsWidgetMode mode, bool is_runtime) {
+  int applied = 0;
+  SettingsWidgetCallbacks callbacks;
+  callbacks.apply = [&](const SettingsStore &store, SettingsWidgetAction action) {
+    const auto links = terminal_link_decorations(store);
+    require(links.regex == TerminalLinkDecoration::validated && links.osc8 == TerminalLinkDecoration::hover,
+        "Apply lost independent link preferences");
+    ++applied;
+    action.complete(true, {});
+  };
+  auto fixture = create_fixture("local", mode, std::move(callbacks), is_runtime);
+  auto *regex = GTK_COMBO_BOX(find_widget(fixture.root, (fixture.prefix + "_terminal_regex_link_decoration_combo").c_str()));
+  auto *osc8 = GTK_COMBO_BOX(find_widget(fixture.root, (fixture.prefix + "_terminal_osc8_link_decoration_combo").c_str()));
+  require(regex && osc8, "Independent link controls are missing");
+  for (const auto *value : {"none", "underline", "hover", "validated"}) {
+    require(gtk_combo_box_set_active_id(regex, value), "Missing regex decoration choice");
+    require(terminal_link_decorations(settings_widget_draft_store(fixture.state)).osc8 == TerminalLinkDecoration::underline,
+        "Editing regex changed the OSC 8 preference");
+  }
+  require(gtk_combo_box_set_active_id(osc8, "hover"), "Missing OSC 8 hover choice");
+  gtk_button_clicked(GTK_BUTTON(find_widget(fixture.root, (fixture.prefix + "_apply_button").c_str())));
+  require(applied == 1, "Link preferences cannot be applied");
+  gtk_combo_box_set_active_id(regex, "inherit");
+  const auto partial = terminal_link_decorations(settings_widget_draft_store(fixture.state));
+  require(partial.regex == TerminalLinkDecoration::hover && partial.osc8 == TerminalLinkDecoration::hover,
+      "Regex inheritance changed the explicit OSC 8 preference");
+  gtk_combo_box_set_active_id(osc8, "inherit");
+  require(terminal_link_decorations(settings_widget_draft_store(fixture.state)) == TerminalLinkDecorations{},
+      "Independent inheritance did not restore built-in defaults");
+  gtk_button_clicked(GTK_BUTTON(find_widget(fixture.root, (fixture.prefix + "_cancel_button").c_str())));
+  const auto restored = terminal_link_decorations(settings_widget_draft_store(fixture.state));
+  require(restored.regex == TerminalLinkDecoration::validated && restored.osc8 == TerminalLinkDecoration::hover,
+      "Cancel did not restore applied link preferences");
   destroy_fixture(&fixture);
 }
 
@@ -266,6 +309,9 @@ int main(int argc, char **argv) {
     verify_actions();
     verify_titlebar_controls(SettingsWidgetMode::connection);
     verify_titlebar_controls(SettingsWidgetMode::global_defaults);
+    verify_link_controls(SettingsWidgetMode::connection, false);
+    verify_link_controls(SettingsWidgetMode::connection, true);
+    verify_link_controls(SettingsWidgetMode::global_defaults, false);
     for (const char *type : {"sftp", "ftp", "webdav", "smb"}) {
       Fixture transfer = create_fixture(type, SettingsWidgetMode::connection);
       verify_tab_structure(transfer, false);

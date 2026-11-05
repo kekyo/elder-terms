@@ -1114,8 +1114,14 @@ msgstr "パス検証"
 msgid "Text boundaries"
 msgstr "テキストの区切り"
 
-msgid "Link decoration"
-msgstr "リンクの装飾"
+msgid "Regex link display"
+msgstr "regexリンクの表示"
+
+msgid "OSC 8 link display"
+msgstr "OSC 8リンクの表示"
+
+msgid "Underline on hover"
+msgstr "ホバー時に下線を表示"
 
 msgid "No decoration"
 msgstr "無装飾"
