@@ -46,7 +46,7 @@ await run('cmake', ['--build', build, '--parallel', String(makeJobs)]);
 await run('cmake', ['--install', build]);
 await run('tar', [
   '--exclude=.git', '--sort=name', '--mtime=@0', '--owner=0', '--group=0',
-  '--numeric-owner', '-czf', join(sdk, 'libsmb2-source.tar.gz'),
+  '--numeric-owner', '-I', 'xz -9e -T1', '-cf', join(sdk, 'libsmb2-source.tar.xz'),
   '-C', join(root, 'deps'), 'libsmb2',
 ]);
 await writeFile(join(output, 'libsmb2-build.stamp'), 'ready\n');

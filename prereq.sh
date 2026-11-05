@@ -70,6 +70,7 @@ ninja-build
 nodejs
 openssh-client
 pkg-config
+xz-utils
 xdg-utils
 EOF
 }

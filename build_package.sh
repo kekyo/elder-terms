@@ -445,10 +445,10 @@ validate_deb_package() {
 		usr/share/doc/elder-terms/licenses/jemalloc/COPYING \
 		usr/share/doc/elder-terms/licenses/libsmb2/COPYING \
 		usr/share/doc/elder-terms/licenses/libdsm/COPYING \
-		usr/share/doc/elder-terms/licenses/libdsm/libdsm-source.tar.gz \
+		usr/share/doc/elder-terms/licenses/libdsm/libdsm-source.tar.xz \
 		usr/share/doc/elder-terms/licenses/libdsm/libdsm-correctness.patch \
 		usr/share/doc/elder-terms/licenses/libsmb2/LICENCE-LGPL-2.1.txt \
-		usr/share/doc/elder-terms/licenses/libsmb2/libsmb2-source.tar.gz \
+		usr/share/doc/elder-terms/licenses/libsmb2/libsmb2-source.tar.xz \
 		usr/share/doc/elder-terms/licenses/connection-icons/NOTO-LICENSE \
 		usr/share/doc/elder-terms/licenses/connection-icons/NOTO-FLAGS-NOTICE \
 		usr/share/doc/elder-terms/licenses/connection-icons/MATERIAL-LICENSE \

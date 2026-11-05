@@ -60,6 +60,6 @@ await run('meson', ['setup', '--reconfigure', build, source,
 await run('meson', ['compile', '-C', build, 'dsm'], root);
 await run('meson', ['install', '-C', build, '--no-rebuild', '--tags=runtime,devel'], root);
 await run('tar', ['--exclude=.git', '--sort=name', '--mtime=@0', '--owner=0',
-  '--group=0', '--numeric-owner', '-czf', join(sdk, 'libdsm-source.tar.gz'),
+  '--group=0', '--numeric-owner', '-I', 'xz -9e -T1', '-cf', join(sdk, 'libdsm-source.tar.xz'),
   '-C', join(output, 'libdsm'), 'source'], root);
 await writeFile(join(output, 'libdsm-build.stamp'), 'ready\n');

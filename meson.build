@@ -177,11 +177,11 @@ custom_target('libsmb2-private-runtime',
   depends: libsmb2_build_target, build_by_default: true,
   install: true, install_dir: elder_terms_private_install_dir)
 custom_target('libsmb2-license-bundle',
-  output: ['COPYING', 'LICENCE-LGPL-2.1.txt', 'libsmb2-source.tar.gz'],
+  output: ['COPYING', 'LICENCE-LGPL-2.1.txt', 'libsmb2-source.tar.xz'],
   command: [find_program('cp'),
     meson.project_source_root() / 'deps/libsmb2/COPYING',
     meson.project_source_root() / 'deps/libsmb2/LICENCE-LGPL-2.1.txt',
-    libsmb2_sdk / 'libsmb2-source.tar.gz', '@OUTDIR@'],
+    libsmb2_sdk / 'libsmb2-source.tar.xz', '@OUTDIR@'],
   depends: libsmb2_build_target, build_by_default: true,
   install: true,
   install_dir: get_option('datadir') / 'doc/elder-terms/licenses/libsmb2')
@@ -204,8 +204,8 @@ libdsm_dep = declare_dependency(
     dirs: libdsm_sdk / 'lib', static: false),
   sources: [libdsm_build_target, libdsm_runtime_target])
 custom_target('libdsm-source-bundle',
-  output: 'libdsm-source.tar.gz',
-  command: [find_program('cp'), libdsm_sdk / 'libdsm-source.tar.gz', '@OUTPUT@'],
+  output: 'libdsm-source.tar.xz',
+  command: [find_program('cp'), libdsm_sdk / 'libdsm-source.tar.xz', '@OUTPUT@'],
   depends: libdsm_build_target, build_by_default: true,
   install: true, install_dir: get_option('datadir') / 'doc/elder-terms/licenses/libdsm')
 install_data('deps/libdsm/COPYING', 'patches/libdsm-correctness.patch',

@@ -220,7 +220,7 @@ Description: GTK terminal for serial, TELNET, local shell, SSH, SFTP, and FTP co
   for (const name of [
     'COPYING',
     'LICENCE-LGPL-2.1.txt',
-    'libsmb2-source.tar.gz',
+    'libsmb2-source.tar.xz',
   ])
     textFiles.set(
       `usr/share/doc/elder-terms/licenses/libsmb2/${name}`,
@@ -228,7 +228,7 @@ Description: GTK terminal for serial, TELNET, local shell, SSH, SFTP, and FTP co
     );
   for (const name of [
     'COPYING',
-    'libdsm-source.tar.gz',
+    'libdsm-source.tar.xz',
     'libdsm-correctness.patch',
   ])
     textFiles.set(
@@ -899,6 +899,7 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
       'meson',
       'nodejs',
       'openssh-client',
+      'xz-utils',
       'xdg-utils',
     ]) {
       expect(containerfile).toContain(dependency);
@@ -1139,10 +1140,10 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
       ].map((name) => `usr/share/doc/elder-terms/licenses/boxrig/${name}`),
       'usr/share/doc/elder-terms/licenses/jemalloc/COPYING',
       'usr/lib/elder-terms/elder-terms-file-transfer/elder-terms-smb1-worker',
-      ...['COPYING', 'libdsm-source.tar.gz', 'libdsm-correctness.patch'].map(
+      ...['COPYING', 'libdsm-source.tar.xz', 'libdsm-correctness.patch'].map(
         (name) => `usr/share/doc/elder-terms/licenses/libdsm/${name}`
       ),
-      ...['COPYING', 'LICENCE-LGPL-2.1.txt', 'libsmb2-source.tar.gz'].map(
+      ...['COPYING', 'LICENCE-LGPL-2.1.txt', 'libsmb2-source.tar.xz'].map(
         (name) => `usr/share/doc/elder-terms/licenses/libsmb2/${name}`
       ),
       ...[
@@ -1295,7 +1296,7 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
         'elder-terms/elder-terms-file-transfer/elder-terms-smb1-worker'
       ),
       'share/doc/elder-terms/licenses/libdsm/COPYING',
-      'share/doc/elder-terms/licenses/libdsm/libdsm-source.tar.gz',
+      'share/doc/elder-terms/licenses/libdsm/libdsm-source.tar.xz',
       'share/doc/elder-terms/licenses/libdsm/libdsm-correctness.patch',
       join(libraryDirectory, 'elder-terms/launcher/elder-terms'),
       join(libraryDirectory, 'elder-terms/launcher/main-window.ui'),
@@ -1324,7 +1325,7 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
       'share/doc/elder-terms/licenses/jemalloc/COPYING',
       'share/doc/elder-terms/licenses/libsmb2/COPYING',
       'share/doc/elder-terms/licenses/libsmb2/LICENCE-LGPL-2.1.txt',
-      'share/doc/elder-terms/licenses/libsmb2/libsmb2-source.tar.gz',
+      'share/doc/elder-terms/licenses/libsmb2/libsmb2-source.tar.xz',
       'share/doc/elder-terms/docs/ja/smb.md',
       'share/doc/elder-terms/docs/en/smb.md',
     ]) {
@@ -1481,7 +1482,7 @@ process.stdout.write('INSTALLED-TERMINAL-READY');
     }
   });
 
-  it('rebuilds and replaces libdsm using the installed corresponding source', () => {
+  it('rebuilds bundled SMB libraries and uses a replacement libdsm', () => {
     const destination = join(temporaryRoot, 'libdsm-source-install');
     const buildDirectory = join(projectRoot, '.build');
     const introspection = run('meson', [
@@ -1516,8 +1517,8 @@ process.stdout.write('INSTALLED-TERMINAL-READY');
     mkdirSync(extracted);
     expectSuccess(
       run('tar', [
-        '-xzf',
-        join(licenses, 'libdsm-source.tar.gz'),
+        '-xJf',
+        join(licenses, 'libdsm-source.tar.xz'),
         '-C',
         extracted,
       ]),
@@ -1547,6 +1548,42 @@ process.stdout.write('INSTALLED-TERMINAL-READY');
     }
     expect(readFileSync(join(source, 'COPYING'), 'utf8')).toBe(
       readFileSync(join(licenses, 'COPYING'), 'utf8')
+    );
+
+    expectSuccess(
+      run('tar', [
+        '-xJf',
+        join(
+          installedRoot,
+          'share/doc/elder-terms/licenses/libsmb2/libsmb2-source.tar.xz'
+        ),
+        '-C',
+        extracted,
+      ]),
+      'Installed libsmb2 source extraction failed'
+    );
+    const smb2Build = join(extracted, 'libsmb2-build');
+    expectSuccess(
+      run('cmake', [
+        '-S',
+        join(extracted, 'libsmb2'),
+        '-B',
+        smb2Build,
+        '-DCMAKE_BUILD_TYPE=Release',
+        '-DBUILD_SHARED_LIBS=ON',
+        '-DENABLE_LIBKRB5=OFF',
+        '-DENABLE_GSSAPI=OFF',
+        '-DENABLE_LIBDCERPC=OFF',
+        '-DENABLE_LIBQUIC=OFF',
+        '-DENABLE_RDMA=OFF',
+        '-DENABLE_UTILS=OFF',
+        '-DENABLE_EXAMPLES=OFF',
+      ]),
+      'Installed libsmb2 source configuration failed'
+    );
+    expectSuccess(
+      run('cmake', ['--build', smb2Build, '--parallel', '2']),
+      'Installed libsmb2 source compilation failed'
     );
 
     // Rebuild only from the installed source, with no access to a submodule or

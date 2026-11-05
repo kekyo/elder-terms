@@ -110,18 +110,20 @@ SMB1では専用の一時ディレクトリに送信内容を保存します。[
 
 ## 同梱ライブラリのソースとライセンス
 
-debパッケージに同梱する[libsmb2](https://github.com/sahlberg/libsmb2)のソース一式は、`/usr/share/doc/elder-terms/licenses/libsmb2/libsmb2-source.tar.gz`にあります。同じディレクトリの`COPYING`に構成要素ごとのライセンスが、`LICENCE-LGPL-2.1.txt`にライブラリのライセンス全文があります。
+debパッケージに同梱する[libsmb2](https://github.com/sahlberg/libsmb2)のソース一式は、`/usr/share/doc/elder-terms/licenses/libsmb2/libsmb2-source.tar.xz`にあります。同じディレクトリの`COPYING`に構成要素ごとのライセンスが、`LICENCE-LGPL-2.1.txt`にライブラリのライセンス全文があります。
 
-SMB1用の[libdsm](https://github.com/videolabs/libdsm)についても、対応するソースを`/usr/share/doc/elder-terms/licenses/libdsm/libdsm-source.tar.gz`に同梱します。同じ場所にライセンスの`COPYING`と、適用した不具合修正の`libdsm-correctness.patch`があります。
+SMB1用の[libdsm](https://github.com/videolabs/libdsm)についても、対応するソースを`/usr/share/doc/elder-terms/licenses/libdsm/libdsm-source.tar.xz`に同梱します。同じ場所にライセンスの`COPYING`と、適用した不具合修正の`libdsm-correctness.patch`があります。
 
 同梱のlibdsmと本プロジェクトによる修正は、LGPL 2.1以降の条件で提供します。元の著作権表示を保持し、変更した各ファイルに変更内容と日付を記載しています。elder-terms本体のライセンスはMITです。[LGPL 2.1](https://opensource.org/license/lgpl-2-1)の第2条・第4条・第6条に従い、修正済みソースとビルド定義を同梱し、共有ライブラリを差し替えられる構成にしています。
+
+ソースはライブラリごとのtar.xz形式です。展開にはtarとxzを使用します。Debian系では`xz-utils`を用意してください。
 
 libdsmは同梱ソースだけで再ビルドできます。Cコンパイラー、Meson、Ninja、pkg-config、libtasn1の開発ファイルと`asn1Parser`を用意してください。Debian系では、libtasn1関連のパッケージ名は`libtasn1-6-dev`と`libtasn1-bin`です。
 
 ```sh
 mkdir libdsm-rebuild
 cd libdsm-rebuild
-tar -xf /usr/share/doc/elder-terms/licenses/libdsm/libdsm-source.tar.gz
+tar -xJf /usr/share/doc/elder-terms/licenses/libdsm/libdsm-source.tar.xz
 meson setup build source --prefix="$PWD/sdk" --libdir=lib \
   -Ddefault_library=shared -Dbinaries=false
 meson compile -C build dsm
