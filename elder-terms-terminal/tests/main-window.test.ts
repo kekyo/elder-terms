@@ -1795,7 +1795,7 @@ describe.concurrent('elder-terms-terminal main window', () => {
     });
   });
 
-  it('keeps local SFTP browsing available when shared SSH disconnects', async (context) => {
+  it('blocks the SFTP background until reconnect after shared SSH disconnects', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const localDirectory = join(directory, 'local');
       const configPath = join(directory, 'ssh.ini');
@@ -1845,17 +1845,26 @@ describe.concurrent('elder-terms-terminal main window', () => {
           );
           await waitForResult(
             async () => {
-              expect((await localPath.info()).states).toContain('sensitive');
+              expect((await localPath.info()).states).not.toContain(
+                'sensitive'
+              );
               expect((await remotePath.info()).states).not.toContain(
                 'sensitive'
               );
               expect(await status.text()).toBe('Disconnected');
+              expect(
+                (await (await app.getById('file_transfer_dim_overlay')).info())
+                  .states
+              ).toContain('showing');
             },
             {
-              message: 'shared disconnect should only disable remote SFTP',
+              message: 'shared disconnect should block both SFTP browsers',
               timeoutMs: 5_000,
             }
           );
+          expect(
+            (await (await app.getById('terminal_view')).info()).states
+          ).toContain('sensitive');
           const reconnect = expectElementKind(
             await app.getById('file_transfer_reconnect_button'),
             'button'
@@ -1863,8 +1872,13 @@ describe.concurrent('elder-terms-terminal main window', () => {
           expect((await reconnect.info()).states).toContain('showing');
           await reconnect.click();
           await waitForResult(async () => {
+            expect((await localPath.info()).states).toContain('sensitive');
             expect((await remotePath.info()).states).toContain('sensitive');
             expect((await reconnect.info()).states).not.toContain('showing');
+            expect(
+              (await (await app.getById('file_transfer_dim_overlay')).info())
+                .states
+            ).not.toContain('showing');
           });
         }
       );

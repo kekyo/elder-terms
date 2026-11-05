@@ -1141,6 +1141,11 @@ std::optional<MainWindow> load_main_window(TerminalAmbiguousWidth ambiguous_widt
   gestament_gtk_assign_accessible_id(main_window.terminal, "terminal_view");
   install_terminal_dim_overlay_input_pass_through(
       main_window.terminal_dim_overlay);
+  // Block local mouse actions while an authentication panel is visible. The
+  // binding follows widget lifetime and restores input when the panel hides.
+  g_object_bind_property(main_window.ssh_prompt_panel, "visible",
+      main_window.terminal_attachment, "sensitive",
+      static_cast<GBindingFlags>(G_BINDING_SYNC_CREATE | G_BINDING_INVERT_BOOLEAN));
   main_window.ssh_prompt = create_inline_prompt_controller(
       {
           .panel = main_window.ssh_prompt_panel,

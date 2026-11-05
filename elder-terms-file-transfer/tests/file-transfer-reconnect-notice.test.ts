@@ -163,10 +163,14 @@ for (const language of ['en', 'ja']) {
           await app.getById('file_transfer_reconnect_button'),
           'button'
         );
+        const dim = await app.getById('file_transfer_dim_overlay');
+        const background = await app.getById('file_transfer_jobs_paned');
         for (let attempt = 0; attempt < 3; ++attempt) {
           await waitForResult(async () => {
             expect((await prompt.info()).states).toContain('showing');
             expect(await entry.text()).toBe('alice');
+            expect((await dim.info()).states).toContain('showing');
+            expect((await background.info()).states).not.toContain('sensitive');
           });
           if (attempt !== 0) {
             expect((await notice.info()).states).not.toContain('showing');
@@ -211,15 +215,11 @@ for (const language of ['en', 'ja']) {
               ).text()
             ).toContain('401');
             expect((await app.output()).exitCode).toBeNull();
+            expect((await dim.info()).states).toContain('showing');
+            expect((await background.info()).states).not.toContain('sensitive');
           });
           const panelBounds = (await notice.capture()).bounds;
           const buttonBounds = (await reconnect.capture()).bounds;
-          const localBounds = (
-            await (await app.getById('file_transfer_local_tree')).capture()
-          ).bounds;
-          expect(panelBounds.x).toBeGreaterThanOrEqual(
-            localBounds.x + localBounds.width
-          );
           expect(buttonBounds.x).toBeGreaterThanOrEqual(panelBounds.x);
           expect(buttonBounds.y).toBeGreaterThanOrEqual(panelBounds.y);
           expect(buttonBounds.x + buttonBounds.width).toBeLessThanOrEqual(
@@ -238,6 +238,8 @@ for (const language of ['en', 'ja']) {
         await waitForResult(async () => {
           expect((await notice.info()).states).not.toContain('showing');
           expect((await tree.info()).states).toContain('sensitive');
+          expect((await dim.info()).states).not.toContain('showing');
+          expect((await background.info()).states).toContain('sensitive');
           const names: string[] = [];
           for (let row = 0; row < (await tree.getRowCount()); ++row)
             names.push((await (await tree.cellAt(row, 0))?.info())?.name ?? '');

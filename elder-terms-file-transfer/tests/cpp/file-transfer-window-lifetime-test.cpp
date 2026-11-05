@@ -236,6 +236,10 @@ static cardio::promise<void> verify_async(
           auto *notice = find_widget(file_transfer_window_widget(closing_window), "file_transfer_connection_notice_panel");
           expect(notice != nullptr && gtk_widget_get_visible(notice),
                  "Disconnected file browsers must display the reason and available actions");
+          auto *background = find_widget(file_transfer_window_widget(closing_window), "file_transfer_jobs_paned");
+          auto *dim = find_widget(file_transfer_window_widget(closing_window), "file_transfer_dim_overlay");
+          expect(gtk_widget_get_visible(dim) && !gtk_widget_is_sensitive(background),
+                 "Disconnected notices must dim and block the browsers and transfer jobs");
           set_file_transfer_window_connection_available(closing_window, false, "Connection reset by peer");
           set_file_transfer_window_connection_available(closing_window, false, "Connection is closed");
           auto *reason = find_widget(notice, "file_transfer_connection_notice_message_label");
@@ -243,6 +247,9 @@ static cardio::promise<void> verify_async(
                  "The first detailed disconnection reason must survive later cleanup errors");
           expect(!gtk_widget_get_visible(find_widget(notice, "file_transfer_reconnect_button")),
                  "A window without a reconnect callback must offer only Close");
+          show_file_transfer_window_connection_error(closing_window, "Connection failed", "Authentication rejected", {});
+          expect(gtk_widget_get_visible(dim) && !gtk_widget_is_sensitive(background),
+                 "Connection failures must keep the same modal background as disconnections");
           gtk_button_clicked(GTK_BUTTON(find_widget(notice, "file_transfer_connection_notice_cancel_button")));
           expect(file_transfer_window_widget(closing_window) == nullptr,
                  "Close on the notice must close a window without reconnection support");
@@ -488,7 +495,6 @@ static cardio::promise<void> verify_async(
              "Remote folder creation must respect the client's write capability");
       expect(std::strcmp(gtk_entry_get_text(GTK_ENTRY(path)), "/remote/loaded") == 0,
              "The canonical path must be applied before input is enabled");
-      set_file_transfer_window_connection_available(window, false);
       cardio::primitives::manually_conditional local_idle{false};
       GtkWidget *local_frame = find_widget(root, "file_transfer_local_group");
       const auto idle_handler = g_signal_connect(local_frame, "notify::sensitive",
@@ -511,9 +517,8 @@ static cardio::promise<void> verify_async(
         if (std::strcmp(gtk_widget_get_name(candidate), "file_transfer_operation_error_dialog") == 0) local_error = candidate;
       }
       g_list_free(error_windows);
-      expect(local_error != nullptr, "A disconnected remote service must not hide local browser errors");
+      expect(local_error != nullptr, "Local browser errors must be reported in a modal dialog");
       gtk_widget_destroy(local_error);
-      set_file_transfer_window_connection_available(window, true);
       g_signal_emit_by_name(find_widget(menu, "settings_menu_item"), "activate");
       GList *toplevels = gtk_window_list_toplevels();
       GtkWidget *settings_dialog = nullptr;

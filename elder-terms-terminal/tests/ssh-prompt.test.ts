@@ -65,7 +65,7 @@ const expectOnlyMainWindow = async (app: GtkApp): Promise<void> => {
 
 describe.concurrent('SSH prompt overlay', () => {
   for (const fixture of ['password', 'host-key', 'changed-host-key']) {
-    it(`keeps Tab and Shift+Tab inside the ${fixture} prompt`, async (context) => {
+    it(`keeps mouse input and Tab navigation inside the ${fixture} prompt`, async (context) => {
       await runGtkTest(
         context,
         ['--test-fixture', `--test-ssh-prompt=${fixture}`],
@@ -75,6 +75,19 @@ describe.concurrent('SSH prompt overlay', () => {
             'window'
           );
           await window.activate();
+          const terminal = await app.getById('terminal_view');
+          const { bounds } = await terminal.capture();
+          await app.input.moveMouseTo(
+            bounds.x + 5,
+            bounds.y + bounds.height - 5
+          );
+          await app.input.setMouseButton('left', true);
+          await app.input.setMouseButton('left', false);
+          await app.input.setMouseButton('right', true);
+          await app.input.setMouseButton('right', false);
+          await expectOnlyMainWindow(app);
+          expect((await terminal.info()).states).not.toContain('focused');
+          expect((await terminal.info()).states).not.toContain('sensitive');
           const widgets = await Promise.all(
             [
               'message_label',
@@ -132,6 +145,7 @@ describe.concurrent('SSH prompt overlay', () => {
               expect(
                 (await (await app.getById('terminal_view')).info()).states
               ).toContain('focused');
+              expect((await terminal.info()).states).toContain('sensitive');
             });
           } else if (fixture === 'changed-host-key') {
             await expectElementKind(widgets[3]!, 'button').click();
