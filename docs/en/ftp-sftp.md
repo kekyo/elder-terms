@@ -1,5 +1,22 @@
 # FTP/SFTP details
 
+## Basic Connection Settings
+
+The corresponding INI settings have the following form:
+
+```ini
+[general]
+type=ftp
+
+[ftp]
+address=ftp.example.com
+port=21
+username=
+data_connection_mode=passive
+local_directory=
+remote_directory=.
+```
+
 ## Using FTP with TLS (FTPS)
 
 To use [FTPS](https://everything.curl.dev/ftp/ftps.html), choose FTPS (explicit TLS)
