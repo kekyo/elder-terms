@@ -1258,8 +1258,11 @@ describe.concurrent('elder-terms-terminal main window', () => {
                 }
               }
 
-              const { bounds } = (await readTerminalGridLayout(app))
-                .terminalCapture;
+              // New frames may be pending after recording; selection only
+              // needs the terminal bounds, not settled rendering metrics.
+              const { bounds } = await (
+                await app.getById('terminal_view')
+              ).capture();
               await selectTerminalCells(
                 app,
                 bounds,
