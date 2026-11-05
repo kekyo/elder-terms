@@ -71,6 +71,9 @@ smb1_worker = executable('elder-terms-smb1-worker', 'src/smb/smb1-worker.cpp',
   install_rpath: elder_terms_private_install_rpath)
 
 if get_option('build_tests')
+smb1_protocol_test = executable('smb1-protocol-test', 'tests/smb/smb1-protocol-test.cpp',
+  dependencies: [cardio_dep], override_options: ['optimization=3', 'werror=true'])
+test('smb1-protocol', smb1_protocol_test)
 smb1_client_test = executable('smb1-client-test',
   ['tests/smb/smb1-client-test.cpp', 'src/file-transfer/file-transfer-engine.cpp', 'src/smb/smb1-client.cpp',
    'src/smb/smb-client.cpp', 'src/smb/smb-share-list.cpp'],

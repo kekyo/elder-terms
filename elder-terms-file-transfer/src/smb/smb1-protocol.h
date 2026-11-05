@@ -5,6 +5,7 @@
 
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cardio.h>
 #include <cstdint>
@@ -33,7 +34,9 @@ struct Payload {
     if (value.size() > maximum_frame || bytes.size() + value.size() + 8 > maximum_frame)
       throw std::runtime_error("SMB1 helper message exceeds its size limit");
     number(value.size());
-    bytes.insert(bytes.end(), value.begin(), value.end());
+    const auto offset = bytes.size();
+    bytes.resize(offset + value.size());
+    std::copy(value.begin(), value.end(), bytes.data() + offset);
   }
   void text(const std::string &value) {
     data(std::as_bytes(std::span(value.data(), value.size())));
