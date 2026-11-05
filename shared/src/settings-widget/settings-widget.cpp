@@ -8,6 +8,7 @@
 #include <elder-terms/settings-widget.h>
 
 #include <algorithm>
+#include <tuple>
 #include <array>
 #include <cerrno>
 #include <cctype>
@@ -181,7 +182,8 @@ struct SettingsWidgetState {
   GtkWidget *terminal_cursor_key_mode_combo = nullptr;
   GtkWidget *terminal_cursor_shape_combo = nullptr;
   GtkWidget *terminal_color_filter_combo = nullptr;
-  GtkWidget *terminal_link_decoration_combo = nullptr;
+  GtkWidget *terminal_regex_link_decoration_combo = nullptr;
+  GtkWidget *terminal_osc8_link_decoration_combo = nullptr;
   GtkWidget *terminal_color_vision_combo = nullptr;
   GtkWidget *terminal_color_vision_strength_entry = nullptr;
   bool terminal_color_vision_strength_valid = true;
@@ -3486,13 +3488,15 @@ static void sync_widgets_from_draft(SettingsWidgetState *state, bool preserve_in
     populate_inheritable_combo(state->terminal_ambiguous_width_combo, state->draft_store, key,
         setting_choice_label(key, fallback), options, setting_string_value_or_default(state->draft_store, key, "narrow"));
   }
-  if (state->terminal_link_decoration_combo) {
-    const auto key = terminal_link_decoration_setting_key();
-    const auto fallback = std::get<std::string>(setting_fallback_value(state->draft_store, key, std::string("underline")));
+  for (const auto &[combo, key, default_value] : {
+      std::tuple{state->terminal_regex_link_decoration_combo, terminal_regex_link_decoration_setting_key(), "hover"},
+      std::tuple{state->terminal_osc8_link_decoration_combo, terminal_osc8_link_decoration_setting_key(), "underline"}}) {
+    if (!combo) continue;
+    const auto fallback = std::get<std::string>(setting_fallback_value(state->draft_store, key, std::string(default_value)));
     std::vector<ComboOption> options;
-    for (const auto *mode : {"none", "underline", "validated"}) options.push_back({mode, setting_choice_label(key, mode)});
-    populate_inheritable_combo(state->terminal_link_decoration_combo, state->draft_store, key,
-        setting_choice_label(key, fallback), options, setting_string_value_or_default(state->draft_store, key, "underline"));
+    for (const auto *mode : {"none", "underline", "hover", "validated"}) options.push_back({mode, setting_choice_label(key, mode)});
+    populate_inheritable_combo(combo, state->draft_store, key, setting_choice_label(key, fallback), options,
+        setting_string_value_or_default(state->draft_store, key, default_value));
   }
   if (state->terminal_color_filter_combo) {
     const auto key = terminal_color_filter_setting_key();
@@ -5558,22 +5562,11 @@ create_terminal_pages(SettingsWidgetState *state) {
     notify_changed(state);
   }), state);
   attach_row(appearance_page, 7, terminal_color_vision_strength_setting_key(), state->terminal_color_vision_strength_entry);
-  state->terminal_link_decoration_combo = create_combo_box(widget_id(state, "terminal_link_decoration_combo").c_str());
-  g_signal_connect(state->terminal_link_decoration_combo, "changed", G_CALLBACK(+[](GtkComboBox *, gpointer data) {
-    auto *state = static_cast<SettingsWidgetState *>(data);
-    if (state->synchronizing) return;
-    const auto key = terminal_link_decoration_setting_key();
-    const auto choice = active_combo_id(state->terminal_link_decoration_combo, inherit_choice);
-    if (choice == inherit_choice) clear_explicit_setting_value(&state->draft_store, key);
-    else set_explicit_setting_value(&state->draft_store, key, SettingValue{choice});
-    notify_changed(state);
-  }), state);
-  attach_row(appearance_page, 8, terminal_link_decoration_setting_key(), state->terminal_link_decoration_combo);
   state->terminal_visual_bell_combo = create_combo_box(widget_id(state, "terminal_visual_bell_combo").c_str());
   g_signal_connect(state->terminal_visual_bell_combo, "changed", G_CALLBACK(on_titlebar_effect_changed), state);
   attach_row(appearance_page, 9, terminal_visual_bell_setting_key(), state->terminal_visual_bell_combo);
   state->terminal_color_preview = create_terminal_color_preview(&state->draft_store, state->id_prefix);
-  gtk_grid_attach(GTK_GRID(appearance_page), terminal_color_preview_root(state->terminal_color_preview), 0, 10, 2, 1);
+  gtk_grid_attach(GTK_GRID(appearance_page), terminal_color_preview_root(state->terminal_color_preview), 0, 8, 2, 1);
   for (int row = 0; row <= 9; row++) {
     auto *label = gtk_grid_get_child_at(GTK_GRID(appearance_page), 0, row);
     if (GTK_IS_LABEL(label)) gtk_size_group_add_widget(labels, label);
@@ -6880,17 +6873,42 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
         .page = macro_page,
         .tab_label = macro_tab,
     });
+  }
 
-    state->hyperlink_editor = create_hyperlink_settings_editor({
-        .store = &state->draft_store,
-        .id_prefix = state->id_prefix,
-        .changed = [state]() {
-          update_action_sensitivity(state);
-          notify_changed(state);
-        },
-    });
-    GtkWidget *link_page =
-        hyperlink_settings_editor_root(state->hyperlink_editor);
+  {
+    GtkWidget *link_page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    assign_accessible_id(link_page, widget_id(state, "link_page").c_str());
+    GtkWidget *preferences = create_page_grid(widget_id(state, "link_display_page").c_str());
+    state->terminal_regex_link_decoration_combo = create_combo_box(widget_id(state, "terminal_regex_link_decoration_combo").c_str());
+    state->terminal_osc8_link_decoration_combo = create_combo_box(widget_id(state, "terminal_osc8_link_decoration_combo").c_str());
+    int row = 0;
+    for (const auto &[combo, key] : {
+        std::pair{state->terminal_regex_link_decoration_combo, terminal_regex_link_decoration_setting_key()},
+        std::pair{state->terminal_osc8_link_decoration_combo, terminal_osc8_link_decoration_setting_key()}}) {
+      attach_row(preferences, row++, key, combo);
+      g_signal_connect(combo, "changed", G_CALLBACK(+[](GtkComboBox *combo, gpointer data) {
+        auto *state = static_cast<SettingsWidgetState *>(data);
+        if (state->synchronizing) return;
+        const auto key = GTK_WIDGET(combo) == state->terminal_regex_link_decoration_combo ?
+            terminal_regex_link_decoration_setting_key() : terminal_osc8_link_decoration_setting_key();
+        const auto choice = active_combo_id(GTK_WIDGET(combo), inherit_choice);
+        if (choice == inherit_choice) clear_explicit_setting_value(&state->draft_store, key);
+        else set_explicit_setting_value(&state->draft_store, key, SettingValue{choice});
+        notify_changed(state);
+      }), state);
+    }
+    gtk_box_pack_start(GTK_BOX(link_page), preferences, FALSE, FALSE, 0);
+    if (state->mode == SettingsWidgetMode::connection) {
+      state->hyperlink_editor = create_hyperlink_settings_editor({
+          .store = &state->draft_store,
+          .id_prefix = state->id_prefix,
+          .changed = [state]() {
+            update_action_sensitivity(state);
+            notify_changed(state);
+          },
+      });
+      gtk_box_pack_start(GTK_BOX(link_page), hyperlink_settings_editor_root(state->hyperlink_editor), TRUE, TRUE, 0);
+    }
     const std::string link_tab_id = widget_id(state, "link_tab");
     GtkWidget *link_tab = create_tab_label(
         settings_ui_text(SettingsUiText::links_tab),

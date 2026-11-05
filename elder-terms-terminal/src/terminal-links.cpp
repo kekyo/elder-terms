@@ -107,6 +107,18 @@ struct Osc8CacheEntry {
   std::shared_ptr<boxrig_regex_result> result;
 };
 
+struct LinkHover {
+  LinkLineKey line;
+  std::uint64_t revision;
+  std::uint64_t source;
+  std::uint64_t item;
+  std::size_t start;
+  std::size_t end;
+  std::uint32_t hyperlink_handle;
+
+  bool operator==(const LinkHover &) const = default;
+};
+
 struct TerminalLinks {
   boxrig_terminal *terminal = nullptr;
   boxrig_ui_view *view = nullptr;
@@ -116,7 +128,8 @@ struct TerminalLinks {
   std::unordered_map<Osc8CacheKey, std::list<Osc8CacheEntry>::iterator, Osc8CacheHash> osc8_index;
   std::size_t osc8_cache_bytes = 0;
   std::shared_ptr<LinkValidationState> validation;
-  TerminalLinkDecoration decoration = TerminalLinkDecoration::underline;
+  TerminalLinkDecorations decorations;
+  std::optional<LinkHover> hover;
   bool osc8_dirty = true;
   std::uint64_t next_annotation_id = 1;
 #if defined(ELDER_TERMS_CACHE_TESTING)
@@ -260,7 +273,9 @@ static void publish_line_annotations(TerminalLinks *links, const LinkLineKey &ke
     for (auto &item : line->second.items) {
       bool covered = false;
       for (const auto &other : links->rules) {
-        if (&other == &rule) continue;
+        // Presentation between sources is composed by priority below. Never
+        // remove a text action merely because an OSC 8 label overlaps it.
+        if (&other == &rule || other.rule.recognition_source != rule.rule.recognition_source) continue;
         const auto previous = other.lines.find(key);
         if (previous == other.lines.end() || previous->second.event.line_revision != line->second.event.line_revision) continue;
         const auto &items = previous->second.items;
@@ -278,13 +293,21 @@ static void publish_line_annotations(TerminalLinks *links, const LinkLineKey &ke
         ++item.path_check->subscribers[key];
       }
       auto annotation = item.annotation;
-      annotation.priority = -static_cast<std::int32_t>(rule.generation);
+      const bool osc8 = rule.rule.recognition_source == HyperlinkRecognitionSource::osc8;
+      const auto decoration = osc8 ? links->decorations.osc8 : links->decorations.regex;
+      annotation.priority = (osc8 ? INT32_MAX : 0) - static_cast<std::int32_t>(rule.generation);
       annotation.style = {};
-      if (links->decoration != TerminalLinkDecoration::none) {
-        annotation.style.field_mask = BOXRIG_UI_ANNOTATION_UNDERLINE_STYLE | BOXRIG_UI_ANNOTATION_UNDERLINE_FALLBACK;
+      // Explicit NONE clears lower-priority link decoration while FALLBACK
+      // preserves every terminal-provided underline, including double lines.
+      annotation.style.field_mask = BOXRIG_UI_ANNOTATION_UNDERLINE_STYLE |
+          BOXRIG_UI_ANNOTATION_UNDERLINE_FALLBACK | BOXRIG_UI_ANNOTATION_COLOR_TAG;
+      const bool hovered = links->hover == std::optional{LinkHover{key, line->second.event.line_revision,
+          annotation.source_id, annotation.item_id, annotation.range.start.column, annotation.range.end.column, item.hyperlink_handle}};
+      if (decoration == TerminalLinkDecoration::underline || decoration == TerminalLinkDecoration::validated ||
+          (decoration == TerminalLinkDecoration::hover && hovered)) {
         annotation.style.underline_style = BOXRIG_UNDERLINE_SINGLE;
       }
-      if (links->decoration == TerminalLinkDecoration::validated) {
+      if (decoration == TerminalLinkDecoration::validated) {
         // A valid higher-priority match must also clear dimming contributed
         // by a partially overlapping lower-priority path annotation.
         annotation.style.field_mask |= BOXRIG_UI_ANNOTATION_COLOR_TAG;
@@ -307,13 +330,38 @@ static void publish_line_annotations(TerminalLinks *links, const LinkLineKey &ke
   }
 }
 
-void terminal_links_set_decoration(TerminalLinks *links, TerminalLinkDecoration decoration) {
-  if (links->decoration == decoration) return;
-  links->decoration = decoration;
+void terminal_links_set_decorations(TerminalLinks *links, TerminalLinkDecorations decorations) {
+  if (links->decorations == decorations) return;
+  links->decorations = decorations;
   std::set<LinkLineKey> keys;
   for (const auto &rule : links->rules)
     for (const auto &[key, line] : rule.lines) { (void)line; keys.insert(key); }
   for (const auto &key : keys) publish_line_annotations(links, key);
+}
+
+void terminal_links_set_hover(TerminalLinks *links, const boxrig_ui_hit_test_result &hit) {
+  std::optional<LinkHover> hovered;
+  if (links->view && hit.inside_grid && hit.text_position_valid &&
+      !(hit.overlay_roles & (BOXRIG_UI_OVERLAY_IME | BOXRIG_UI_OVERLAY_CANDIDATES))) {
+    std::array<boxrig_ui_text_annotation, 32> annotations{};
+    std::size_t count = 0;
+    if (boxrig_ui_view_query_text_annotation_hits(links->view, &hit, BOXRIG_UI_ANNOTATION_HIT_ALL,
+        annotations.data(), annotations.size(), &count, nullptr) == BOXRIG_UI_OK && count) {
+      const auto &selected = *std::max_element(annotations.begin(), annotations.begin() + count,
+          [](const auto &left, const auto &right) { return left.priority < right.priority; });
+      hovered = LinkHover{line_key(selected.range.start.screen, selected.range.start.line_id),
+          selected.range.start.line_revision, selected.source_id, selected.item_id,
+          selected.range.start.column, selected.range.end.column, hit.hyperlink_handle};
+      // Text links underneath unrelated OSC 8 text retain their own identity.
+      for (const auto &rule : links->rules)
+        if (annotation_source(rule) == selected.source_id && rule.recognizer) hovered->hyperlink_handle = 0;
+    }
+  }
+  if (links->hover == hovered) return;
+  const auto previous = links->hover;
+  links->hover = hovered;
+  if (previous) publish_line_annotations(links, previous->line);
+  if (hovered && (!previous || previous->line != hovered->line)) publish_line_annotations(links, hovered->line);
 }
 
 static void stop_validation(TerminalLinks *links) {
@@ -377,10 +425,16 @@ TerminalLinks *create_terminal_links(boxrig_ui_view *view, std::vector<Hyperlink
     links->rules.push_back({std::move(rule), std::move(program), recognizer, 0,
         static_cast<std::uint64_t>(links->rules.size() + 1), {}, url_boundaries});
   }
+  // Explicit labels remain visible even when no launch rule accepts their URI.
+  // A null program marks this presentation-only source; it grants no action.
+  LinkRule explicit_labels;
+  explicit_labels.generation = links->rules.size() + 1;
+  links->rules.push_back(std::move(explicit_labels));
   return links;
 }
 
 void terminal_links_attach_view(TerminalLinks *links, boxrig_ui_view *view) {
+  links->hover.reset();
   stop_validation(links);
   auto validation = std::make_shared<LinkValidationState>();
   validation->owner = links;
@@ -461,7 +515,6 @@ static std::vector<std::pair<std::size_t, std::size_t>> prose_url_ranges(std::st
           character == 0xff0e || character == 0xff1b || character == 0xff1a) break;
       if ((character == ',' || character == ';') && url_prefix(text, offset + 1)) break;
       if (character == '(' || character == '[') {
-        if (closers.size() == 128) break;
         closers.push_back(character == '(' ? ')' : ']');
       } else if (character == ')' || character == ']') {
         if (closers.empty() || closers.back() != character) break;
@@ -775,11 +828,11 @@ void terminal_links_refresh_viewport(TerminalLinks *links) {
         boxrig_ui_hit_test_result target{};
         target.hyperlink_uri = cell.hyperlink_uri;
         target.hyperlink_uri_length = cell.hyperlink_uri_length;
-        const auto match = cached_match_osc8(links, rule, target);
-        if (!match) continue;
+        const auto match = rule.program ? cached_match_osc8(links, rule, target) : nullptr;
+        if (rule.program && !match) continue;
         std::string reason;
-        auto action = expand_terminal_hyperlink_action(rule.rule,
-            [&match](const std::string &name) { return regular_expression_capture(match.get(), name); }, &reason);
+        auto action = match ? expand_terminal_hyperlink_action(rule.rule,
+            [&match](const std::string &name) { return regular_expression_capture(match.get(), name); }, &reason) : std::nullopt;
         line.event.screen = position.fragment.screen;
         line.event.line_id = position.fragment.line_id;
         line.event.line_revision = position.fragment.line_revision;
@@ -844,6 +897,7 @@ static std::optional<ResolvedLink> resolve_link(
       annotations.data(), annotations.size(), &count, nullptr) != BOXRIG_UI_OK) return std::nullopt;
   std::optional<ResolvedLink> rejection;
   for (const auto &rule : links->rules) {
+    if (!rule.program) continue;
     std::shared_ptr<boxrig_regex_result> result;
     std::optional<std::string> normalized_target;
     std::uint64_t match_id = 0;

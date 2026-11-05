@@ -37,7 +37,8 @@ describe('boxrig link actions', () => {
         try {
           const app = await launcher.launch([
             '--links',
-            `--link-decoration=${decoration}`,
+            `--regex-link-decoration=${decoration}`,
+            `--osc8-link-decoration=${decoration}`,
             '--local',
             '--',
             '/bin/sh',

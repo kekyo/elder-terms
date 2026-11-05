@@ -253,19 +253,33 @@ enum class TerminalLinkDecoration {
   none,
   /** Adds an underline without changing brightness. */
   underline,
+  /** Adds an underline only to the link under the pointer. */
+  hover,
   /** Underlines links and dims unconfirmed or invalid local paths. */
   validated,
 };
 
-/** Returns the ordinary, inheritable [terminal] link_decoration key. */
-ELDER_TERMS_API SettingKey terminal_link_decoration_setting_key();
+/** Independent presentation preferences for the two recognition sources. */
+struct TerminalLinkDecorations {
+  /** Presentation of links recognized from terminal text. */
+  TerminalLinkDecoration regex = TerminalLinkDecoration::hover;
+  /** Presentation of explicit OSC 8 ranges, including unsupported actions. */
+  TerminalLinkDecoration osc8 = TerminalLinkDecoration::underline;
+
+  bool operator==(const TerminalLinkDecorations &) const = default;
+};
+
+/** @return The inheritable [terminal] regex_link_decoration key. */
+ELDER_TERMS_API SettingKey terminal_regex_link_decoration_setting_key();
+/** @return The inheritable [terminal] osc8_link_decoration key. */
+ELDER_TERMS_API SettingKey terminal_osc8_link_decoration_setting_key();
 
 /**
- * Reads link presentation for both text and OSC 8 targets.
+ * Reads independent text and OSC 8 presentation preferences.
  * @param store Effective settings.
- * @return Selected mode, defaulting to always underline.
+ * @return Selected modes, defaulting to regex hover and OSC 8 underline.
  */
-ELDER_TERMS_API TerminalLinkDecoration terminal_link_decoration(const SettingsStore &store);
+ELDER_TERMS_API TerminalLinkDecorations terminal_link_decorations(const SettingsStore &store);
 
 /**
  * Validates ordered terminal font family names without requiring installed fonts.

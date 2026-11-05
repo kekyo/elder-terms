@@ -51,7 +51,8 @@ describe('link styling retains terminal attributes', () => {
         try {
           const app = await launcher.launch([
             '--defer-link-validation',
-            `--link-decoration=${decoration}`,
+            `--regex-link-decoration=${decoration}`,
+            `--osc8-link-decoration=${decoration}`,
             '--local',
             '--',
             process.execPath,

@@ -781,7 +781,7 @@ create_hyperlink_settings_editor(HyperlinkSettingsEditorOptions options) {
                                  GTK_POLICY_AUTOMATIC);
   gtk_widget_set_hexpand(state->root, TRUE);
   gtk_widget_set_vexpand(state->root, TRUE);
-  assign_accessible_id(state->root, widget_id(state, "link_page"));
+  assign_accessible_id(state->root, widget_id(state, "link_rules_page"));
 
   GtkWidget *content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 12);
   gtk_widget_set_margin_top(content, 12);

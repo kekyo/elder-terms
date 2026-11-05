@@ -51,7 +51,8 @@ describe('links in an updating process table', () => {
         try {
           const app = await launcher.launch([
             '--links',
-            `--link-decoration=${decoration}`,
+            `--regex-link-decoration=${decoration}`,
+            `--osc8-link-decoration=${decoration}`,
             '--local',
             '--',
             process.execPath,

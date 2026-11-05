@@ -318,7 +318,7 @@ static cardio::promise<void> click_scenarios(Fixture *fixture) {
       "a stale pending press aborts without selecting replacement text");
 
   std::vector<TerminalHyperlinkResolution> actions;
-  terminal_runtime_set_hyperlink_rules(runtime, default_hyperlink_action_rules(),
+  terminal_runtime_set_hyperlink_rules(runtime, true, default_hyperlink_action_rules(),
       [&actions](TerminalHyperlinkResolution action) { actions.push_back(std::move(action)); });
   for (const bool osc8 : {false, true}) {
     const std::string text = osc8 ? "\033]8;;https://link.test/\033\\Open link\033]8;;\033\\" : "https://link.test/";
@@ -340,7 +340,13 @@ static cardio::promise<void> click_scenarios(Fixture *fixture) {
           "Ctrl drag over regex and OSC 8 links selects a rectangle without launching or terminal mouse reports");
     }
     const auto previous = actions.size();
+    mouse(fixture, GDK_MOTION_NOTIFY, 30.1, 1.5, 0);
+    co_await barrier(fixture, false);
+    mouse(fixture, GDK_MOTION_NOTIFY, 2.1, 0.5, 0);
     mouse(fixture, GDK_BUTTON_PRESS, 2.1, 0.5, GDK_CONTROL_MASK);
+    // Hover can publish new annotations while the native press/release is
+    // queued. A presentation-only revision must not discard this click.
+    co_await barrier(fixture, false);
     mouse(fixture, GDK_BUTTON_RELEASE, 2.1, 0.5, GDK_BUTTON1_MASK | GDK_CONTROL_MASK);
     co_await barrier(fixture, false);
     expect(actions.size() == previous + 1 && actions.back().action &&
@@ -369,7 +375,7 @@ static cardio::promise<void> click_scenarios(Fixture *fixture) {
     co_await barrier(fixture, false);
     expect(actions.size() == previous + 1, "release on a different link with the same URL does not activate it");
   }
-  terminal_runtime_set_hyperlink_rules(runtime, {}, {});
+  terminal_runtime_set_hyperlink_rules(runtime, false, {}, {});
   fixture->outgoing.clear();
   mouse(fixture, GDK_BUTTON_PRESS, 0.1, 0.5, 0);
   mouse(fixture, GDK_MOTION_NOTIFY, 8.9, 0.5, GDK_BUTTON1_MASK);
@@ -557,7 +563,7 @@ static cardio::promise<void> link_copy_scenarios(Fixture *fixture) {
   auto *runtime = fixture->window->runtime;
   std::size_t activations = 0;
   GtkWidget *copy_link = nullptr;
-  terminal_runtime_set_hyperlink_rules(runtime, default_hyperlink_action_rules(),
+  terminal_runtime_set_hyperlink_rules(runtime, true, default_hyperlink_action_rules(),
       [&activations](TerminalHyperlinkResolution) { ++activations; });
   for (const bool osc8 : {false, true}) {
     const std::string target = osc8 ? "vscode://file/tmp/source%20file.cpp:12:3" : "https://example.みんな/docs?q=1&v=2";
@@ -604,7 +610,7 @@ static cardio::promise<void> link_copy_scenarios(Fixture *fixture) {
     gtk_menu_popdown(GTK_MENU(menu));
     co_await barrier(fixture, false);
   }
-  terminal_runtime_set_hyperlink_rules(runtime, {}, {});
+  terminal_runtime_set_hyperlink_rules(runtime, false, {}, {});
   expect(terminal_runtime_feed(runtime, "\033[2J\033[Hhttps://disabled.test/"), "show a URL with recognition disabled");
   while (!terminal_runtime_is_settled(runtime)) co_await fixture->changed.wait();
   mouse(fixture, GDK_BUTTON_PRESS, 2.1, 0.5, 0, GDK_BUTTON_SECONDARY);

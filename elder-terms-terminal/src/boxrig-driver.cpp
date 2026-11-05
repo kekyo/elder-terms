@@ -47,7 +47,7 @@ struct Driver {
   bool links = false;
   bool defer_link_validation = false;
   elder_terms::TerminalColorFilterContext link_colors{};
-  elder_terms::TerminalLinkDecoration link_decoration = elder_terms::TerminalLinkDecoration::underline;
+  elder_terms::TerminalLinkDecorations link_decorations;
   std::shared_ptr<cardio::primitives::manually_conditional> link_validation_ready =
       std::make_shared<cardio::primitives::manually_conditional>();
   bool context_loss_control = false;
@@ -423,8 +423,9 @@ static cardio::promise<elder_terms::SshUserPromptResponse> prompt_ssh(Driver *dr
 }
 
 static void configure_links(Driver *driver) {
-  elder_terms::terminal_runtime_set_link_decoration(driver->runtime, driver->link_decoration);
-  driver->link_colors.dim_links = driver->link_decoration == elder_terms::TerminalLinkDecoration::validated;
+  elder_terms::terminal_runtime_set_link_decorations(driver->runtime, driver->link_decorations);
+  driver->link_colors.dim_links = (driver->link_decorations.regex == elder_terms::TerminalLinkDecoration::validated ||
+      driver->link_decorations.osc8 == elder_terms::TerminalLinkDecoration::validated);
   boxrig_ui_view_set_color_filter(boxrig_gtk3_terminal_widget_view(elder_terms::terminal_runtime_widget(driver->runtime)),
       driver->link_colors.dim_links ? elder_terms::filter_terminal_colors : nullptr, &driver->link_colors);
   elder_terms::TerminalHyperlinkPathValidator validate = elder_terms::validate_terminal_hyperlink_path_async;
@@ -435,7 +436,7 @@ static void configure_links(Driver *driver) {
       co_return co_await elder_terms::validate_terminal_hyperlink_path_async(std::move(path), cancellation);
     };
   }
-  elder_terms::terminal_runtime_set_hyperlink_rules(driver->runtime,
+  elder_terms::terminal_runtime_set_hyperlink_rules(driver->runtime, driver->links,
       driver->links ? elder_terms::default_hyperlink_action_rules() : std::vector<elder_terms::HyperlinkActionRule>{}, [](elder_terms::TerminalHyperlinkResolution resolved) {
         if (resolved.action) {
           std::string value = resolved.action->command;
@@ -476,10 +477,14 @@ int main(int argc, char **argv) {
   for (int index = 1; index < argc; ++index) {
     if (std::string_view(argv[index]) == "--local") driver.connection_mode = true;
     else if (std::string_view(argv[index]) == "--links") driver.links = true;
-    else if (std::string_view(argv[index]).starts_with("--link-decoration=")) {
-      const auto mode = std::string_view(argv[index]).substr(18);
-      if (mode != "none" && mode != "underline" && mode != "validated") return 2;
-      driver.link_decoration = mode == "none" ? elder_terms::TerminalLinkDecoration::none :
+    else if (std::string_view(argv[index]).starts_with("--regex-link-decoration=") ||
+        std::string_view(argv[index]).starts_with("--osc8-link-decoration=")) {
+      const std::string_view option(argv[index]);
+      const auto mode = option.substr(option.find('=') + 1);
+      if (mode != "none" && mode != "underline" && mode != "hover" && mode != "validated") return 2;
+      auto &decoration = option.starts_with("--regex-") ? driver.link_decorations.regex : driver.link_decorations.osc8;
+      decoration = mode == "none" ? elder_terms::TerminalLinkDecoration::none :
+          mode == "hover" ? elder_terms::TerminalLinkDecoration::hover :
           mode == "validated" ? elder_terms::TerminalLinkDecoration::validated : elder_terms::TerminalLinkDecoration::underline;
     }
     else if (std::string_view(argv[index]) == "--defer-link-validation") {

@@ -93,21 +93,22 @@ boxrig_input_key_route terminal_runtime_route_selection_key(TerminalRuntime *run
 /**
  * Replaces ordered link rules and the application action handler.
  * @param runtime Live runtime; current recognition is invalidated atomically.
- * @param rules Screen and OSC 8 rules, or an empty list to disable links.
+ * @param enabled Enables recognition and explicit OSC 8 presentation.
+ * @param rules Screen and OSC 8 actions; an empty list leaves OSC 8 display only.
  * @param activate Called on Ctrl+click with the resolved action or rejection.
  * @param validate Asynchronous local path checker; defaults to filesystem queries.
  * @remarks The callback decides how to launch commands or display errors.
  */
-void terminal_runtime_set_hyperlink_rules(TerminalRuntime *runtime,
+void terminal_runtime_set_hyperlink_rules(TerminalRuntime *runtime, bool enabled,
     std::vector<HyperlinkActionRule> rules, std::function<void(TerminalHyperlinkResolution)> activate,
     TerminalHyperlinkPathValidator validate = validate_terminal_hyperlink_path_async);
 
 /**
  * Applies link-only decoration to the current and subsequent rule sets.
  * @param runtime Live runtime.
- * @param decoration Text and OSC 8 presentation mode.
+ * @param decorations Independent text and OSC 8 presentation modes.
  */
-void terminal_runtime_set_link_decoration(TerminalRuntime *runtime, TerminalLinkDecoration decoration);
+void terminal_runtime_set_link_decorations(TerminalRuntime *runtime, TerminalLinkDecorations decorations);
 
 /**
  * Reports whether the pointer currently resolves to an executable link.

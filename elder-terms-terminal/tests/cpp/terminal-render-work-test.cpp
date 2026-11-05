@@ -54,7 +54,7 @@ static cardio::promise<void> run(TerminalRuntime *runtime,
     if (!terminal_runtime_feed(runtime, input)) throw std::runtime_error("feed terminal text");
     while (!terminal_runtime_is_settled(runtime)) co_await changed->wait();
     frames = 0;
-    terminal_runtime_set_hyperlink_rules(runtime, default_hyperlink_action_rules(), {});
+    terminal_runtime_set_hyperlink_rules(runtime, true, default_hyperlink_action_rules(), {});
     while (!terminal_runtime_is_settled(runtime)) co_await changed->wait();
     g_print("Frames while recognizing unchanged text: %zu\n", frames);
     // Count expensive screen preparations instead of setting a machine-speed
