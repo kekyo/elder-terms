@@ -1,5 +1,22 @@
 # FTP/SFTPの詳細
 
+## 基本の接続設定
+
+対応するINI設定は次の形式です。
+
+```ini
+[general]
+type=ftp
+
+[ftp]
+address=ftp.example.com
+port=21
+username=
+data_connection_mode=passive
+local_directory=
+remote_directory=.
+```
+
 ## FTPでTLSを使用する (FTPS)
 
 [FTPS](https://everything.curl.dev/ftp/ftps.html)を使用するには、FTPタブの「暗号化」で「FTPS（明示的TLS）」または「FTPS（暗黙的TLS）」を選択して下さい。
