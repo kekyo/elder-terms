@@ -244,11 +244,12 @@ foreach backend : ['cairo', 'opengl']
     test('terminal-selection-state-' + backend + '-' + scale, find_program('xvfb-run'),
       args: ['-a', '-s', '-screen 0 2560x2048x24', selection_state_test], timeout: 60,
       env: appearance_env + ['GTK_IM_MODULE=gtk-im-context-simple'])
-    # Plan21's switching probes remain explicit RED reproducers until boxrig
-    # provides a public API that preserves offscreen anchors when changing shape.
-    test('terminal-selection-mode-baseline-' + backend + '-' + scale, find_program('xvfb-run'),
-      args: ['-a', '-s', '-screen 0 2560x2048x24', selection_state_test, 'mode-baseline'], timeout: 60,
-      env: appearance_env + ['GTK_IM_MODULE=gtk-im-context-simple'])
+    foreach scenario : ['baseline', 'roundtrip-linear', 'roundtrip-rectangular',
+        'pending-linear', 'pending-rectangular', 'history-linear', 'history-rectangular']
+      test('terminal-selection-mode-' + scenario + '-' + backend + '-' + scale, find_program('xvfb-run'),
+        args: ['-a', '-s', '-screen 0 2560x2048x24', selection_state_test, 'mode-' + scenario], timeout: 60,
+        env: appearance_env + ['GTK_IM_MODULE=gtk-im-context-simple'])
+    endforeach
     foreach width : ['narrow', 'wide', 'font', 'default']
       test('terminal-cell-width-' + backend + '-' + scale + '-' + width, find_program('xvfb-run'),
         args: ['-a', '-s', '-screen 0 2560x2048x24', cell_width_test, width], timeout: 60,

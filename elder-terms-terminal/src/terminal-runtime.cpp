@@ -87,6 +87,10 @@ struct TerminalRuntime {
   SelectionPhase selection_phase = SelectionPhase::idle;
   PendingSelection selection_press;
   std::optional<std::pair<boxrig_ui_fixed, boxrig_ui_fixed>> selection_pointer;
+  std::optional<std::pair<boxrig_ui_fixed, boxrig_ui_fixed>> selection_motion_pointer;
+  boxrig_ui_selection_options selection_options{};
+  boxrig_ui_selection_kind selection_linear_kind = BOXRIG_UI_SELECTION_CHARACTER;
+  std::optional<boxrig_ui_selection_options> selection_pending_options;
   bool selection_scroll_pending = false;
   bool selection_release_pending = false;
   bool selection_left_down = false;
@@ -192,6 +196,8 @@ static void cancel_selection_gesture(TerminalRuntime *runtime) {
   if (selecting(runtime)) runtime->selection_phase = runtime->selection_left_down ? SelectionPhase::cancelled : SelectionPhase::idle;
   runtime->selection_press = {};
   runtime->selection_pointer.reset();
+  runtime->selection_motion_pointer.reset();
+  runtime->selection_pending_options.reset();
   runtime->selection_scroll_pending = false;
   runtime->selection_release_pending = false;
 }
@@ -323,7 +329,14 @@ static boxrig_ui_status update_selection_endpoint(TerminalRuntime *runtime) {
       std::clamp<boxrig_ui_fixed>(runtime->selection_pointer->second, 0, layout.grid_height - 1), &endpoint);
   if (status != BOXRIG_UI_OK) return status;
   if (!endpoint.text_position_valid) return BOXRIG_UI_OK;
-  return selection_result(runtime, boxrig_ui_view_update_selection(view, &endpoint), "selection update");
+  // A motion may precede an asynchronous scroll frame. Retain only the policy
+  // chosen by that real motion; wheel/timer/release modifiers never replace it.
+  const auto options = runtime->selection_pending_options;
+  status = options ? boxrig_ui_view_update_selection_with_options(view, &*options, &endpoint) :
+      boxrig_ui_view_update_selection(view, &endpoint);
+  if (status == BOXRIG_UI_OK && options) runtime->selection_options = *options;
+  runtime->selection_pending_options.reset();
+  return selection_result(runtime, status, "selection update");
 }
 
 static bool update_scrolled_selection(TerminalRuntime *runtime) {
@@ -487,6 +500,18 @@ static boxrig_input_mouse_route route_mouse(
   }
   if (runtime->selection_phase == SelectionPhase::dragging) {
     if (event->action == BOXRIG_MOUSE_MOTION || release) {
+      const std::pair position{hit->x, hit->y};
+      if (event->action == BOXRIG_MOUSE_MOTION && runtime->selection_motion_pointer != position) {
+        runtime->selection_motion_pointer = position;
+        boxrig_ui_selection_options options{};
+        options.shape = (event->modifiers & BOXRIG_MODIFIER_CONTROL) ?
+            BOXRIG_UI_SELECTION_RECTANGULAR : BOXRIG_UI_SELECTION_LINEAR;
+        options.kind = options.shape == BOXRIG_UI_SELECTION_RECTANGULAR ?
+            BOXRIG_UI_SELECTION_CHARACTER : runtime->selection_linear_kind;
+        if (options.shape != runtime->selection_options.shape)
+          runtime->selection_pending_options = options;
+        else runtime->selection_pending_options.reset();
+      }
       runtime->selection_pointer = {hit->x, hit->y};
       runtime->selection_release_pending = release;
       const auto status = runtime->selection_scroll_pending ? BOXRIG_UI_OK : update_selection_endpoint(runtime);
@@ -532,6 +557,10 @@ static boxrig_input_mouse_route route_mouse(
     options.kind = options.shape == BOXRIG_UI_SELECTION_RECTANGULAR ? BOXRIG_UI_SELECTION_CHARACTER :
         event->click_count >= 3 ? BOXRIG_UI_SELECTION_LINE :
         event->click_count == 2 ? BOXRIG_UI_SELECTION_WORD : BOXRIG_UI_SELECTION_CHARACTER;
+    runtime->selection_options = options;
+    runtime->selection_linear_kind = options.kind;
+    runtime->selection_motion_pointer = runtime->selection_pointer;
+    runtime->selection_pending_options.reset();
     if (event->click_count <= 1) {
       if (boxrig_ui_view_clear_selection(view) != BOXRIG_UI_OK) return BOXRIG_INPUT_MOUSE_ROUTE_ERROR;
       runtime->selection_press = {*hit, options, {}};
@@ -1158,6 +1187,8 @@ static bool attach_widget(TerminalRuntime *runtime) {
   runtime->selection_phase = SelectionPhase::idle;
   runtime->selection_press = {};
   runtime->selection_pointer.reset();
+  runtime->selection_motion_pointer.reset();
+  runtime->selection_pending_options.reset();
   runtime->selection_scroll_pending = false;
   runtime->selection_release_pending = false;
   runtime->selection_left_down = false;
