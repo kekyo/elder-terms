@@ -267,6 +267,13 @@ install_data(
 
 foreach language : ['ja', 'en']
   install_data(
+    'docs' / language / 'building.md',
+    'docs' / language / 'configuration.md',
+    'docs' / language / 'connection-icons.md',
+    'docs' / language / 'hotkeys.md',
+    'docs' / language / 'terminal-links.md',
+    'docs' / language / 'text-selection.md',
+    'docs' / language / 'ssh-proxy.md',
     'docs' / language / 'webdav.md',
     'docs' / language / 'smb.md',
     'docs' / language / 'nfs.md',
@@ -276,6 +283,28 @@ foreach language : ['ja', 'en']
 endforeach
 
 install_data(
+  'docs/ja/ftp-ftps.md',
+  'docs/ja/connection-icon-artwork.md',
+  install_dir: get_option('datadir') / 'doc/elder-terms/docs/ja',
+)
+
+install_data(
+  'docs/en/ftp-sftp.md',
   'docs/en/webdav-validation.md',
   install_dir: get_option('datadir') / 'doc/elder-terms/docs/en',
+)
+
+# Keep relative image and license links usable in the installed guides.
+install_subdir(
+  'images',
+  exclude_files: ['capture-manifest.json'],
+  install_dir: get_option('datadir') / 'doc/elder-terms',
+)
+
+install_data(
+  'data/connection-icons/NOTO-LICENSE',
+  'data/connection-icons/NOTO-FLAGS-NOTICE',
+  'data/connection-icons/MATERIAL-LICENSE',
+  'data/connection-icons/UNICODE-LICENSE',
+  install_dir: get_option('datadir') / 'doc/elder-terms/data/connection-icons',
 )

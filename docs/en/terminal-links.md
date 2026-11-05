@@ -1,6 +1,7 @@
 # Configuring Terminal Links and Macros
 
 OSC 8 links have a target and display range explicitly supplied by the connection. Links can also be recognized in visible text using regular expressions.
+A regular expression describes a text pattern. Captures assign numbers or names to parts of the matched text so they can be referenced in command arguments and other values.
 
 ## Opening and Copying Links
 
@@ -87,7 +88,7 @@ Character classes, groups, alternatives, repetition, and numbered or named captu
 `.` also matches newlines, and `^` and `$` anchor the complete input. Matching is case-sensitive and chooses the longest match at the same starting position.
 A complete match cannot split a visible character composed of multiple Unicode characters. Use an expression such as `[\p{L}\p{M}]+` to include combining marks.
 
-The command is a fixed executable name or path. It is launched directly without a shell,
+A link command is a fixed executable name or path. It is launched directly without a shell,
 so pipes, redirections, and other shell syntax are not interpreted. Capture
 templates are expanded only in arguments and in the optional validation path.
 An expanded argument or validation path starting with `~/` uses the home

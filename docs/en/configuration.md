@@ -168,7 +168,7 @@ carrier_detect=ignore
 `device_usb_serial` is supplementary information saved when the settings dialog can obtain a USB serial number.
 If multiple candidates share that number, the connection waits.
 Existing INI files with a device path but no `device_match_mode` continue to use that path.
-`carrier_detect=ignore` selects "Do not monitor" for the connection monitoring signal.
+`carrier_detect=ignore` selects "Ignore (do not monitor)" for the connection monitoring signal.
 
 ## Sending and Pasting Text
 

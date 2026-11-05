@@ -978,7 +978,7 @@ Macros automate sending text or running external commands in response to receive
 For example, they can send Enter when a prompt appears or record an error message in a log.
 They work with local terminal, TELNET, serial, and SSH connections.
 
-On the connection's "Macros" tab, specify a regular expression for the received text and the action to perform.
+On the connection's "Macro" tab, specify a regular expression for the received text and the action to perform.
 Rules are evaluated from top to bottom, and only the first matching rule runs.
 See [macro details](./docs/en/terminal-links.md#configuring-macros) for examples and capture syntax.
 
@@ -1026,6 +1026,6 @@ It covers requirements, building and running, tests, and deb package generation.
 Under MIT.
 
 Bundled connection artwork and emoji names are covered by their respective
-licenses. See [artwork sources and licenses](./data/connection-icons/SOURCES.md).
+licenses. See [artwork sources and licenses](./docs/ja/connection-icon-artwork.md).
 Distribution packages include the licenses and notices under
 `/usr/share/doc/elder-terms/licenses/connection-icons/`.
