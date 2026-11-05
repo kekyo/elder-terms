@@ -1135,8 +1135,8 @@ msgstr "リンク有効判定（減光あり）"
 msgid "Partial match"
 msgstr "部分一致"
 
-msgid "Whitespace, quotes or line ends"
-msgstr "空白・引用符・行端"
+msgid "Whitespace, punctuation or line ends"
+msgstr "空白・記号・行端"
 
 #: shared/src/settings-widget/hyperlink-settings-editor.cpp:715
 msgid ""

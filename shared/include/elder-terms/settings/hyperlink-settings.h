@@ -54,7 +54,7 @@ struct HyperlinkActionRule {
       HyperlinkPathValidation::none;
   /** Capture template expanded to the local path that is validated. */
   std::string path_template = {};
-  /** Requires text matches to be separated by whitespace, quotes or line ends. */
+  /** Requires whitespace, directional punctuation or line ends around text matches. */
   bool whole_token = false;
 
   bool operator==(const HyperlinkActionRule &) const = default;

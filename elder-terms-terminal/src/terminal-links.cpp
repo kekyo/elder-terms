@@ -482,8 +482,13 @@ static bool token_boundary(boxrig_terminal *terminal,
   if (remaining) *remaining -= length;
   if (!length) return true;
   const auto character = g_utf8_get_char(before ? g_utf8_find_prev_char(bytes, bytes + length) : bytes);
-  return g_unichar_isspace(character) || character == 0x85 || character == 0x180e ||
-      character == '\'' || character == '"';
+  if (g_unichar_isspace(character) || character == 0x85 || character == 0x180e ||
+      std::u32string_view(U"\"'`:=;|&<>,、。").find(character) != std::u32string_view::npos) return true;
+  // Prose delimiters apply to all whole-token rules, independently of shells.
+  // Opening and closing brackets delimit only their respective sides. A dollar
+  // sign ends a candidate; slashes, escapes and filename characters never do.
+  const std::u32string_view delimiters = before ? U"([{（「『" : U")]}）」』$";
+  return delimiters.find(character) != std::u32string_view::npos;
 }
 
 static bool url_prefix(std::string_view text, std::size_t offset) {
