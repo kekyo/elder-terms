@@ -459,17 +459,9 @@ it('retains unknown progress and disconnected jobs until explicit retry', async 
       expect(await state(1)).toBe('Failed');
       expect(await state(2)).toBe('Failed');
     });
-    await folding.expand();
-    await expectElementKind(
-      await app.getById('file_transfer_job_2_row'),
-      'expander'
-    ).expand();
     expect(
-      await expectElementKind(
-        await app.getById('file_transfer_job_2_details'),
-        'label'
-      ).text()
-    ).toContain('Disconnected before execution');
+      (await (await app.getById('file_transfer_jobs_paned')).info()).states
+    ).not.toContain('sensitive');
     const retry = expectElementKind(
       await app.getById('file_transfer_job_2_retry'),
       'button'
@@ -488,6 +480,17 @@ it('retains unknown progress and disconnected jobs until explicit retry', async 
     await waitForResult(async () =>
       expect((await retry.info()).states).toContain('sensitive')
     );
+    await folding.expand();
+    await expectElementKind(
+      await app.getById('file_transfer_job_2_row'),
+      'expander'
+    ).expand();
+    expect(
+      await expectElementKind(
+        await app.getById('file_transfer_job_2_details'),
+        'label'
+      ).text()
+    ).toContain('Disconnected before execution');
     expect(
       server.requests.filter(
         (r) => r.method === 'GET' && r.url === '/dav/hello.txt'
@@ -508,6 +511,15 @@ it('retains unknown progress and disconnected jobs until explicit retry', async 
     await waitForResult(async () =>
       expect(await state(4)).toBe('Awaiting decision')
     );
+    await evidence.captureEvidence('overwrite-modal', async () =>
+      app.capture()
+    );
+    expect(
+      (await (await app.getById('file_transfer_dim_overlay')).info()).states
+    ).toContain('showing');
+    expect(
+      (await (await app.getById('file_transfer_jobs_paned')).info()).states
+    ).not.toContain('sensitive');
     await expectElementKind(
       await app.getById('file_transfer_prompt_alternative_button'),
       'button'

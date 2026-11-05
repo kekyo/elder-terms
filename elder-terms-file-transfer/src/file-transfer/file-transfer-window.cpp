@@ -719,7 +719,8 @@ static void update_file_action_overlay_presentation(
   // keyboard input that an event-box backdrop alone cannot intercept.
   const bool blocked =
       window->connection_state != FileTransferConnectionState::ready ||
-      window->certificate_confirmation || window->browser_action_active;
+      window->certificate_confirmation || window->browser_action_active ||
+      gtk_widget_get_visible(window->prompt_panel);
   set_widget_visible(window->dim_overlay, blocked);
   gtk_widget_set_sensitive(window->vertical_paned, !blocked);
   set_widget_visible(window->action_overlay,
@@ -3332,6 +3333,11 @@ create_file_transfer_window(FileTransferWindowOptions options) {
   state->prompt = create_inline_prompt_controller(prompt_widgets);
   gtk_overlay_add_overlay(GTK_OVERLAY(state->root_overlay),
                           state->prompt_panel);
+  // Transfer queue decisions also use this panel, without a browser action.
+  g_signal_connect(state->prompt_panel, "notify::visible",
+      G_CALLBACK(+[](GObject *, GParamSpec *, gpointer data) {
+        update_file_action_overlay_presentation(static_cast<FileTransferWindow *>(data));
+      }), state.get());
 
   apply_file_transfer_window_style(state.get());
   set_file_transfer_window_colors(state, options.colors);

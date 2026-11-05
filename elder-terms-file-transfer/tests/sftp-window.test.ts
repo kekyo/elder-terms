@@ -3111,7 +3111,7 @@ describe('SFTP window', () => {
       false,
       [],
       undefined,
-      async ({ app, localDirectory }) => {
+      async ({ app, localDirectory, evidence }) => {
         const remoteTree = expectTable(
           await app.getById('file_transfer_remote_tree')
         );
@@ -3140,6 +3140,17 @@ describe('SFTP window', () => {
               'label'
             ).text()
           ).toBe('File transfer failed');
+          await evidence.captureEvidence('transfer-error-modal', async () =>
+            app.capture()
+          );
+          expect(
+            (await (await app.getById('file_transfer_dim_overlay')).info())
+              .states
+          ).toContain('showing');
+          expect(
+            (await (await app.getById('file_transfer_jobs_paned')).info())
+              .states
+          ).not.toContain('sensitive');
           for (const [widgetId, label] of [
             ['file_transfer_prompt_cancel_button', 'Abort'],
             ['file_transfer_prompt_alternative_button', 'Skip'],
@@ -3154,7 +3165,7 @@ describe('SFTP window', () => {
           }
 
           await expectElementKind(
-            await app.getById('file_transfer_job_1_cancel'),
+            await app.getById('file_transfer_prompt_cancel_button'),
             'button'
           ).click();
           await expectHidden(promptPanel);
@@ -3164,7 +3175,11 @@ describe('SFTP window', () => {
                 await app.getById('file_transfer_status_label'),
                 'label'
               ).text()
-            ).toBe('Transfer cancelled');
+            ).toBe('Transfer failed');
+            expect(
+              (await (await app.getById('file_transfer_jobs_paned')).info())
+                .states
+            ).toContain('sensitive');
           });
           expect(await app.getWindowCount()).toBe(1);
         } finally {
