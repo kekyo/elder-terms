@@ -249,6 +249,8 @@ See the [INI settings reference](./docs/en/configuration.md) for file syntax and
 
 ## Sharing Named Themes
 
+![Named theme editor and color preview](./images/named-themes.png)
+
 For example, a "Red theme" can define only titlebar and content background colors.
 
 Open "Application settings" from the launcher's menu, choose the "Themes" tab, and click "New". Enter a name and the settings to share, then click "Save". The preview shows the titlebar and content background together. Select the theme on each connection's "General" page to inherit its settings. Choose "None" to return to connection defaults.
@@ -360,6 +362,8 @@ Expand "Transfers" to see each job's state, progress, and Cancel button.
 Drag the divider above the list to change its height.
 Transfers continue while the list is collapsed; the summary still shows active and waiting counts and progress.
 Discovery and transfers with unknown total sizes show known item counts or transferred bytes without a percentage.
+
+![Completed receive job](./images/file-transfer-jobs.png)
 
 Expand a row to see its destination, start and finish times, and copied, skipped, failed, and unprocessed counts.
 The unprocessed count remains "Unknown" if discovery did not finish.
