@@ -4,11 +4,15 @@ SMB connects to folders shared by Windows or Samba. elder-terms supports SMB1, S
 
 ## Connect
 
+![SMB address, version, signing and encryption settings](../../images/smb-settings.png)
+
 Create a connection in the launcher and choose "SMB" as its type. Enter the server address on the SMB tab, then save. After connecting, `/` on the remote side lists the server's file shares. A share name identifies a folder published by the server.
 
 The connection uses NTLM authentication with a username and password. When the window opens, enter the username and then the password. The configured username is the initial value; if it is empty, the current OS username is shown. A configured domain is used for authentication. Enter the password for each connection. It is never saved in the settings file.
 
 Open a share to browse its files and folders. You can also expand the tree, enter a path, or move to the parent directory. Selecting "Up" at a share's root returns to the share list.
+
+![SMB shares listed at the remote root](../../images/smb-shares.png)
 
 | Remote path | Location |
 | --- | --- |

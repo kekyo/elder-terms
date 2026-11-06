@@ -73,7 +73,7 @@ A terminal application, inspired by personal computing in the 1990s.
 
 ![Colored terminal](./images/colored-terminal.png)
 
-### SFTP/FTP/FTPS/WebDAV/SMB
+### SFTP/FTP/FTPS/WebDAV/SMB and NFS
 
 ![File transfer window](./images/sftp.png)
 
@@ -114,84 +114,70 @@ Use `elder-terms-terminal` to start a terminal directly, or `elder-terms-termina
 
 ## Basic Usage
 
-On the first launch, elder-terms automatically creates a connection entry named
-`Local terminal`. It starts a shell such as `bash`, much like the terminal you
-normally use.
+On the first launch, elder-terms automatically creates a connection entry named `Local terminal`.
+It starts a shell such as `bash`, much like the terminal you normally use.
 
 ![Local terminal](./images/launcher.png)
 
-Double-click the entry in the launcher's list to open it. To create another
-connection, click "New" at the bottom of the launcher, change the name from
-"New connection" to whatever you like, and click "Save". There it is:
+Double-click the entry in the launcher's list to open it. To create another connection,
+click "New" at the bottom of the launcher,
+change the name from "New connection" to whatever you like, and click "Save". There it is:
 
 ![Local terminal](./images/local-terminal.png)
 
-Open the menu at the top-right of the terminal and select "Settings" to change
-its settings. Clicking "Apply" applies the changes only to the currently
-running terminal. Clicking "Save" remembers the settings and uses them the next
-time the terminal starts.
-In terminal and file transfer windows, the settings dialog stays open after Apply so you can continue editing. Save
-records the changes and closes it. Cancel discards edits since the last Apply
-or Save; already applied changes remain active.
+Open the menu at the top-right of the terminal and select "Settings" to change its settings.
+Clicking "Apply" applies the changes only to the currently running terminal.
+Clicking "Save" remembers the settings and uses them the next time the terminal starts.
+In terminal and file transfer windows, the settings dialog stays open after Apply so you can continue editing.
+Save records the changes and closes it.
+Cancel discards edits since the last Apply or Save; already applied changes remain active.
 
-Apply and Save are unavailable while required input is missing or settings conflict. Check the marked fields and tabs. Hover over a field to see what needs correction.
+Apply and Save are unavailable while required input is missing or settings conflict.
+Check the marked fields and tabs. Hover over a field to see what needs correction.
 
 Terminal settings are split into two tabs. "Terminal" contains encoding, character width, special
 keys, rows and columns, scrollback, BEL, shortcuts, screen-reader access, and copy settings.
 "Terminal appearance" contains fonts, text size, the cursor, background,
-and color correction. The same layout is used for individual connections and
-"Connection defaults".
-Border visibility and width are configured on the "General" tab for both
-terminal and file transfer windows.
+and color correction. The same layout is used for individual connections and "Connection defaults".
+Border visibility and width are configured on the "General" tab for both terminal and file transfer windows.
 
 ![Settings (Terminal)](./images/settings-terminal.png)
 
-Try changing different settings with the "Apply" button. If something goes
-wrong, simply close the terminal window to discard the changes.
+Try changing different settings with the "Apply" button. If something goes wrong,
+simply close the terminal window to discard the changes.
 
-Most settings are self-explanatory once you try them, but a few need more
-detail. Those settings are described in the following sections.
+Most settings are self-explanatory once you try them, but a few need more detail.
+Those settings are described in the following sections.
 
-To read terminal text with a screen reader, enable "Screen reader access" in the
-"Terminal" settings tab. It is disabled by default and can be changed while the
-terminal is running. Enabling it exposes the currently visible terminal text.
+To read terminal text with a screen reader, enable "Screen reader access" in the "Terminal" settings tab.
+It is disabled by default and can be changed while the terminal is running.
+Enabling it exposes the currently visible terminal text.
 This setting does not affect screen-reader access to menus or settings dialogs.
 
-To edit a saved connection's INI file directly, right-click its entry in the
-launcher and select "Edit in text editor". This uses your desktop's default
-application for plain text files.
+To edit a saved connection's INI file directly, right-click its entry in the launcher and select "Edit in text editor".
+This uses your desktop's default application for plain text files.
 Changes saved in an external editor are reloaded automatically.
-
-To choose the connection opened by "New Window" on the desktop icon of a terminal
-started without a connection, open "Application settings" in the launcher and select its name from
-"Use for \"New Window\"". Select "None" to use the default terminal settings.
-The list includes saved local shell, TELNET, SSH, and serial connections.
-The desktop action is named "New Window" in every system language.
 
 See the [INI settings reference](./docs/en/configuration.md) for editing configuration files directly.
 
-It is also useful to remember that `Ctrl`+`=` increases the font size and
-`Ctrl`+`-` decreases it. You can do the same with the mouse wheel while holding
-`Ctrl`.
+It is also useful to remember that `Ctrl`+`=` increases the font size and `Ctrl`+`-` decreases it.
+You can do the same with the mouse wheel while holding `Ctrl`.
 
 ![Settings (Terminal)](./images/font-size.png)
 
-Terminal window placement is left to your window manager or Wayland
-compositor.
-Use bindings such as the `Super` key according to your window
-system environment.
+Terminal window placement is left to your window manager or Wayland compositor.
+Use bindings such as the `Super` key according to your window system environment.
 
-Today, IoT development often involves debugging and collecting logs from
-serial devices such as Arduino boards. elder-terms is exceptionally capable in
-such environments.
+Today, IoT development often involves debugging and collecting logs from serial devices such as Arduino boards.
+elder-terms is exceptionally capable in such environments.
 
-And yes, analog modems have not been forgotten. The indicators below the
-terminal by default will satisfy that nostalgia:
+And yes, analog modems have not been forgotten.
+The indicators below the terminal by default will satisfy that nostalgia:
 
 ![Indicator](./images/serial-indicator.png)
 
-Think the blinking looks suspiciously regular? Of course it does. It is an
-homage to the [SONY NEWS workstation](https://en.wikipedia.org/wiki/Sony_NEWS).
+Think the blinking looks suspiciously regular?
+Of course it does. It is an homage to the [SONY NEWS workstation](https://en.wikipedia.org/wiki/Sony_NEWS).
 
 Well then, enjoy elder-terms!
 
@@ -246,20 +232,6 @@ removes the explicit value, causing the setting to inherit the first defined val
 
 For the settings below, "Apply" changes the current connection, "Save" keeps changes for the next launch, and "Cancel" discards unapplied edits.
 See the [INI settings reference](./docs/en/configuration.md) for file syntax and examples.
-
-## Sharing Named Themes
-
-For example, a "Red theme" can define only titlebar and content background colors.
-
-Open "Application settings" from the launcher's menu, choose the "Themes" tab, and click "New". Enter a name and the settings to share, then click "Save". The preview shows the titlebar and content background together. Select the theme on each connection's "General" page to inherit its settings. Choose "None" to return to connection defaults.
-
-Explicit connection settings survive theme changes. Clear an override to inherit the current theme's value. Clearing an item in the theme restores connection defaults for that item. Connection names, icons, launch hotkeys, application-wide settings, macros, and link rules are outside themes.
-
-Renaming a theme keeps existing references. "Duplicate" creates a separate theme. Themes in use list their connections and cannot be deleted until those references are removed. If an external edit removes a referenced theme, select an existing theme or "None" before launching the connection.
-
-Saved themes affect new sessions and the connection being edited in the launcher. For a running terminal or transfer window, reopen settings and click "Apply". Previewing or selecting a theme does not change the running session. Changes such as connection destinations still require reconnection.
-
-Application settings retain edits across tabs, and "Save" covers all editing tabs. If only one of `global.ini` and `theme.ini` saves, the dialog stays open and reports each file's result. Retry writes only unsaved changes; a subsequent "Cancel" discards only those unsaved changes. If an external-edit conflict is reported, review the persisted files and reopen settings.
 
 ## Configuring Connection Icons
 
@@ -360,6 +332,8 @@ Expand "Transfers" to see each job's state, progress, and Cancel button.
 Drag the divider above the list to change its height.
 Transfers continue while the list is collapsed; the summary still shows active and waiting counts and progress.
 Discovery and transfers with unknown total sizes show known item counts or transferred bytes without a percentage.
+
+![Completed receive job](./images/file-transfer-jobs.png)
 
 Expand a row to see its destination, start and finish times, and copied, skipped, failed, and unprocessed counts.
 The unprocessed count remains "Unknown" if discovery did not finish.
@@ -689,6 +663,22 @@ In practice, however, the extended `CP932` conventionally used by the NEC PC-980
 
 If you use a different encoding, receiving extended or altered characters can produce garbled text.
 
+## Configuring the Terminal Type
+
+![Terminal type settings](./images/terminal-type-settings.png)
+
+The terminal type is a name that tells the remote host which kind of terminal
+elder-terms emulates. This value is automatically reported during terminal-type
+negotiation for TELNET and when allocating a pseudo-terminal for SSH.
+
+Shells and applications that use `curses` on the remote host consult the
+corresponding `terminfo` entry to select control sequences for colors, cursor
+movement, function keys, and other features. You can normally leave the
+default unchanged. If the remote host does not support that terminal type,
+specify a value installed on the host, such as `xterm`.
+
+The default for TELNET and SSH is `xterm-256color`. Use global or connection settings to select a terminal type supported by the remote host.
+
 ## Configuring the Scrollback Buffer
 
 ![Scrollback buffer settings](./images/scrollback-settings.png)
@@ -890,46 +880,30 @@ Font size follows "Text size (DIP)", `Ctrl`+`=`, `Ctrl`+`-`, or the mouse wheel 
 
 See the [settings reference](./docs/en/configuration.md#fonts-and-character-width) for INI list syntax and escaping.
 
-## Configuring Hotkeys
+## Support for Text-to-Speech
+
+To have screen reader software read the device text, enable "Read Device Text" on the "Device" tab in Settings.
+This setting is disabled by default.
+You can toggle it on or off while the app is running; when enabled, the currently displayed text will be made available to the screen reader.
+
+This setting does not affect the reading of menus or settings screens.
+
+## Hotkeys
+
+While elder-terms is running, the hotkey configured for each connection lets you
+instantly open its terminal or file transfer window:
 
 ![Hotkey settings](./images/hotkey-settings.png)
 
-Hotkeys work only while the elder-terms launcher is running.
-In environments with a system tray, you can keep the launcher in the tray by opening the launcher's application menu,
-selecting "Application settings", and setting "Startup mode" to "System tray only" or "System tray and main window".
-
-![System tray](./images/system-tray.png)
-
-The tray's "Connections" submenu lists every saved connection with its icon and
-name. Connections with a hotkey also show a combination such as `Ctrl+Alt+X`.
-Select an entry to open it, regardless of whether it has a hotkey or registration
-succeeded. This also works while the launcher is hidden. Menu actions use saved
-settings; unsaved edits in the launcher are not passed to the new connection.
-Adding or deleting connections and saving changes to names, icons, or hotkeys
-updates the menu.
-The "Open windows" submenu lists terminal and file transfer windows launched by
-this launcher that are still running. Selecting one requests that window to be
-shown; the desktop environment controls whether it comes to the foreground.
-Windows started directly from a command, SFTP windows opened from an SSH terminal,
-and windows from before a launcher restart are not listed. Without a session bus, the
-list remains visible but its window actions are unavailable.
-
-The deb package and Meson installation install an XDG autostart entry that starts elder-terms when you log in to the desktop.
-Whether autostart shows the launcher and keeps it in the system tray follows "Startup mode" under "Application settings",
-so hotkeys are available immediately after login.
-
-To disable autostart, use your desktop environment's startup-application settings.
-
-> You can also override the system-wide autostart entry by placing a file with the same name,
-> `net.kekyo.elder-terms.desktop`, in your `~/.config/autostart` directory and setting `Hidden=true`.
-
-Assigning a key combination to "Open connection shortcut" for a connection
-lets you open it directly with that hotkey even while the launcher is hidden.
+Connections with a hotkey also show a combination such as `Ctrl+Alt+X`.
 "Open application shortcut" under "Application settings" shows the launcher; its default is `Ctrl+Alt+T`.
 
-Automatic hotkey registration depends on the desktop environment.
-On Sway and labwc, the launcher saves hotkeys in your compositor configuration files.
-See [desktop-specific hotkey setup](./docs/en/hotkeys.md) for troubleshooting, manual registration, and removal.
+Hotkeys work only while the elder-terms launcher is running, so we recommend
+keeping it running in the system tray.
+
+> Note: Automatic hotkey registration depends on the desktop environment.
+> On Sway and labwc, the launcher saves hotkeys in your compositor configuration files.
+> See [desktop-specific hotkey setup](./docs/en/hotkeys.md) for troubleshooting, manual registration, and removal.
 
 ## Configuring Logging
 
@@ -1015,21 +989,59 @@ that are already open do not change language immediately either.
 > on machine translation. If you find an undesirable translation, please send
 > a pull request.
 
-## Configuring the Terminal Type
+## Keeping the Launcher in the System Tray
 
-![Terminal type settings](./images/terminal-type-settings.png)
+In environments that support a system tray, you can keep elder-terms running in the tray.
 
-The terminal type is a name that tells the remote host which kind of terminal
-elder-terms emulates. This value is automatically reported during terminal-type
-negotiation for TELNET and when allocating a pseudo-terminal for SSH.
+Open the launcher's application menu, select "Application settings", and set
+"Startup mode" to "System tray only" or "System tray and main window" to keep the launcher in the tray.
 
-Shells and applications that use `curses` on the remote host consult the
-corresponding `terminfo` entry to select control sequences for colors, cursor
-movement, function keys, and other features. You can normally leave the
-default unchanged. If the remote host does not support that terminal type,
-specify a value installed on the host, such as `xterm`.
+![System tray](./images/system-tray.png)
 
-The default for TELNET and SSH is `xterm-256color`. Use global or connection settings to select a terminal type supported by the remote host.
+The tray's "Connections" submenu lists every saved connection with its icon and name.
+Select a connection here to open it.
+
+The "Open windows" submenu lists terminal and file transfer windows launched by
+this launcher that are still running. Selecting one requests that window to be
+shown; the desktop environment controls whether it comes to the foreground.
+
+## "New window"
+
+To choose the connection opened by "New Window" on the desktop icon of a terminal started without a connection,
+open "Application settings" in the launcher and select its name from "Use for \"New Window\"".
+
+Select "None" to use the default terminal settings.
+
+The list includes saved local shell, TELNET, SSH, and serial connections.
+The desktop action is named "New Window" in every system language.
+
+## Defining Themes
+
+elder-terms features a theme system. As the name suggests, it functions as a "theme" that allows you to customize and define the appearance, but it’s actually much more powerful than that.
+
+Themes defined here affect all settings.
+The global settings in "Application Settings" allow you to modify nearly all of elder-terms’ settings;
+this feature simply lets you assign a theme name to them so you can switch between them.
+
+Themes are applied as follows:
+
+1. It uses the global settings as a baseline.
+2. If a theme is specified for a connection, it overrides the settings with those redefined by that theme.
+3. Settings for each individual connection override those above.
+
+![Editing Named Themes and Previewing Color Schemes](./images/named-themes.png)
+
+You can create a “Red Theme” that defines only the title bar and body background colors, or you can group settings that apply to all serial connections into a theme such as "Default Baud Rate."
+
+Open "Application settings" from the launcher's menu, choose the "Themes" tab, and click "New". Enter a name and the settings to share, then click "Save". The preview shows the titlebar and content background together. Select the theme on each connection's "General" page to inherit its settings. Choose "None" to return to connection defaults.
+
+Explicit connection settings survive theme changes. Clear an override to inherit the current theme's value. Clearing an item in the theme restores connection defaults for that item. Connection names, icons, launch hotkeys, application-wide settings, macros, and link rules are outside themes.
+
+Renaming a theme keeps existing references. "Duplicate" creates a separate theme. Themes in use list their connections and cannot be deleted until those references are removed. If an external edit removes a referenced theme, select an existing theme or "None" before launching the connection.
+
+Saved themes affect new sessions and the connection being edited in the launcher. For a running terminal or transfer window, reopen settings and click "Apply". Previewing or selecting a theme does not change the running session. Changes such as connection destinations still require reconnection.
+
+Application settings retain edits across tabs, and "Save" covers all editing tabs. If only one of `global.ini` and `theme.ini` saves, the dialog stays open and reports each file's result. Retry writes only unsaved changes; a subsequent "Cancel" discards only those unsaved changes. If an external-edit conflict is reported, review the persisted files and reopen settings.
 
 ## Checking the Running Version
 

@@ -4,6 +4,8 @@ HTTP/HTTPS connections show links from an HTML page in the file-transfer window.
 
 ## Configure the connection
 
+![HTTP/HTTPS settings with a base URL and start page](../../images/http-settings.png)
+
 Choose “HTTP/HTTPS” as the connection type and enter the base URL on its tab. The base URL defines the permitted directory. It must end with `/` and must not contain credentials, a query or a fragment.
 
 For example, `https://example.com/pub/` permits `/pub/file.zip`, but excludes `/public/file.zip`, `/other/` and links using another host, port or scheme. Redirects follow the same restriction.
@@ -27,6 +29,8 @@ Responses with `text/html` or `application/xhtml+xml` are normally expanded. Att
 ## Receive files and directories
 
 Select one folder or regular file in Local, then select one or more items in Remote and choose the receive mode from the context menu. Selecting a folder saves into that folder; selecting a file saves into its containing folder. Both receive modes are unavailable when no destination is selected, a symbolic link is selected, or multiple destination items are selected. The Local path field is not used as the destination.
+
+![Context menu offering Receive as directory and Receive as file](../../images/http-receive-menu.png)
 
 | Operation | Result |
 | --- | --- |

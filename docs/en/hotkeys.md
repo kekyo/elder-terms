@@ -1,7 +1,11 @@
 # Desktop-specific Hotkey Setup
 
-See the [README hotkey settings](../../README.md#configuring-hotkeys) for normal setup.
+See the [README hotkey settings](../../README.md#hotkeys) for normal setup.
 On Sway and labwc, the launcher and `etctl setup` save hotkeys in your compositor configuration files.
+
+Open "About" in the launcher to check the detected hotkey backend and `etctl` availability. This screenshot shows an X11 session.
+
+![X11 hotkey detection and etctl availability](../../images/about-dialog.png)
 
 ## Hotkeys on Wayland
 

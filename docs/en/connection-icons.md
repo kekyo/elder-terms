@@ -3,6 +3,8 @@
 Open "Choose icon…" on a connection's "General" tab to select a preset or a PNG/JPEG file.
 Icons are specific to each connection and do not inherit from "Connection defaults".
 
+![Connection icon picker with presets and an image file option](../../images/connection-icon-picker.png)
+
 ## Image File Requirements
 
 Images are read from their original paths. Keep the file available for subsequent launches.

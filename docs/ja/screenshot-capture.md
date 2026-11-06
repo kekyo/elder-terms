@@ -1,6 +1,6 @@
-# READMEのスクリーンショット撮影
+# ドキュメントのスクリーンショット撮影
 
-この文書は、READMEとREADME_ja.mdで共用する44枚の画面画像を更新するための記録です。README冒頭の紹介画像6枚はウインドウ全体を示します。各節の画像は、対象の設定欄や操作結果と、その場所が分かる最小限の周辺を切り出します。
+この文書は、日英READMEとdocsで共用する58枚の画面画像の撮影記録です。README冒頭の紹介画像6枚はウインドウ全体を示します。各節の画像は、対象の設定欄や操作結果と、その場所が分かる最小限の周辺を切り出します。
 
 ## 以前の画像から分かること
 
@@ -38,6 +38,30 @@ IPスキャン画像は、このボタンから実際の探索を完了し、9�
 
 撮影用スクリプトと取得結果は`test-results/plan23/capture-launcher.mts`と`test-results/plan23/launcher-capture.json`に保存しました。これらは作業用の記録です。画像のハッシュと個別の撮影条件は`images/capture-manifest.json`に反映しています。
 
+## 2026年11月6日のREADME画像の更新
+
+バージョン1.12.172で8枚を差し替え、名前付きテーマと転送ジョブの画像を追加しました。対象ソースは`983d9728f282e867ea1264057d92f711b9155fc4`です。`make test`のビルド結果を使用しています。
+
+表示先は撮影専用のXvfb（1700×1250、24 bit）です。表示倍率1、Yaru-dark、Ubuntu Sans 11、英語表示を共通条件としました。設定とデータのディレクトリ、D-Busを分離し、利用者の保存済み設定を使わずに起動しています。
+
+試し撮りからウインドウを縮め、文字が欠けないことを確認しました。設定画面の幅は1080pxです。画面の最小サイズによって空白が残る場合は、説明に必要な範囲だけを撮影します。SFTPの紹介画像は1080×460pxです。更新日時が読めるよう、一覧の列幅も画面上で調整しました。取得にはFFmpegの`x11grab`を使い、画像の合成やリサイズは行っていません。
+
+テーマの例は「Blue theme」で、タイトルとステータスバーに`#23486A`、本文背景に`#142435`を指定しました。「Local terminal」では、そのテーマを継承する表示を確認できます。IPスキャンは実際の探索で得たlocalhostの行と、NFSを含む10列の見出しを撮影しています。「About」にあるX11のホットキー検出は、撮影環境での結果です。
+
+SFTPはループバックで待ち受ける一時OpenSSHサーバーへ接続しました。ローカル側で「Downloads」、リモート側で「README.txt」を選び、受信後に内容を照合しています。ジョブ画像は、その受信が完了して1件コピー済みになった状態です。ホスト側のSSH設定と`authorized_keys`は変更していません。
+
+撮影用スクリプトと作業記録は`artifacts/documentation-screenshots/`にあります。最終画像の撮影日時、座標、ハッシュ、個別の環境は[画像の記録](../../images/capture-manifest.json)に保存しました。個別の`application`と`environment`がある画像では、最上位の共通項目より優先します。
+
+## 同日の各ガイド向け画像の追加
+
+HTTP、SMB、NFS、SSH proxyの設定、FTPSのTLS設定、HTTPの受信メニュー、SMB共有、NFS公開パス、証明書確認、文字選択の比較を追加しました。バージョン、対象ソース、表示条件、取得方法は上記のREADME更新と同じです。日英の各ガイドから共通の英語画像を参照します。テーマ、継承表示、接続アイコン、About、FTPとWebDAVの基本設定には、READMEと同じ画像を使いました。
+
+HTTPのメニューは、ループバックのHTTPサーバーにある`/pub/docs/`を選んだ状態です。ローカル側では「Downloads」を保存先として選択しています。証明書確認の2枚は、一時FTPSサーバーとWebDAV HTTPSサーバーが実際に提示した自己署名証明書によるものです。証明書の例外は許可せず、確認画面だけを取得しました。
+
+SMB共有は撮影専用のSambaコンテナーに`archive`、`public`、`team`を用意しました。NFSは一時仮想マシンのLinuxサーバーへv3で接続し、`/srv`配下の公開パスを展開しています。ネットワークを分離し、ホスト側の共有設定やサービスは変更していません。
+
+文字選択の2枚は、同じ端末に同じ4行の表を表示し、同じ開始点と終了点でドラッグしました。通常選択は行をまたぐ範囲、ブロック選択はSTATE列の`ready`3件です。コピーした文字列も照合しました。表示倍率と切り出し範囲は共通です。
+
 ## 画像ごとの条件
 
 | 用途 | 画像 | 再撮影する状態 |
@@ -47,25 +71,39 @@ IPスキャン画像は、このボタンから実際の探索を完了し、9�
 | 紹介 | `complex-terminal.png` | 現行の端末描画で`btop`を実行したウインドウ全体 |
 | 紹介 | `serial-terminal.png` | ローカルPTYからサンプルの起動・状態ログを受信中のシリアル端末全体。115200 bps、8N1 |
 | 紹介 | `colored-terminal.png` | 青い外郭と背景を設定し、`htop`を実行した端末ウインドウ全体 |
-| 紹介 | `sftp.png` | 127.0.0.1:40222の一時OpenSSHサーバーへ実際に接続したSFTPウインドウ全体。ローカルは`/tmp/elder-local`、リモートは`/tmp/elder-remote` |
+| 紹介 | `sftp.png` | 127.0.0.1の一時OpenSSHサーバーへ接続したSFTPウインドウ全体。サンプルのフォルダーと各種類のファイル、折り畳んだ転送ジョブ一覧を表示 |
 | 基本操作 | `launcher.png` | ランチャーで「Local terminal」を選択した接続一覧 |
 | 基本操作 | `local-terminal.png` | 起動直後のローカルシェルのプロンプト |
-| 基本操作 | `settings-terminal.png` | 「Terminal」タブで文字コード、キー、画面サイズ、履歴、BELなどが見える範囲 |
+| 基本操作 | `settings-terminal.png` | 「Terminal」タブで文字コード、キー、画面サイズ、履歴、BEL、ブロックコピーの行末空白除去、曖昧幅文字の設定を表示 |
 | 基本操作 | `font-size.png` | 同じ本文を表示する端末2枚。左は16 DIP、右はそこから`Ctrl+=`を3回押した状態 |
 | 基本操作 | `serial-indicator.png` | シリアル端末の接続・通信インジケーター。PTYには物理モデムラインがないため、実機の信号状態として説明しない |
-| 接続設定 | `configuration-structure.png` | 「General」で明示した自動終了の値と、組み込み既定値を継承するコンパクトモードを並べる |
+| 接続設定 | `configuration-structure.png` | 「General」で「Blue theme」を選択。配色のテーマ継承と組み込み既定値の出所を表示 |
+| 接続設定 | `named-themes.png` | 「Application settings」の「Themes」で「Blue theme」の配色とプレビューを表示 |
 | 接続設定 | `connection-icon-picker.png` | Noto Color Emojiの選択ポップアップを開き、絵文字の候補と画像ファイル選択を表示 |
-| 接続設定 | `ip-scan-results.png` | 実際にIPスキャンを完了し、9列の見出しとlocalhostの行だけを切り出す |
+| 接続設定 | `ip-scan-results.png` | 実際のIPスキャンで得たlocalhostの行と、NFS(2049)を含む10列の見出しを切り出す |
 | 接続設定 | `ssh-sftp-settings.png` | 「SSH」タブのアドレス、ユーザー名、秘密鍵、端末種別。SFTPも共有する設定 |
 | 接続設定 | `ssh-telnet-reconnect.png` | ループバックのTELNET接続を切断し、再接続ボタンが使える状態 |
 | 接続設定 | `ftp-ftps-settings.png` | 「FTP」タブでパッシブ転送、明示的FTPS、証明書確認を設定 |
 | 接続設定 | `webdav-settings.png` | 「WebDAV」タブでHTTPS、アドレス欄右側のIPスキャンボタン、公開パス、認証、完成したURLを表示 |
+| 接続設定 | `ftp-tls-settings.png` | 明示的FTPSの暗号化、TLSバージョン、互換性、証明書、暗号の設定欄 |
+| 接続設定 | `http-settings.png` | 「HTTP/HTTPS」で基準URLと開始ページ、認証、証明書設定を表示 |
+| 接続設定 | `smb-settings.png` | 「SMB」でアドレス、SMB2/3の自動選択、署名と暗号化などの設定を表示 |
+| 接続設定 | `nfs-settings.png` | 「NFS」でv3を選択し、exportとv4公開パスの設定・探索欄を表示 |
+| 接続設定 | `ssh-proxy-settings.png` | 「SSH proxy」を有効にし、`bastion.example.net`とユーザー名`demo`を指定 |
+| 接続設定 | `ftps-certificate.png` | ループバックのFTPSサーバーが提示した自己署名証明書の確認画面 |
+| 接続設定 | `webdav-certificate.png` | ループバックのWebDAV HTTPSサーバーが提示した自己署名証明書の確認画面 |
 | ファイル転送 | `file-transfer-item-menu.png` | 実SFTP接続でサンプルのリモートファイルを選択し、右クリックメニューを開く |
+| ファイル転送 | `file-transfer-jobs.png` | 実SFTP接続でREADME.txtを受信し、完了・コピー済み1件のジョブを表示 |
+| ファイル転送 | `http-receive-menu.png` | HTTPの`/pub/docs/`を選択し、ディレクトリ・ファイルとしての受信を選べるメニューを開く |
+| ファイル転送 | `smb-shares.png` | 実Samba接続のリモート側`/`に共有3件を表示し、`team`を選択 |
+| ファイル転送 | `nfs-exports.png` | 実NFS v3接続で`/srv`を展開し、親ディレクトリと公開パスの階層を表示 |
 | 端末とシリアル | `local-startup-process.png` | 「Local」の起動コマンドを`/bin/bash --login`に指定 |
 | 端末とシリアル | `serial-device-selector.png` | 「Serial」で安定デバイスID、検出されたFTDIデバイス、現在のデバイスノードを表示。実ハードウェアの設定変更は行わない |
 | 端末とシリアル | `serial-connection-monitoring.png` | 「Serial」の接続監視信号の選択欄 |
 | 端末とシリアル | `terminal-encoding-keys.png` | 「Terminal」のUTF-8、Backspace、カーソルキー、Enter/Return設定 |
 | 端末とシリアル | `terminal-text-selection.png` | ローカル端末のサンプルC++ソースを選択した状態 |
+| 端末とシリアル | `text-selection-linear.png` | サービス名・状態・ポートの表を通常選択し、3行にまたがる範囲を表示 |
+| 端末とシリアル | `text-selection-block.png` | 同じ表とドラッグ範囲を使い、STATE列の`ready`3件だけをブロック選択 |
 | 端末とシリアル | `terminal-send-paste.png` | 「Transfer」のテキスト送信速度と改行追従設定 |
 | 端末とシリアル | `terminal-break-menu.png` | 接続中のTELNET端末で、右クリックメニューの「Send BREAK」を有効な状態で表示 |
 | 端末とシリアル | `scrollback-settings.png` | 「Terminal」のスクロール履歴を20,000行に設定 |
@@ -73,7 +111,7 @@ IPスキャン画像は、このボタンから実際の探索を完了し、9�
 | 外観 | `compact-mode.png` | コンパクトモードの端末で、タイトル横にCONN、LOG、SD、RDを表示 |
 | 外観 | `indicator-color-settings.png` | 「General」の点灯色を青、消灯色を灰色に設定 |
 | 外観 | `text-size-settings.png` | 「Terminal appearance」の文字サイズを14.5 DIPに設定 |
-| 外観 | `cursor-background-settings.png` | 縦線カーソル、透過背景、混色、背景画像の設定欄 |
+| 外観 | `cursor-background-settings.png` | 縦線カーソル、透過背景、セル背景の不透明設定、混色、背景画像の設定欄 |
 | 外観 | `text-contrast-settings.png` | Oklchの明暗差補正を選び、「Compare colors」を展開した前後比較 |
 | 外観 | `reverse-polarity-settings.png` | 反転方式Cを選び、「Compare colors」を展開した前後比較 |
 | 外観 | `color-distinction-settings.png` | D型向け再配色、強さ60、「Compare colors」を展開した前後比較 |
@@ -82,15 +120,15 @@ IPスキャン画像は、このボタンから実際の探索を完了し、9�
 | アプリと自動化 | `system-tray.png` | 現行GNOMEセッションのトレイのトップメニュー。「Open elder-terms」「Connections」「Application settings」「About」「Quit」を表示。接続サブメニューは開かない |
 | アプリと自動化 | `terminal-type-settings.png` | 「SSH」の端末種別`xterm-256color` |
 | アプリと自動化 | `language-settings.png` | ランチャーの「Application settings」で表示言語を表示 |
-| アプリと自動化 | `about-dialog.png` | 「About」のバージョン1.8.189とホットキーの検出状態 |
+| アプリと自動化 | `about-dialog.png` | 「About」のバージョン1.12.172、X11のホットキー検出、etctlの利用可否 |
 | アプリと自動化 | `logging-settings.png` | ログ有効、接続名と日時を使うファイル名、UTF-8テキスト形式 |
 | アプリと自動化 | `macro-settings.png` | `READY`に一致したとき`START`とCRLFを送るマクロルールを選択 |
-| アプリと自動化 | `terminal-link-actions.png` | 表示テキストのローカルソースパスを認識し、エディターで該当行を開くルール |
+| アプリと自動化 | `terminal-link-actions.png` | Regex・OSC 8の下線表示、エディターで該当行を開くルール、Text boundariesを表示 |
 
-SFTPのサーバーは127.0.0.1だけで待ち受け、公開鍵認証を使います。ホスト側のSSH設定とユーザーの`authorized_keys`は変更しません。撮影ではリモートディレクトリに`/tmp/elder-remote`を使いました。撮影後は一時サーバーを停止します。
+SFTPのサーバーは127.0.0.1だけで待ち受け、公開鍵認証を使います。ホスト側のSSH設定とユーザーの`authorized_keys`は変更しません。リモートディレクトリは撮影専用の一時ディレクトリです。撮影後は一時サーバーを停止します。
 
 通常の設定画像はprivate D-Busで撮影します。トレイはGNOMEのStatusNotifierWatcherが必要なので、実ユーザーのD-Busを継承します。起動前に`net.kekyo.elder-terms`の所有者がいないことを確認し、表示先をディスプレイ2に限定して一時的なランチャーを起動します。撮影用のXDG設定ディレクトリは引き続き分離します。
 
 ## 更新時の確認
 
-撮影対象のソース、表示環境、サンプル接続を固定します。各節の対象が画像内で読めること、切り出しに隣の行の断片や欠けた文字がないことを目視します。比較画像は本文、表示倍率、範囲をそろえます。最後に日英READMEの全画像参照と画像の実体を照合します。
+撮影対象のソース、表示環境、サンプル接続を固定します。各節の対象が画像内で読めること、切り出しに隣の行の断片や欠けた文字がないことを目視します。比較画像は本文、表示倍率、範囲をそろえます。最後に日英READMEとdocsの全画像参照、画像の実体、撮影記録の寸法とハッシュを照合します。plansは対象に含めません。

@@ -120,15 +120,33 @@
     {
       "file": "sftp.png",
       "scope": "window",
-      "capturedAt": "2026-10-23T00:53:15.002Z",
+      "capturedAt": "2026-11-06T14:00:59.416Z",
       "bounds": {
-        "x": 5026,
-        "y": 1373,
-        "width": 1268,
-        "height": 528
+        "x": 0,
+        "y": 0,
+        "width": 1080,
+        "height": 460
       },
-      "description": "Live SFTP browser on an isolated loopback OpenSSH server, sample local and remote files, custom brown exterior and content colors",
-      "sha256": "baa7b1870ea3d6859ee9d07bbdb608f352253c8baaefa2dbcd16c995752d8a12"
+      "sha256": "6a9f0e083ed73732b237314ea03ae3f4bf79515116d9e58c855158825aadb0f5",
+      "application": {
+        "version": "1.12.172",
+        "sourceCommit": "983d9728f282e867ea1264057d92f711b9155fc4",
+        "buildCommand": "make test"
+      },
+      "environment": {
+        "session": "X11 (Xvfb)",
+        "display": ":604",
+        "screen": "1700x1250x24",
+        "scale": 1,
+        "gtkTheme": "Yaru-dark",
+        "uiFont": "Ubuntu Sans 11",
+        "terminalFont": "Noto Sans Mono",
+        "uiLanguage": "en",
+        "locale": "C.UTF-8",
+        "isolatedSettings": true,
+        "isolatedDBus": true
+      },
+      "description": "SFTP window connected to an isolated loopback OpenSSH server, with file type icons and the collapsed transfer list."
     },
     {
       "file": "launcher.png",
@@ -159,15 +177,33 @@
     {
       "file": "settings-terminal.png",
       "scope": "detail",
-      "capturedAt": "2026-10-23T00:34:16.247Z",
+      "capturedAt": "2026-11-06T13:59:42.388Z",
       "bounds": {
-        "x": 5044,
-        "y": 1446,
-        "width": 809,
-        "height": 482
+        "x": 214,
+        "y": 51,
+        "width": 861,
+        "height": 643
       },
-      "description": "Terminal settings including encoding, keys, grid, history, BEL, shortcuts and accessibility.",
-      "sha256": "7d67d41754fc8156967e3b9bb3c4e87df36bd803ace8f54deb3c569700a5fc61"
+      "sha256": "e20abb98e247145617111a2f1aaa56e9efeb87ebbe82e59cc716a9e2918c0023",
+      "application": {
+        "version": "1.12.172",
+        "sourceCommit": "983d9728f282e867ea1264057d92f711b9155fc4",
+        "buildCommand": "make test"
+      },
+      "environment": {
+        "session": "X11 (Xvfb)",
+        "display": ":604",
+        "screen": "1700x1250x24",
+        "scale": 1,
+        "gtkTheme": "Yaru-dark",
+        "uiFont": "Ubuntu Sans 11",
+        "terminalFont": "Noto Sans Mono",
+        "uiLanguage": "en",
+        "locale": "C.UTF-8",
+        "isolatedSettings": true,
+        "isolatedDBus": true
+      },
+      "description": "Terminal settings including block-copy trailing-space trimming and ambiguous character width."
     },
     {
       "file": "font-size.png",
@@ -198,15 +234,33 @@
     {
       "file": "configuration-structure.png",
       "scope": "detail",
-      "capturedAt": "2026-10-23T00:30:43.101Z",
+      "capturedAt": "2026-11-06T13:59:41.288Z",
       "bounds": {
-        "x": 5044,
-        "y": 1778,
-        "width": 801,
-        "height": 92
+        "x": 214,
+        "y": 51,
+        "width": 861,
+        "height": 643
       },
-      "description": "Explicit Disabled for session auto-close, inherited built-in Disabled for compact mode.",
-      "sha256": "a37ea456ab2ffe2920be93b1b3fd691cf41291c661aaeafa2d9336be14f136fa"
+      "sha256": "cc5c2b881a004d69d79f8c492fd33ed155743c2627f30d83e100409d1c9e5f10",
+      "application": {
+        "version": "1.12.172",
+        "sourceCommit": "983d9728f282e867ea1264057d92f711b9155fc4",
+        "buildCommand": "make test"
+      },
+      "environment": {
+        "session": "X11 (Xvfb)",
+        "display": ":604",
+        "screen": "1700x1250x24",
+        "scale": 1,
+        "gtkTheme": "Yaru-dark",
+        "uiFont": "Ubuntu Sans 11",
+        "terminalFont": "Noto Sans Mono",
+        "uiLanguage": "en",
+        "locale": "C.UTF-8",
+        "isolatedSettings": true,
+        "isolatedDBus": true
+      },
+      "description": "General settings inheriting colors from Blue theme alongside built-in defaults."
     },
     {
       "file": "connection-icon-picker.png",
@@ -224,32 +278,33 @@
     {
       "file": "ip-scan-results.png",
       "scope": "detail",
-      "capturedAt": "2026-10-30T03:13:05.986Z",
+      "capturedAt": "2026-11-06T13:59:51.747Z",
       "bounds": {
-        "x": 94,
-        "y": 160,
-        "width": 1172,
+        "x": 14,
+        "y": 40,
+        "width": 1212,
         "height": 48
       },
-      "description": "Nine-column header and localhost result of a completed live IP scan from WebDAV settings.",
-      "sha256": "c2f807b37d658fd456fa7db9d82ecfb9b6955310fe0a803090e8bd82963f9c0f",
+      "sha256": "95718941134838d4dce5b15cdefb978dd854c9d196582a7e9172067b4696926e",
       "application": {
-        "version": "1.10.72",
-        "sourceCommit": "cee8b4a12541235618f901d584f278e2baff6e6f",
+        "version": "1.12.172",
+        "sourceCommit": "983d9728f282e867ea1264057d92f711b9155fc4",
         "buildCommand": "make test"
       },
       "environment": {
-        "display": ":605",
-        "screen": "1600x1000x24",
+        "session": "X11 (Xvfb)",
+        "display": ":604",
+        "screen": "1700x1250x24",
         "scale": 1,
         "gtkTheme": "Yaru-dark",
         "uiFont": "Ubuntu Sans 11",
+        "terminalFont": "Noto Sans Mono",
         "uiLanguage": "en",
         "locale": "C.UTF-8",
-        "session": "X11 (Xvfb)",
         "isolatedSettings": true,
         "isolatedDBus": true
-      }
+      },
+      "description": "Ten IP scan column headers, including NFS(2049), and a real localhost result."
     },
     {
       "file": "ssh-sftp-settings.png",
@@ -323,15 +378,33 @@
     {
       "file": "file-transfer-item-menu.png",
       "scope": "detail",
-      "capturedAt": "2026-10-23T00:52:04.698Z",
+      "capturedAt": "2026-11-06T14:01:00.200Z",
       "bounds": {
-        "x": 5680,
-        "y": 1699,
-        "width": 370,
-        "height": 166
+        "x": 547,
+        "y": 62,
+        "width": 516,
+        "height": 420
       },
-      "description": "Selected remote file and context menu on a connected SFTP browser",
-      "sha256": "9aa0acbf87a77a84a7995f3a8f9b1f7ec046a1aff97c948089959b4b94cc91ad"
+      "sha256": "0675ff4f3536c5b060c253eb91f3b712f8591ef8ef1b0a51ca713967ab23736c",
+      "application": {
+        "version": "1.12.172",
+        "sourceCommit": "983d9728f282e867ea1264057d92f711b9155fc4",
+        "buildCommand": "make test"
+      },
+      "environment": {
+        "session": "X11 (Xvfb)",
+        "display": ":604",
+        "screen": "1700x1250x24",
+        "scale": 1,
+        "gtkTheme": "Yaru-dark",
+        "uiFont": "Ubuntu Sans 11",
+        "terminalFont": "Noto Sans Mono",
+        "uiLanguage": "en",
+        "locale": "C.UTF-8",
+        "isolatedSettings": true,
+        "isolatedDBus": true
+      },
+      "description": "Remote README.txt context menu on a real SFTP connection."
     },
     {
       "file": "local-startup-process.png",
@@ -492,15 +565,33 @@
     {
       "file": "cursor-background-settings.png",
       "scope": "detail",
-      "capturedAt": "2026-10-23T00:35:45.551Z",
+      "capturedAt": "2026-11-06T13:59:43.270Z",
       "bounds": {
-        "x": 5044,
-        "y": 1540,
-        "width": 809,
-        "height": 416
+        "x": 214,
+        "y": 253,
+        "width": 861,
+        "height": 458
       },
-      "description": "Vertical cursor, transparent background at 70 percent, tint and background-image controls.",
-      "sha256": "d1d1656577b7005af8daad6c3caa1b0ac5a6cd00b15454a039707af898780f75"
+      "sha256": "ae218062399d226562517f35147f5828f0caa712c5ae5263b9c39697df8fa27d",
+      "application": {
+        "version": "1.12.172",
+        "sourceCommit": "983d9728f282e867ea1264057d92f711b9155fc4",
+        "buildCommand": "make test"
+      },
+      "environment": {
+        "session": "X11 (Xvfb)",
+        "display": ":604",
+        "screen": "1700x1250x24",
+        "scale": 1,
+        "gtkTheme": "Yaru-dark",
+        "uiFont": "Ubuntu Sans 11",
+        "terminalFont": "Noto Sans Mono",
+        "uiLanguage": "en",
+        "locale": "C.UTF-8",
+        "isolatedSettings": true,
+        "isolatedDBus": true
+      },
+      "description": "Cursor and background settings including opaque cell backgrounds."
     },
     {
       "file": "text-contrast-settings.png",
@@ -609,15 +700,33 @@
     {
       "file": "about-dialog.png",
       "scope": "detail",
-      "capturedAt": "2026-10-23T00:48:07.077Z",
+      "capturedAt": "2026-11-06T13:59:55.854Z",
       "bounds": {
-        "x": 5060,
-        "y": 1655,
-        "width": 568,
-        "height": 117
+        "x": 270,
+        "y": 243,
+        "width": 400,
+        "height": 116
       },
-      "description": "About page: application version 1.8.189 and hotkey backend status",
-      "sha256": "a9f01e794e20dad6b45b0795e4c4bcda9b834ec006541c0e0f353ec359a8a6bb"
+      "sha256": "80ac38f0381b5ed0f4857ddab79c51f73cb55b89332af4d555548a33e5226754",
+      "application": {
+        "version": "1.12.172",
+        "sourceCommit": "983d9728f282e867ea1264057d92f711b9155fc4",
+        "buildCommand": "make test"
+      },
+      "environment": {
+        "session": "X11 (Xvfb)",
+        "display": ":604",
+        "screen": "1700x1250x24",
+        "scale": 1,
+        "gtkTheme": "Yaru-dark",
+        "uiFont": "Ubuntu Sans 11",
+        "terminalFont": "Noto Sans Mono",
+        "uiLanguage": "en",
+        "locale": "C.UTF-8",
+        "isolatedSettings": true,
+        "isolatedDBus": true
+      },
+      "description": "Version and detected X11 hotkey backend in the About page."
     },
     {
       "file": "logging-settings.png",
@@ -648,15 +757,467 @@
     {
       "file": "terminal-link-actions.png",
       "scope": "detail",
-      "capturedAt": "2026-10-23T00:44:51.495Z",
+      "capturedAt": "2026-11-06T13:59:44.127Z",
       "bounds": {
-        "x": 5036,
-        "y": 1438,
-        "width": 825,
-        "height": 518
+        "x": 214,
+        "y": 51,
+        "width": 861,
+        "height": 690
       },
-      "description": "Terminal-text link rule opening existing source paths in the editor at a named line",
-      "sha256": "7d8a49ea7466734caf9464b91cb15234a93a81672c89fb7dafd6bf4b6a22071c"
+      "sha256": "3a896418c1fcda8ea9e9599a29501a9b60d883a99a258a2f731313543e34320d",
+      "application": {
+        "version": "1.12.172",
+        "sourceCommit": "983d9728f282e867ea1264057d92f711b9155fc4",
+        "buildCommand": "make test"
+      },
+      "environment": {
+        "session": "X11 (Xvfb)",
+        "display": ":604",
+        "screen": "1700x1250x24",
+        "scale": 1,
+        "gtkTheme": "Yaru-dark",
+        "uiFont": "Ubuntu Sans 11",
+        "terminalFont": "Noto Sans Mono",
+        "uiLanguage": "en",
+        "locale": "C.UTF-8",
+        "isolatedSettings": true,
+        "isolatedDBus": true
+      },
+      "description": "Regex and OSC 8 link display options, a local source rule and text boundary settings."
+    },
+    {
+      "file": "file-transfer-jobs.png",
+      "scope": "detail",
+      "capturedAt": "2026-11-06T14:01:01.521Z",
+      "bounds": {
+        "x": 17,
+        "y": 280,
+        "width": 786,
+        "height": 72
+      },
+      "sha256": "c81c6a8195077054a4b88fb6730ea98cfafdf74165393d9474ac81b5aeec81ac",
+      "application": {
+        "version": "1.12.172",
+        "sourceCommit": "983d9728f282e867ea1264057d92f711b9155fc4",
+        "buildCommand": "make test"
+      },
+      "environment": {
+        "session": "X11 (Xvfb)",
+        "display": ":604",
+        "screen": "1700x1250x24",
+        "scale": 1,
+        "gtkTheme": "Yaru-dark",
+        "uiFont": "Ubuntu Sans 11",
+        "terminalFont": "Noto Sans Mono",
+        "uiLanguage": "en",
+        "locale": "C.UTF-8",
+        "isolatedSettings": true,
+        "isolatedDBus": true
+      },
+      "description": "Completed SFTP receive job showing one copied item."
+    },
+    {
+      "file": "named-themes.png",
+      "scope": "window",
+      "capturedAt": "2026-11-06T13:59:54.154Z",
+      "bounds": {
+        "x": 20,
+        "y": 20,
+        "width": 1080,
+        "height": 725
+      },
+      "sha256": "9414fc748a22c8d7b87efa3840a9ed5137394fa79efac6af41a0143621f5ea77",
+      "application": {
+        "version": "1.12.172",
+        "sourceCommit": "983d9728f282e867ea1264057d92f711b9155fc4",
+        "buildCommand": "make test"
+      },
+      "environment": {
+        "session": "X11 (Xvfb)",
+        "display": ":604",
+        "screen": "1700x1250x24",
+        "scale": 1,
+        "gtkTheme": "Yaru-dark",
+        "uiFont": "Ubuntu Sans 11",
+        "terminalFont": "Noto Sans Mono",
+        "uiLanguage": "en",
+        "locale": "C.UTF-8",
+        "isolatedSettings": true,
+        "isolatedDBus": true
+      },
+      "description": "Named theme editor with Blue theme selected and a live color preview."
+    },
+    {
+      "file": "ftp-tls-settings.png",
+      "scope": "detail",
+      "capturedAt": "2026-11-06T13:59:46.217Z",
+      "bounds": {
+        "x": 214,
+        "y": 345,
+        "width": 861,
+        "height": 502
+      },
+      "sha256": "124eeca60b5fafaca99f2b033420f4132beb01501218160cd2c34da8cc198566",
+      "application": {
+        "version": "1.12.172",
+        "sourceCommit": "983d9728f282e867ea1264057d92f711b9155fc4",
+        "buildCommand": "make test"
+      },
+      "environment": {
+        "session": "X11 (Xvfb)",
+        "display": ":604",
+        "screen": "1700x1250x24",
+        "scale": 1,
+        "gtkTheme": "Yaru-dark",
+        "uiFont": "Ubuntu Sans 11",
+        "terminalFont": "Noto Sans Mono",
+        "uiLanguage": "en",
+        "locale": "C.UTF-8",
+        "isolatedSettings": true,
+        "isolatedDBus": true
+      },
+      "description": "Explicit FTPS configuration, TLS versions, compatibility, certificate policy and cipher settings."
+    },
+    {
+      "file": "ftps-certificate.png",
+      "scope": "detail",
+      "capturedAt": "2026-11-06T13:55:41.676Z",
+      "bounds": {
+        "x": 310,
+        "y": 153,
+        "width": 481,
+        "height": 390
+      },
+      "sha256": "cfa8e35855076f1a9150fef787697af2c5e79cd7cf27623bcf8ea31ce3a86f87",
+      "application": {
+        "version": "1.12.172",
+        "sourceCommit": "983d9728f282e867ea1264057d92f711b9155fc4",
+        "buildCommand": "make test"
+      },
+      "environment": {
+        "session": "X11 (Xvfb)",
+        "display": ":603",
+        "screen": "1700x1250x24",
+        "scale": 1,
+        "gtkTheme": "Yaru-dark",
+        "uiFont": "Ubuntu Sans 11",
+        "terminalFont": "Noto Sans Mono",
+        "uiLanguage": "en",
+        "locale": "C.UTF-8",
+        "isolatedSettings": true,
+        "isolatedDBus": true
+      },
+      "description": "Confirmation of a real self-signed certificate from a loopback FTPS server."
+    },
+    {
+      "file": "webdav-certificate.png",
+      "scope": "detail",
+      "capturedAt": "2026-11-06T13:54:23.441Z",
+      "bounds": {
+        "x": 310,
+        "y": 153,
+        "width": 481,
+        "height": 390
+      },
+      "sha256": "2cc1a517be13aad181cd42e3f88db0b72b3b890920b216cda3c9065dda292782",
+      "application": {
+        "version": "1.12.172",
+        "sourceCommit": "983d9728f282e867ea1264057d92f711b9155fc4",
+        "buildCommand": "make test"
+      },
+      "environment": {
+        "session": "X11 (Xvfb)",
+        "display": ":602",
+        "screen": "1700x1250x24",
+        "scale": 1,
+        "gtkTheme": "Yaru-dark",
+        "uiFont": "Ubuntu Sans 11",
+        "terminalFont": "Noto Sans Mono",
+        "uiLanguage": "en",
+        "locale": "C.UTF-8",
+        "isolatedSettings": true,
+        "isolatedDBus": true
+      },
+      "description": "Confirmation of a real self-signed certificate from a loopback WebDAV HTTPS server."
+    },
+    {
+      "file": "http-settings.png",
+      "scope": "detail",
+      "capturedAt": "2026-11-06T13:59:47.284Z",
+      "bounds": {
+        "x": 214,
+        "y": 51,
+        "width": 861,
+        "height": 534
+      },
+      "sha256": "a34453e15ba1b6a9aeaae29094b5d415a54d29c2a398ca565ae9a77f9e29787f",
+      "application": {
+        "version": "1.12.172",
+        "sourceCommit": "983d9728f282e867ea1264057d92f711b9155fc4",
+        "buildCommand": "make test"
+      },
+      "environment": {
+        "session": "X11 (Xvfb)",
+        "display": ":604",
+        "screen": "1700x1250x24",
+        "scale": 1,
+        "gtkTheme": "Yaru-dark",
+        "uiFont": "Ubuntu Sans 11",
+        "terminalFont": "Noto Sans Mono",
+        "uiLanguage": "en",
+        "locale": "C.UTF-8",
+        "isolatedSettings": true,
+        "isolatedDBus": true
+      },
+      "description": "HTTP/HTTPS base URL, relative start page, authentication and certificate settings."
+    },
+    {
+      "file": "http-receive-menu.png",
+      "scope": "detail",
+      "capturedAt": "2026-11-06T13:54:22.380Z",
+      "bounds": {
+        "x": 547,
+        "y": 62,
+        "width": 516,
+        "height": 324
+      },
+      "sha256": "d22b96e78eb9b554e90700fe919aea8288bf1098f891fd104429797a9fd01c1c",
+      "application": {
+        "version": "1.12.172",
+        "sourceCommit": "983d9728f282e867ea1264057d92f711b9155fc4",
+        "buildCommand": "make test"
+      },
+      "environment": {
+        "session": "X11 (Xvfb)",
+        "display": ":602",
+        "screen": "1700x1250x24",
+        "scale": 1,
+        "gtkTheme": "Yaru-dark",
+        "uiFont": "Ubuntu Sans 11",
+        "terminalFont": "Noto Sans Mono",
+        "uiLanguage": "en",
+        "locale": "C.UTF-8",
+        "isolatedSettings": true,
+        "isolatedDBus": true
+      },
+      "description": "HTTP resource context menu with Receive as directory and Receive as file enabled."
+    },
+    {
+      "file": "smb-settings.png",
+      "scope": "detail",
+      "capturedAt": "2026-11-06T13:59:48.433Z",
+      "bounds": {
+        "x": 214,
+        "y": 51,
+        "width": 861,
+        "height": 558
+      },
+      "sha256": "ec57bc4b45a276687500191194198ee324fe2e1020b61aa656e7a9da45c7d813",
+      "application": {
+        "version": "1.12.172",
+        "sourceCommit": "983d9728f282e867ea1264057d92f711b9155fc4",
+        "buildCommand": "make test"
+      },
+      "environment": {
+        "session": "X11 (Xvfb)",
+        "display": ":604",
+        "screen": "1700x1250x24",
+        "scale": 1,
+        "gtkTheme": "Yaru-dark",
+        "uiFont": "Ubuntu Sans 11",
+        "terminalFont": "Noto Sans Mono",
+        "uiLanguage": "en",
+        "locale": "C.UTF-8",
+        "isolatedSettings": true,
+        "isolatedDBus": true
+      },
+      "description": "SMB settings with automatic SMB2/3 selection and security options."
+    },
+    {
+      "file": "smb-shares.png",
+      "scope": "detail",
+      "capturedAt": "2026-11-06T13:56:47.507Z",
+      "bounds": {
+        "x": 547,
+        "y": 63,
+        "width": 516,
+        "height": 225
+      },
+      "sha256": "eb637a9662d93bbf471165041e6a68cbc272f17b54d59970da8053df4bc9a75a",
+      "application": {
+        "version": "1.12.172",
+        "sourceCommit": "983d9728f282e867ea1264057d92f711b9155fc4",
+        "buildCommand": "make test"
+      },
+      "environment": {
+        "session": "X11 (Xvfb)",
+        "display": ":603",
+        "screen": "1700x1250x24",
+        "scale": 1,
+        "gtkTheme": "Yaru-dark",
+        "uiFont": "Ubuntu Sans 11",
+        "terminalFont": "Noto Sans Mono",
+        "uiLanguage": "en",
+        "locale": "C.UTF-8",
+        "isolatedSettings": true,
+        "isolatedDBus": true
+      },
+      "description": "Real file shares listed at the remote root of an isolated Samba server."
+    },
+    {
+      "file": "nfs-settings.png",
+      "scope": "detail",
+      "capturedAt": "2026-11-06T13:59:49.552Z",
+      "bounds": {
+        "x": 214,
+        "y": 51,
+        "width": 861,
+        "height": 574
+      },
+      "sha256": "a0ccb4ba8de5f6ac5a65ba36598b508e90184a89b908b25581a01953f0c8c565",
+      "application": {
+        "version": "1.12.172",
+        "sourceCommit": "983d9728f282e867ea1264057d92f711b9155fc4",
+        "buildCommand": "make test"
+      },
+      "environment": {
+        "session": "X11 (Xvfb)",
+        "display": ":604",
+        "screen": "1700x1250x24",
+        "scale": 1,
+        "gtkTheme": "Yaru-dark",
+        "uiFont": "Ubuntu Sans 11",
+        "terminalFont": "Noto Sans Mono",
+        "uiLanguage": "en",
+        "locale": "C.UTF-8",
+        "isolatedSettings": true,
+        "isolatedDBus": true
+      },
+      "description": "NFS address, version, export discovery and public namespace settings."
+    },
+    {
+      "file": "nfs-exports.png",
+      "scope": "detail",
+      "capturedAt": "2026-11-06T14:02:11.344Z",
+      "bounds": {
+        "x": 547,
+        "y": 63,
+        "width": 516,
+        "height": 305
+      },
+      "sha256": "bc70f00e368260f5709ce98a02abc073a661247ac2f4abbe3b32191edea39287",
+      "application": {
+        "version": "1.12.172",
+        "sourceCommit": "983d9728f282e867ea1264057d92f711b9155fc4",
+        "buildCommand": "make test"
+      },
+      "environment": {
+        "session": "X11 (Xvfb)",
+        "display": ":607",
+        "screen": "1700x1250x24",
+        "scale": 1,
+        "gtkTheme": "Yaru-dark",
+        "uiFont": "Ubuntu Sans 11",
+        "terminalFont": "Noto Sans Mono",
+        "uiLanguage": "en",
+        "locale": "C.UTF-8",
+        "isolatedSettings": true,
+        "isolatedDBus": true
+      },
+      "description": "Real NFS v3 exports grouped under /srv on an isolated Linux NFS server."
+    },
+    {
+      "file": "ssh-proxy-settings.png",
+      "scope": "detail",
+      "capturedAt": "2026-11-06T13:59:45.128Z",
+      "bounds": {
+        "x": 214,
+        "y": 51,
+        "width": 861,
+        "height": 264
+      },
+      "sha256": "ba8c497a757891b369a13b0f66777be3a7a4c3f218e462b889a1942af5c55d41",
+      "application": {
+        "version": "1.12.172",
+        "sourceCommit": "983d9728f282e867ea1264057d92f711b9155fc4",
+        "buildCommand": "make test"
+      },
+      "environment": {
+        "session": "X11 (Xvfb)",
+        "display": ":604",
+        "screen": "1700x1250x24",
+        "scale": 1,
+        "gtkTheme": "Yaru-dark",
+        "uiFont": "Ubuntu Sans 11",
+        "terminalFont": "Noto Sans Mono",
+        "uiLanguage": "en",
+        "locale": "C.UTF-8",
+        "isolatedSettings": true,
+        "isolatedDBus": true
+      },
+      "description": "Enabled SSH gateway with example hostname and username."
+    },
+    {
+      "file": "text-selection-linear.png",
+      "scope": "detail",
+      "capturedAt": "2026-11-06T13:54:57.512Z",
+      "bounds": {
+        "x": 5,
+        "y": 51,
+        "width": 260,
+        "height": 110
+      },
+      "sha256": "385966941cec3ac3fe21e40044adce0ed1398f64ac91e12c1351b3bbfb4e0c86",
+      "application": {
+        "version": "1.12.172",
+        "sourceCommit": "983d9728f282e867ea1264057d92f711b9155fc4",
+        "buildCommand": "make test"
+      },
+      "environment": {
+        "session": "X11 (Xvfb)",
+        "display": ":602",
+        "screen": "1700x1250x24",
+        "scale": 1,
+        "gtkTheme": "Yaru-dark",
+        "uiFont": "Ubuntu Sans 11",
+        "terminalFont": "Noto Sans Mono",
+        "uiLanguage": "en",
+        "locale": "C.UTF-8",
+        "isolatedSettings": true,
+        "isolatedDBus": true
+      },
+      "description": "Linear selection spanning the STATE column over three rows."
+    },
+    {
+      "file": "text-selection-block.png",
+      "scope": "detail",
+      "capturedAt": "2026-11-06T13:54:58.654Z",
+      "bounds": {
+        "x": 5,
+        "y": 51,
+        "width": 260,
+        "height": 110
+      },
+      "sha256": "c88c98126c1f39f00d8a8c546629ac2862cf1c6905dcc77e09d1d69c0b22bff7",
+      "application": {
+        "version": "1.12.172",
+        "sourceCommit": "983d9728f282e867ea1264057d92f711b9155fc4",
+        "buildCommand": "make test"
+      },
+      "environment": {
+        "session": "X11 (Xvfb)",
+        "display": ":602",
+        "screen": "1700x1250x24",
+        "scale": 1,
+        "gtkTheme": "Yaru-dark",
+        "uiFont": "Ubuntu Sans 11",
+        "terminalFont": "Noto Sans Mono",
+        "uiLanguage": "en",
+        "locale": "C.UTF-8",
+        "isolatedSettings": true,
+        "isolatedDBus": true
+      },
+      "description": "Block selection of the STATE column over the same three rows."
     }
   ]
 }
