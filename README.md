@@ -162,12 +162,6 @@ launcher and select "Edit in text editor". This uses your desktop's default
 application for plain text files.
 Changes saved in an external editor are reloaded automatically.
 
-To choose the connection opened by "New Window" on the desktop icon of a terminal
-started without a connection, open "Application settings" in the launcher and select its name from
-"Use for \"New Window\"". Select "None" to use the default terminal settings.
-The list includes saved local shell, TELNET, SSH, and serial connections.
-The desktop action is named "New Window" in every system language.
-
 See the [INI settings reference](./docs/en/configuration.md) for editing configuration files directly.
 
 It is also useful to remember that `Ctrl`+`=` increases the font size and
@@ -246,22 +240,6 @@ removes the explicit value, causing the setting to inherit the first defined val
 
 For the settings below, "Apply" changes the current connection, "Save" keeps changes for the next launch, and "Cancel" discards unapplied edits.
 See the [INI settings reference](./docs/en/configuration.md) for file syntax and examples.
-
-## Sharing Named Themes
-
-![Named theme editor and color preview](./images/named-themes.png)
-
-For example, a "Red theme" can define only titlebar and content background colors.
-
-Open "Application settings" from the launcher's menu, choose the "Themes" tab, and click "New". Enter a name and the settings to share, then click "Save". The preview shows the titlebar and content background together. Select the theme on each connection's "General" page to inherit its settings. Choose "None" to return to connection defaults.
-
-Explicit connection settings survive theme changes. Clear an override to inherit the current theme's value. Clearing an item in the theme restores connection defaults for that item. Connection names, icons, launch hotkeys, application-wide settings, macros, and link rules are outside themes.
-
-Renaming a theme keeps existing references. "Duplicate" creates a separate theme. Themes in use list their connections and cannot be deleted until those references are removed. If an external edit removes a referenced theme, select an existing theme or "None" before launching the connection.
-
-Saved themes affect new sessions and the connection being edited in the launcher. For a running terminal or transfer window, reopen settings and click "Apply". Previewing or selecting a theme does not change the running session. Changes such as connection destinations still require reconnection.
-
-Application settings retain edits across tabs, and "Save" covers all editing tabs. If only one of `global.ini` and `theme.ini` saves, the dialog stays open and reports each file's result. Retry writes only unsaved changes; a subsequent "Cancel" discards only those unsaved changes. If an external-edit conflict is reported, review the persisted files and reopen settings.
 
 ## Configuring Connection Icons
 
@@ -693,6 +671,22 @@ In practice, however, the extended `CP932` conventionally used by the NEC PC-980
 
 If you use a different encoding, receiving extended or altered characters can produce garbled text.
 
+## Configuring the Terminal Type
+
+![Terminal type settings](./images/terminal-type-settings.png)
+
+The terminal type is a name that tells the remote host which kind of terminal
+elder-terms emulates. This value is automatically reported during terminal-type
+negotiation for TELNET and when allocating a pseudo-terminal for SSH.
+
+Shells and applications that use `curses` on the remote host consult the
+corresponding `terminfo` entry to select control sequences for colors, cursor
+movement, function keys, and other features. You can normally leave the
+default unchanged. If the remote host does not support that terminal type,
+specify a value installed on the host, such as `xterm`.
+
+The default for TELNET and SSH is `xterm-256color`. Use global or connection settings to select a terminal type supported by the remote host.
+
 ## Configuring the Scrollback Buffer
 
 ![Scrollback buffer settings](./images/scrollback-settings.png)
@@ -1019,21 +1013,31 @@ that are already open do not change language immediately either.
 > on machine translation. If you find an undesirable translation, please send
 > a pull request.
 
-## Configuring the Terminal Type
+## "New window"
 
-![Terminal type settings](./images/terminal-type-settings.png)
+To choose the connection opened by "New Window" on the desktop icon of a terminal started without a connection,
+open "Application settings" in the launcher and select its name from "Use for \"New Window\"".
 
-The terminal type is a name that tells the remote host which kind of terminal
-elder-terms emulates. This value is automatically reported during terminal-type
-negotiation for TELNET and when allocating a pseudo-terminal for SSH.
+Select "None" to use the default terminal settings.
 
-Shells and applications that use `curses` on the remote host consult the
-corresponding `terminfo` entry to select control sequences for colors, cursor
-movement, function keys, and other features. You can normally leave the
-default unchanged. If the remote host does not support that terminal type,
-specify a value installed on the host, such as `xterm`.
+The list includes saved local shell, TELNET, SSH, and serial connections.
+The desktop action is named "New Window" in every system language.
 
-The default for TELNET and SSH is `xterm-256color`. Use global or connection settings to select a terminal type supported by the remote host.
+## Sharing Named Themes
+
+![Named theme editor and color preview](./images/named-themes.png)
+
+For example, a "Red theme" can define only titlebar and content background colors.
+
+Open "Application settings" from the launcher's menu, choose the "Themes" tab, and click "New". Enter a name and the settings to share, then click "Save". The preview shows the titlebar and content background together. Select the theme on each connection's "General" page to inherit its settings. Choose "None" to return to connection defaults.
+
+Explicit connection settings survive theme changes. Clear an override to inherit the current theme's value. Clearing an item in the theme restores connection defaults for that item. Connection names, icons, launch hotkeys, application-wide settings, macros, and link rules are outside themes.
+
+Renaming a theme keeps existing references. "Duplicate" creates a separate theme. Themes in use list their connections and cannot be deleted until those references are removed. If an external edit removes a referenced theme, select an existing theme or "None" before launching the connection.
+
+Saved themes affect new sessions and the connection being edited in the launcher. For a running terminal or transfer window, reopen settings and click "Apply". Previewing or selecting a theme does not change the running session. Changes such as connection destinations still require reconnection.
+
+Application settings retain edits across tabs, and "Save" covers all editing tabs. If only one of `global.ini` and `theme.ini` saves, the dialog stays open and reports each file's result. Retry writes only unsaved changes; a subsequent "Cancel" discards only those unsaved changes. If an external-edit conflict is reported, review the persisted files and reopen settings.
 
 ## Checking the Running Version
 
