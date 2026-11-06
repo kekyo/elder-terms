@@ -106,13 +106,3 @@ it('edits defaults and named themes in shared application tabs and saves only th
     }
   );
 });
-
-it('temporarily verifies the old defaults button is removed', async (context) => {
-  await runLauncherGtkTest(
-    context,
-    async () => {},
-    async ({ app }) => {
-      expect(await app.findById('global_defaults_button')).toBeUndefined();
-    }
-  );
-});
