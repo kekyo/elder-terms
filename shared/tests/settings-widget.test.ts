@@ -2335,7 +2335,7 @@ describe.concurrent('shared settings widget', () => {
               : ['--global=terminal.cell_background_mode=opaque']),
             ...(mode === 'runtime' ? ['--runtime'] : []),
           ],
-          async ({ app }) => {
+          async ({ app, directory: evidenceDirectory }) => {
             const id = `${prefix}_terminal_cell_background_mode_combo`;
             const combo = expectElementKind(await app.getById(id), 'comboBox');
             await scrollTerminalFieldIntoView(app, id);
@@ -2369,12 +2369,7 @@ describe.concurrent('shared settings widget', () => {
               )
             );
             await writeFile(
-              fileURLToPath(
-                new URL(
-                  `../../artifacts/plan22-implementation/settings-${mode}.png`,
-                  import.meta.url
-                )
-              ),
+              join(evidenceDirectory, `settings-${mode}.png`),
               (await app.capture()).image
             );
           }
