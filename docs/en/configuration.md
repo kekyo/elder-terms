@@ -11,9 +11,13 @@ Omitting a connection setting inherits the first defined value from the selected
 Application-wide settings belong in `global.ini`.
 See the individual guides for settings specific to a connection, including icons, macros, and link rules.
 
+![Settings showing values inherited from a theme and built-in defaults](../../images/configuration-structure.png)
+
 An empty value and an omitted key can have different meanings. For example, `font_families=` explicitly selects the built-in font list.
 
 ## Named Themes
+
+![Named theme editor and color preview](../../images/named-themes.png)
 
 Themes are stored in `theme.ini` beside `global.ini`. Each has a reference ID and a display name. Renaming a theme in the editor keeps its ID.
 

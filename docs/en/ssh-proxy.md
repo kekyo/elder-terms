@@ -7,6 +7,8 @@ Gateway prompts include the SSH proxy label.
 
 ## Settings and inheritance
 
+![Enabled SSH proxy with a gateway address and username](../../images/ssh-proxy-settings.png)
+
 Configure a shared gateway in global settings. Select Disabled in a connection to override an inherited gateway; select Inherit to restore the global choice.
 Local shells and serial connections ignore these settings.
 Connection routes are read-only while connected. Reconnect or open a new window after changing saved settings.

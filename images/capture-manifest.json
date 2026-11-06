@@ -846,6 +846,378 @@
         "isolatedDBus": true
       },
       "description": "Named theme editor with Blue theme selected and a live color preview."
+    },
+    {
+      "file": "ftp-tls-settings.png",
+      "scope": "detail",
+      "capturedAt": "2026-11-06T13:59:46.217Z",
+      "bounds": {
+        "x": 214,
+        "y": 345,
+        "width": 861,
+        "height": 502
+      },
+      "sha256": "124eeca60b5fafaca99f2b033420f4132beb01501218160cd2c34da8cc198566",
+      "application": {
+        "version": "1.12.172",
+        "sourceCommit": "983d9728f282e867ea1264057d92f711b9155fc4",
+        "buildCommand": "make test"
+      },
+      "environment": {
+        "session": "X11 (Xvfb)",
+        "display": ":604",
+        "screen": "1700x1250x24",
+        "scale": 1,
+        "gtkTheme": "Yaru-dark",
+        "uiFont": "Ubuntu Sans 11",
+        "terminalFont": "Noto Sans Mono",
+        "uiLanguage": "en",
+        "locale": "C.UTF-8",
+        "isolatedSettings": true,
+        "isolatedDBus": true
+      },
+      "description": "Explicit FTPS configuration, TLS versions, compatibility, certificate policy and cipher settings."
+    },
+    {
+      "file": "ftps-certificate.png",
+      "scope": "detail",
+      "capturedAt": "2026-11-06T13:55:41.676Z",
+      "bounds": {
+        "x": 310,
+        "y": 153,
+        "width": 481,
+        "height": 390
+      },
+      "sha256": "cfa8e35855076f1a9150fef787697af2c5e79cd7cf27623bcf8ea31ce3a86f87",
+      "application": {
+        "version": "1.12.172",
+        "sourceCommit": "983d9728f282e867ea1264057d92f711b9155fc4",
+        "buildCommand": "make test"
+      },
+      "environment": {
+        "session": "X11 (Xvfb)",
+        "display": ":603",
+        "screen": "1700x1250x24",
+        "scale": 1,
+        "gtkTheme": "Yaru-dark",
+        "uiFont": "Ubuntu Sans 11",
+        "terminalFont": "Noto Sans Mono",
+        "uiLanguage": "en",
+        "locale": "C.UTF-8",
+        "isolatedSettings": true,
+        "isolatedDBus": true
+      },
+      "description": "Confirmation of a real self-signed certificate from a loopback FTPS server."
+    },
+    {
+      "file": "webdav-certificate.png",
+      "scope": "detail",
+      "capturedAt": "2026-11-06T13:54:23.441Z",
+      "bounds": {
+        "x": 310,
+        "y": 153,
+        "width": 481,
+        "height": 390
+      },
+      "sha256": "2cc1a517be13aad181cd42e3f88db0b72b3b890920b216cda3c9065dda292782",
+      "application": {
+        "version": "1.12.172",
+        "sourceCommit": "983d9728f282e867ea1264057d92f711b9155fc4",
+        "buildCommand": "make test"
+      },
+      "environment": {
+        "session": "X11 (Xvfb)",
+        "display": ":602",
+        "screen": "1700x1250x24",
+        "scale": 1,
+        "gtkTheme": "Yaru-dark",
+        "uiFont": "Ubuntu Sans 11",
+        "terminalFont": "Noto Sans Mono",
+        "uiLanguage": "en",
+        "locale": "C.UTF-8",
+        "isolatedSettings": true,
+        "isolatedDBus": true
+      },
+      "description": "Confirmation of a real self-signed certificate from a loopback WebDAV HTTPS server."
+    },
+    {
+      "file": "http-settings.png",
+      "scope": "detail",
+      "capturedAt": "2026-11-06T13:59:47.284Z",
+      "bounds": {
+        "x": 214,
+        "y": 51,
+        "width": 861,
+        "height": 534
+      },
+      "sha256": "a34453e15ba1b6a9aeaae29094b5d415a54d29c2a398ca565ae9a77f9e29787f",
+      "application": {
+        "version": "1.12.172",
+        "sourceCommit": "983d9728f282e867ea1264057d92f711b9155fc4",
+        "buildCommand": "make test"
+      },
+      "environment": {
+        "session": "X11 (Xvfb)",
+        "display": ":604",
+        "screen": "1700x1250x24",
+        "scale": 1,
+        "gtkTheme": "Yaru-dark",
+        "uiFont": "Ubuntu Sans 11",
+        "terminalFont": "Noto Sans Mono",
+        "uiLanguage": "en",
+        "locale": "C.UTF-8",
+        "isolatedSettings": true,
+        "isolatedDBus": true
+      },
+      "description": "HTTP/HTTPS base URL, relative start page, authentication and certificate settings."
+    },
+    {
+      "file": "http-receive-menu.png",
+      "scope": "detail",
+      "capturedAt": "2026-11-06T13:54:22.380Z",
+      "bounds": {
+        "x": 547,
+        "y": 62,
+        "width": 516,
+        "height": 324
+      },
+      "sha256": "d22b96e78eb9b554e90700fe919aea8288bf1098f891fd104429797a9fd01c1c",
+      "application": {
+        "version": "1.12.172",
+        "sourceCommit": "983d9728f282e867ea1264057d92f711b9155fc4",
+        "buildCommand": "make test"
+      },
+      "environment": {
+        "session": "X11 (Xvfb)",
+        "display": ":602",
+        "screen": "1700x1250x24",
+        "scale": 1,
+        "gtkTheme": "Yaru-dark",
+        "uiFont": "Ubuntu Sans 11",
+        "terminalFont": "Noto Sans Mono",
+        "uiLanguage": "en",
+        "locale": "C.UTF-8",
+        "isolatedSettings": true,
+        "isolatedDBus": true
+      },
+      "description": "HTTP resource context menu with Receive as directory and Receive as file enabled."
+    },
+    {
+      "file": "smb-settings.png",
+      "scope": "detail",
+      "capturedAt": "2026-11-06T13:59:48.433Z",
+      "bounds": {
+        "x": 214,
+        "y": 51,
+        "width": 861,
+        "height": 558
+      },
+      "sha256": "ec57bc4b45a276687500191194198ee324fe2e1020b61aa656e7a9da45c7d813",
+      "application": {
+        "version": "1.12.172",
+        "sourceCommit": "983d9728f282e867ea1264057d92f711b9155fc4",
+        "buildCommand": "make test"
+      },
+      "environment": {
+        "session": "X11 (Xvfb)",
+        "display": ":604",
+        "screen": "1700x1250x24",
+        "scale": 1,
+        "gtkTheme": "Yaru-dark",
+        "uiFont": "Ubuntu Sans 11",
+        "terminalFont": "Noto Sans Mono",
+        "uiLanguage": "en",
+        "locale": "C.UTF-8",
+        "isolatedSettings": true,
+        "isolatedDBus": true
+      },
+      "description": "SMB settings with automatic SMB2/3 selection and security options."
+    },
+    {
+      "file": "smb-shares.png",
+      "scope": "detail",
+      "capturedAt": "2026-11-06T13:56:47.507Z",
+      "bounds": {
+        "x": 547,
+        "y": 63,
+        "width": 516,
+        "height": 225
+      },
+      "sha256": "eb637a9662d93bbf471165041e6a68cbc272f17b54d59970da8053df4bc9a75a",
+      "application": {
+        "version": "1.12.172",
+        "sourceCommit": "983d9728f282e867ea1264057d92f711b9155fc4",
+        "buildCommand": "make test"
+      },
+      "environment": {
+        "session": "X11 (Xvfb)",
+        "display": ":603",
+        "screen": "1700x1250x24",
+        "scale": 1,
+        "gtkTheme": "Yaru-dark",
+        "uiFont": "Ubuntu Sans 11",
+        "terminalFont": "Noto Sans Mono",
+        "uiLanguage": "en",
+        "locale": "C.UTF-8",
+        "isolatedSettings": true,
+        "isolatedDBus": true
+      },
+      "description": "Real file shares listed at the remote root of an isolated Samba server."
+    },
+    {
+      "file": "nfs-settings.png",
+      "scope": "detail",
+      "capturedAt": "2026-11-06T13:59:49.552Z",
+      "bounds": {
+        "x": 214,
+        "y": 51,
+        "width": 861,
+        "height": 574
+      },
+      "sha256": "a0ccb4ba8de5f6ac5a65ba36598b508e90184a89b908b25581a01953f0c8c565",
+      "application": {
+        "version": "1.12.172",
+        "sourceCommit": "983d9728f282e867ea1264057d92f711b9155fc4",
+        "buildCommand": "make test"
+      },
+      "environment": {
+        "session": "X11 (Xvfb)",
+        "display": ":604",
+        "screen": "1700x1250x24",
+        "scale": 1,
+        "gtkTheme": "Yaru-dark",
+        "uiFont": "Ubuntu Sans 11",
+        "terminalFont": "Noto Sans Mono",
+        "uiLanguage": "en",
+        "locale": "C.UTF-8",
+        "isolatedSettings": true,
+        "isolatedDBus": true
+      },
+      "description": "NFS address, version, export discovery and public namespace settings."
+    },
+    {
+      "file": "nfs-exports.png",
+      "scope": "detail",
+      "capturedAt": "2026-11-06T14:02:11.344Z",
+      "bounds": {
+        "x": 547,
+        "y": 63,
+        "width": 516,
+        "height": 305
+      },
+      "sha256": "bc70f00e368260f5709ce98a02abc073a661247ac2f4abbe3b32191edea39287",
+      "application": {
+        "version": "1.12.172",
+        "sourceCommit": "983d9728f282e867ea1264057d92f711b9155fc4",
+        "buildCommand": "make test"
+      },
+      "environment": {
+        "session": "X11 (Xvfb)",
+        "display": ":607",
+        "screen": "1700x1250x24",
+        "scale": 1,
+        "gtkTheme": "Yaru-dark",
+        "uiFont": "Ubuntu Sans 11",
+        "terminalFont": "Noto Sans Mono",
+        "uiLanguage": "en",
+        "locale": "C.UTF-8",
+        "isolatedSettings": true,
+        "isolatedDBus": true
+      },
+      "description": "Real NFS v3 exports grouped under /srv on an isolated Linux NFS server."
+    },
+    {
+      "file": "ssh-proxy-settings.png",
+      "scope": "detail",
+      "capturedAt": "2026-11-06T13:59:45.128Z",
+      "bounds": {
+        "x": 214,
+        "y": 51,
+        "width": 861,
+        "height": 264
+      },
+      "sha256": "ba8c497a757891b369a13b0f66777be3a7a4c3f218e462b889a1942af5c55d41",
+      "application": {
+        "version": "1.12.172",
+        "sourceCommit": "983d9728f282e867ea1264057d92f711b9155fc4",
+        "buildCommand": "make test"
+      },
+      "environment": {
+        "session": "X11 (Xvfb)",
+        "display": ":604",
+        "screen": "1700x1250x24",
+        "scale": 1,
+        "gtkTheme": "Yaru-dark",
+        "uiFont": "Ubuntu Sans 11",
+        "terminalFont": "Noto Sans Mono",
+        "uiLanguage": "en",
+        "locale": "C.UTF-8",
+        "isolatedSettings": true,
+        "isolatedDBus": true
+      },
+      "description": "Enabled SSH gateway with example hostname and username."
+    },
+    {
+      "file": "text-selection-linear.png",
+      "scope": "detail",
+      "capturedAt": "2026-11-06T13:54:57.512Z",
+      "bounds": {
+        "x": 5,
+        "y": 51,
+        "width": 260,
+        "height": 110
+      },
+      "sha256": "385966941cec3ac3fe21e40044adce0ed1398f64ac91e12c1351b3bbfb4e0c86",
+      "application": {
+        "version": "1.12.172",
+        "sourceCommit": "983d9728f282e867ea1264057d92f711b9155fc4",
+        "buildCommand": "make test"
+      },
+      "environment": {
+        "session": "X11 (Xvfb)",
+        "display": ":602",
+        "screen": "1700x1250x24",
+        "scale": 1,
+        "gtkTheme": "Yaru-dark",
+        "uiFont": "Ubuntu Sans 11",
+        "terminalFont": "Noto Sans Mono",
+        "uiLanguage": "en",
+        "locale": "C.UTF-8",
+        "isolatedSettings": true,
+        "isolatedDBus": true
+      },
+      "description": "Linear selection spanning the STATE column over three rows."
+    },
+    {
+      "file": "text-selection-block.png",
+      "scope": "detail",
+      "capturedAt": "2026-11-06T13:54:58.654Z",
+      "bounds": {
+        "x": 5,
+        "y": 51,
+        "width": 260,
+        "height": 110
+      },
+      "sha256": "c88c98126c1f39f00d8a8c546629ac2862cf1c6905dcc77e09d1d69c0b22bff7",
+      "application": {
+        "version": "1.12.172",
+        "sourceCommit": "983d9728f282e867ea1264057d92f711b9155fc4",
+        "buildCommand": "make test"
+      },
+      "environment": {
+        "session": "X11 (Xvfb)",
+        "display": ":602",
+        "screen": "1700x1250x24",
+        "scale": 1,
+        "gtkTheme": "Yaru-dark",
+        "uiFont": "Ubuntu Sans 11",
+        "terminalFont": "Noto Sans Mono",
+        "uiLanguage": "en",
+        "locale": "C.UTF-8",
+        "isolatedSettings": true,
+        "isolatedDBus": true
+      },
+      "description": "Block selection of the STATE column over the same three rows."
     }
   ]
 }

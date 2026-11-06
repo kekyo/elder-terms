@@ -1,6 +1,6 @@
-# READMEのスクリーンショット撮影
+# ドキュメントのスクリーンショット撮影
 
-この文書は、日英READMEとdocsで共用する46枚の画面画像の撮影記録です。README冒頭の紹介画像6枚はウインドウ全体を示します。各節の画像は、対象の設定欄や操作結果と、その場所が分かる最小限の周辺を切り出します。
+この文書は、日英READMEとdocsで共用する58枚の画面画像の撮影記録です。README冒頭の紹介画像6枚はウインドウ全体を示します。各節の画像は、対象の設定欄や操作結果と、その場所が分かる最小限の周辺を切り出します。
 
 ## 以前の画像から分かること
 
@@ -52,6 +52,16 @@ SFTPはループバックで待ち受ける一時OpenSSHサーバーへ接続し
 
 撮影用スクリプトと作業記録は`artifacts/documentation-screenshots/`にあります。最終画像の撮影日時、座標、ハッシュ、個別の環境は[画像の記録](../../images/capture-manifest.json)に保存しました。個別の`application`と`environment`がある画像では、最上位の共通項目より優先します。
 
+## 同日の各ガイド向け画像の追加
+
+HTTP、SMB、NFS、SSH proxyの設定、FTPSのTLS設定、HTTPの受信メニュー、SMB共有、NFS公開パス、証明書確認、文字選択の比較を追加しました。バージョン、対象ソース、表示条件、取得方法は上記のREADME更新と同じです。日英の各ガイドから共通の英語画像を参照します。テーマ、継承表示、接続アイコン、About、FTPとWebDAVの基本設定には、READMEと同じ画像を使いました。
+
+HTTPのメニューは、ループバックのHTTPサーバーにある`/pub/docs/`を選んだ状態です。ローカル側では「Downloads」を保存先として選択しています。証明書確認の2枚は、一時FTPSサーバーとWebDAV HTTPSサーバーが実際に提示した自己署名証明書によるものです。証明書の例外は許可せず、確認画面だけを取得しました。
+
+SMB共有は撮影専用のSambaコンテナーに`archive`、`public`、`team`を用意しました。NFSは一時仮想マシンのLinuxサーバーへv3で接続し、`/srv`配下の公開パスを展開しています。ネットワークを分離し、ホスト側の共有設定やサービスは変更していません。
+
+文字選択の2枚は、同じ端末に同じ4行の表を表示し、同じ開始点と終了点でドラッグしました。通常選択は行をまたぐ範囲、ブロック選択はSTATE列の`ready`3件です。コピーした文字列も照合しました。表示倍率と切り出し範囲は共通です。
+
 ## 画像ごとの条件
 
 | 用途 | 画像 | 再撮影する状態 |
@@ -75,13 +85,25 @@ SFTPはループバックで待ち受ける一時OpenSSHサーバーへ接続し
 | 接続設定 | `ssh-telnet-reconnect.png` | ループバックのTELNET接続を切断し、再接続ボタンが使える状態 |
 | 接続設定 | `ftp-ftps-settings.png` | 「FTP」タブでパッシブ転送、明示的FTPS、証明書確認を設定 |
 | 接続設定 | `webdav-settings.png` | 「WebDAV」タブでHTTPS、アドレス欄右側のIPスキャンボタン、公開パス、認証、完成したURLを表示 |
+| 接続設定 | `ftp-tls-settings.png` | 明示的FTPSの暗号化、TLSバージョン、互換性、証明書、暗号の設定欄 |
+| 接続設定 | `http-settings.png` | 「HTTP/HTTPS」で基準URLと開始ページ、認証、証明書設定を表示 |
+| 接続設定 | `smb-settings.png` | 「SMB」でアドレス、SMB2/3の自動選択、署名と暗号化などの設定を表示 |
+| 接続設定 | `nfs-settings.png` | 「NFS」でv3を選択し、exportとv4公開パスの設定・探索欄を表示 |
+| 接続設定 | `ssh-proxy-settings.png` | 「SSH proxy」を有効にし、`bastion.example.net`とユーザー名`demo`を指定 |
+| 接続設定 | `ftps-certificate.png` | ループバックのFTPSサーバーが提示した自己署名証明書の確認画面 |
+| 接続設定 | `webdav-certificate.png` | ループバックのWebDAV HTTPSサーバーが提示した自己署名証明書の確認画面 |
 | ファイル転送 | `file-transfer-item-menu.png` | 実SFTP接続でサンプルのリモートファイルを選択し、右クリックメニューを開く |
 | ファイル転送 | `file-transfer-jobs.png` | 実SFTP接続でREADME.txtを受信し、完了・コピー済み1件のジョブを表示 |
+| ファイル転送 | `http-receive-menu.png` | HTTPの`/pub/docs/`を選択し、ディレクトリ・ファイルとしての受信を選べるメニューを開く |
+| ファイル転送 | `smb-shares.png` | 実Samba接続のリモート側`/`に共有3件を表示し、`team`を選択 |
+| ファイル転送 | `nfs-exports.png` | 実NFS v3接続で`/srv`を展開し、親ディレクトリと公開パスの階層を表示 |
 | 端末とシリアル | `local-startup-process.png` | 「Local」の起動コマンドを`/bin/bash --login`に指定 |
 | 端末とシリアル | `serial-device-selector.png` | 「Serial」で安定デバイスID、検出されたFTDIデバイス、現在のデバイスノードを表示。実ハードウェアの設定変更は行わない |
 | 端末とシリアル | `serial-connection-monitoring.png` | 「Serial」の接続監視信号の選択欄 |
 | 端末とシリアル | `terminal-encoding-keys.png` | 「Terminal」のUTF-8、Backspace、カーソルキー、Enter/Return設定 |
 | 端末とシリアル | `terminal-text-selection.png` | ローカル端末のサンプルC++ソースを選択した状態 |
+| 端末とシリアル | `text-selection-linear.png` | サービス名・状態・ポートの表を通常選択し、3行にまたがる範囲を表示 |
+| 端末とシリアル | `text-selection-block.png` | 同じ表とドラッグ範囲を使い、STATE列の`ready`3件だけをブロック選択 |
 | 端末とシリアル | `terminal-send-paste.png` | 「Transfer」のテキスト送信速度と改行追従設定 |
 | 端末とシリアル | `terminal-break-menu.png` | 接続中のTELNET端末で、右クリックメニューの「Send BREAK」を有効な状態で表示 |
 | 端末とシリアル | `scrollback-settings.png` | 「Terminal」のスクロール履歴を20,000行に設定 |
@@ -109,4 +131,4 @@ SFTPのサーバーは127.0.0.1だけで待ち受け、公開鍵認証を使い�
 
 ## 更新時の確認
 
-撮影対象のソース、表示環境、サンプル接続を固定します。各節の対象が画像内で読めること、切り出しに隣の行の断片や欠けた文字がないことを目視します。比較画像は本文、表示倍率、範囲をそろえます。最後に日英READMEの全画像参照と画像の実体を照合します。
+撮影対象のソース、表示環境、サンプル接続を固定します。各節の対象が画像内で読めること、切り出しに隣の行の断片や欠けた文字がないことを目視します。比較画像は本文、表示倍率、範囲をそろえます。最後に日英READMEとdocsの全画像参照、画像の実体、撮影記録の寸法とハッシュを照合します。plansは対象に含めません。

@@ -4,6 +4,8 @@ NFS connects to directories published by a server, called exports. elder-terms s
 
 ## Connect
 
+![NFS address, version, public paths and discovery settings](../../images/nfs-settings.png)
+
 Choose "NFS" as the connection type in the launcher, then specify the server address and version on the NFS tab. The default is v3. Select a version accepted by the server; a failed connection never falls back to another version.
 
 Use "IP scan" beside the address field to find a server. A check mark under "NFS(2049)" identifies a candidate that accepted a TCP connection on port 2049. Verify the supported version and access to public paths by connecting. Selecting a candidate preserves the version, NFS and MOUNT ports, and authentication settings. Enter the address and port manually for servers using a port other than 2049.
@@ -17,6 +19,10 @@ For v4.0, the application explores the server's public directory tree. This diff
 Public paths are grouped by their common parent directories. For example, expand `/storage1` at the root to see `/storage1/home` and `/storage1/public`. Registered public paths remain browsable when their parent is not exported.
 
 When `/` itself is published, its contents appear at the remote root. Otherwise, the root lists the public paths.
+
+This example shows `/srv` expanded over NFS v3.
+
+![NFS public paths grouped under their common parent directory](../../images/nfs-exports.png)
 
 Open a public root to browse its contents. "Up" returns to its parent in the tree. The path field displays an absolute path such as `/srv/public/Documents`. Enter a path and press Enter to navigate there. `.` and `..` components and consecutive slashes within the path are not accepted. Trailing slashes are omitted from the display except for the root.
 

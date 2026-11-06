@@ -4,6 +4,14 @@ See the [README selection and copying instructions](../../README.md#selecting-an
 
 ## Selection Mode During a Drag
 
+These examples drag between the same positions in the same text. Linear selection follows the lines from the starting point to the endpoint.
+
+![Linear selection spanning three rows](../../images/text-selection-linear.png)
+
+Block selection selects a rectangle. This example selects only `ready` in the STATE column.
+
+![Block selection of the STATE column](../../images/text-selection-block.png)
+
 Holding Ctrl when pressing the left button starts a block selection.
 During a drag, changes to Ctrl take effect on the next mouse movement: Ctrl selects a block, and no Ctrl selects normally.
 Movement within the same character also switches modes. Pressing or releasing Ctrl alone, wheel scrolling, autoscrolling, and releasing the left button do not switch modes.

@@ -3,6 +3,10 @@
 通常の設定方法は[READMEのホットキー設定](../../README_ja.md#ホットキーの設定)を参照してください。
 Swayとlabwcでは、ランチャーと`etctl setup`が利用者のコンポジター設定ファイルにホットキーを保存します。
 
+ランチャーの「About」で、検出したホットキーの方式と`etctl`の利用可否を確認できます。画像はX11環境での表示例です。
+
+![X11のホットキー検出とetctlの利用可否](../../images/about-dialog.png)
+
 ## Wayland環境でのホットキー
 
 Waylandセッションでは、ランチャーが最初にXDG Global Shortcutsポータルへの登録を試みます。
