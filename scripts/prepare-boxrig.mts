@@ -175,7 +175,7 @@ const inputs = [
     "deps/utf8proc/LICENSE.md",
     "deps/libpng/LICENSE",
     "deps/zlib/LICENSE",
-    "resources/unicode/17.0.0/LICENSE.txt",
+    "resources/unicode/18.0.0/LICENSE.txt",
     "data/encoding/whatwg/LICENSE",
     "examples/gtk3/external_scrollbar.h",
     "packaging/linux/rules.mk",
