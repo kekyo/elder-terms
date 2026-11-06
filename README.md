@@ -197,6 +197,20 @@ Well then, enjoy elder-terms!
 
 ---
 
+## INI File Locations
+
+elder-terms configuration files are stored under the XDG user configuration directory.
+In a typical environment where `XDG_CONFIG_HOME` is not set, their locations are:
+
+- Global settings (application settings and connection defaults):
+  `~/.config/elder-terms/global.ini`
+- Connection settings:
+  `~/.config/elder-terms/connections/<connection-name>.ini`
+
+When `XDG_CONFIG_HOME` is set, its value replaces `~/.config` in the paths above.
+Connection settings inherit the connection defaults in the global file,
+and values changed for an individual connection take precedence over them.
+
 ## Configuration Structure
 
 ![Inherited configuration values](./images/configuration-structure.png)
@@ -902,48 +916,6 @@ Automatic hotkey registration depends on the desktop environment.
 On Sway and labwc, the launcher saves hotkeys in your compositor configuration files.
 See [desktop-specific hotkey setup](./docs/en/hotkeys.md) for troubleshooting, manual registration, and removal.
 
-## Configuring the Terminal Type
-
-![Terminal type settings](./images/terminal-type-settings.png)
-
-The terminal type is a name that tells the remote host which kind of terminal
-elder-terms emulates. This value is automatically reported during terminal-type
-negotiation for TELNET and when allocating a pseudo-terminal for SSH.
-
-Shells and applications that use `curses` on the remote host consult the
-corresponding `terminfo` entry to select control sequences for colors, cursor
-movement, function keys, and other features. You can normally leave the
-default unchanged. If the remote host does not support that terminal type,
-specify a value installed on the host, such as `xterm`.
-
-The default for TELNET and SSH is `xterm-256color`. Use global or connection settings to select a terminal type supported by the remote host.
-
-## Configuring the Display Language
-
-![Display language settings](./images/language-settings.png)
-
-"Display language" under the launcher's "Application settings" lets you select
-the system default, English, Arabic, Spanish, French, Hindi, Japanese, Korean,
-Portuguese, Russian, or Simplified Chinese.
-
-The display language is loaded when elder-terms starts, so you must restart
-elder-terms after saving a change. Select "Restart now" in the dialog shown
-when you save, or restart it manually later. Terminal and file transfer windows
-that are already open do not change language immediately either.
-
-## Checking the Running Version
-
-![Version in the About dialog](./images/about-dialog.png)
-
-Open the application menu in either the launcher or a terminal window and
-select "About elder-terms". The "About" page shows the version of elder-terms currently running.
-
-> Note: The elder-terms project owner is a native Japanese speaker who
-> understands Japanese and English but cannot read any of the other languages.
-> Consequently, the multilingual text included in elder-terms relies entirely
-> on machine translation. If you find an undesirable translation, please send
-> a pull request.
-
 ## Configuring Logging
 
 ![Logging settings](./images/logging-settings.png)
@@ -1007,19 +979,49 @@ With existence-checked display, local paths remain dimmed until they are confirm
 Only the first matching custom rule runs. Since rules launch external commands, restrict the accepted formats to those you need.
 See [terminal link details](./docs/en/terminal-links.md) for punctuation boundaries, display choices, regular expressions, and INI syntax.
 
-## INI File Locations
+---
 
-Configuration files are stored under the XDG user configuration directory. In
-a typical environment where `XDG_CONFIG_HOME` is not set, their locations are:
+## Configuring the Display Language
 
-- Global settings (application settings and connection defaults):
-  `~/.config/elder-terms/global.ini`
-- Connection settings:
-  `~/.config/elder-terms/connections/<connection-name>.ini`
+![Display language settings](./images/language-settings.png)
 
-When `XDG_CONFIG_HOME` is set, its value replaces `~/.config` in the paths
-above. Connection settings inherit the connection defaults in the global file,
-and values changed for an individual connection take precedence over them.
+"Display language" under the launcher's "Application settings" lets you select
+the system default, English, Arabic, Spanish, French, Hindi, Japanese, Korean,
+Portuguese, Russian, or Simplified Chinese.
+
+The display language is loaded when elder-terms starts, so you must restart
+elder-terms after saving a change. Select "Restart now" in the dialog shown
+when you save, or restart it manually later. Terminal and file transfer windows
+that are already open do not change language immediately either.
+
+> Note: The elder-terms project owner is a native Japanese speaker who
+> understands Japanese and English but cannot read any of the other languages.
+> Consequently, the multilingual text included in elder-terms relies entirely
+> on machine translation. If you find an undesirable translation, please send
+> a pull request.
+
+## Configuring the Terminal Type
+
+![Terminal type settings](./images/terminal-type-settings.png)
+
+The terminal type is a name that tells the remote host which kind of terminal
+elder-terms emulates. This value is automatically reported during terminal-type
+negotiation for TELNET and when allocating a pseudo-terminal for SSH.
+
+Shells and applications that use `curses` on the remote host consult the
+corresponding `terminfo` entry to select control sequences for colors, cursor
+movement, function keys, and other features. You can normally leave the
+default unchanged. If the remote host does not support that terminal type,
+specify a value installed on the host, such as `xterm`.
+
+The default for TELNET and SSH is `xterm-256color`. Use global or connection settings to select a terminal type supported by the remote host.
+
+## Checking the Running Version
+
+![Version in the About dialog](./images/about-dialog.png)
+
+Open the application menu in either the launcher or a terminal window and
+select "About elder-terms". The "About" page shows the version of elder-terms currently running.
 
 ---
 
@@ -1031,6 +1033,34 @@ It covers requirements, building and running, tests, and deb package generation.
 ## License
 
 Under MIT.
+
+### Included 3rd party libraries
+
+elder-terms bundles the following libraries, each covered by its own license.
+
+| Library | Use | License |
+| --- | --- | --- |
+| [boxrig](https://github.com/kekyo/boxrig) | Terminal control sequence parsing and rendering | [MIT](https://github.com/kekyo/boxrig/blob/8ae3e3f8caa5499b20eee7896eaa568bfdfdc9a9/LICENSE) |
+| [cardio](https://github.com/kekyo/cardio) | Asynchronous I/O | [MIT](https://github.com/kekyo/cardio/blob/31e8149ce52cdfdaaa48838ca9de39288074885c/LICENSE) |
+| [libxyzm](https://github.com/kekyo/libxyzm) | X/Y/ZMODEM file transfers | [MIT](https://github.com/kekyo/libxyzm/blob/b1cd04cfd2769bbd1a5a6bc6990d60338b5a3cf5/LICENSE) |
+| [jemalloc](https://github.com/jemalloc/jemalloc) | Memory allocation and management | [BSD-2-Clause](https://github.com/jemalloc/jemalloc/blob/7a34f18502e7b222724097cdcd499b437d189acc/COPYING) |
+| [libsmb2](https://github.com/sahlberg/libsmb2) | SMB2/3 file transfers and share listing | [LGPL-2.1-or-later](https://github.com/sahlberg/libsmb2/blob/727feaaa6d0f4fed1bae57745fbc2c5db9a30e64/COPYING) |
+| [libdsm](https://github.com/videolabs/libdsm) | SMB1 file transfers and share listing | [LGPL-2.1-or-later](https://github.com/videolabs/libdsm/blob/0f3edc6df6ab5950f2550d453035351440f71e31/COPYING) |
+
+boxrig also includes utf8proc, libpng, zlib, and data or generated code from
+Unicode, WHATWG Encoding, and Wayland protocols.
+See [boxrig's license list](https://github.com/kekyo/boxrig/blob/8ae3e3f8caa5499b20eee7896eaa568bfdfdc9a9/packaging/licenses/README.md)
+for each component's license.
+
+Distribution packages include the licenses and notices for boxrig, jemalloc,
+libsmb2, and libdsm in directories named after each library under
+`/usr/share/doc/elder-terms/licenses/`.
+The libsmb2 and libdsm directories also contain the corresponding source,
+and the libdsm directory includes the applied patch.
+See [SMB library source and licenses](./docs/en/smb.md#bundled-library-source-and-licenses)
+for details.
+
+### Icons and Emoji images
 
 Bundled connection artwork and emoji names are covered by their respective
 licenses. See [artwork sources and licenses](./docs/ja/connection-icon-artwork.md).

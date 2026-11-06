@@ -175,6 +175,17 @@ elder-termsはそのような環境でも無類の力を発揮します。
 
 ---
 
+## INIファイルの保存位置
+
+elder-termsの設定は、INIファイル形式で、XDGのユーザー設定ディレクトリ以下に保存されます。
+`XDG_CONFIG_HOME` が設定されていない通常の環境では、保存位置は次の通りです。
+
+- グローバル設定（アプリケーション設定と接続の既定値）: `~/.config/elder-terms/global.ini`
+- 接続設定: `~/.config/elder-terms/connections/<接続名>.ini`
+
+`XDG_CONFIG_HOME` が設定されている場合は、上記の `~/.config` がその値に置き換わります。
+接続設定ではグローバル設定ファイル内の接続の既定値を継承し、接続ごとに変更した値が接続の既定値より優先されます。
+
 ## 設定項目の構造
 
 ![設定値の継承表示](./images/configuration-structure.png)
@@ -809,42 +820,6 @@ debパッケージまたはMesonのインストールは、elder-termsをデス�
 Swayとlabwcでは、ランチャーが利用者のコンポジター設定ファイルにホットキーを保存します。
 動作しない場合の確認、手動登録、解除方法は[ホットキーの環境別設定](./docs/ja/hotkeys.md)を参照してください。
 
-## ターミナル種別の設定
-
-![ターミナル種別の設定](./images/terminal-type-settings.png)
-
-ターミナル種別は、接続先にelder-termsがエミュレートする端末の種類を伝えるための名前です。
-TELNETではターミナル種別のネゴシエーション時に、SSHでは仮想端末の確保時に、この値が接続先へ自動的に通知されます。
-
-接続先のシェルや `curses` を使用するアプリケーションは、
-この値に対応する `terminfo` を参照して、色、カーソル移動、ファンクションキーなどの制御シーケンスを選択します。
-通常はデフォルトのままで構いませんが、接続先がそのターミナル種別に対応していない場合は、
-接続先にインストールされている `xterm` などの値を指定して下さい。
-
-TELNETとSSHのデフォルトは`xterm-256color`です。グローバル設定または接続設定で、接続先に合う端末種別を指定できます。
-
-## 表示言語の設定
-
-![表示言語の設定](./images/language-settings.png)
-
-ランチャーの「アプリケーション設定」にある「表示言語」では、
-システムの既定言語、英語、アラビア語、スペイン語、フランス語、ヒンディー語、日本語、韓国語、ポルトガル語、ロシア語、簡体字中国語を選択出来ます。
-
-表示言語はelder-termsの起動時に読み込まれるため、変更を保存した後にelder-termsを再起動する必要があります。
-保存時に表示されるダイアログで「今すぐ再起動」を選ぶか、後で手動で再起動して下さい。
-既に開いているターミナルやファイル転送ウインドウも、その場では表示言語が切り替わりません。
-
-## 動作中のバージョンの確認
-
-![情報ダイアログのバージョン表示](./images/about-dialog.png)
-
-ランチャーまたはターミナルウインドウのアプリケーションメニューから「elder-termsについて」を選択して下さい。
-「情報」ページで、動作中のelder-termsのバージョンを確認できます。
-
-> 注記: elder-termsのプロジェクトオーナーは日本語話者で、日本語及び英語が分かりますが、
-> 他の言語は全く読めません。そのため、elder-termsに含まれている多国語表記は完全に機械翻訳に頼っています。
-> もし、望ましくない表記を見つけた場合は、PRを送って下さい。
-
 ## ログの設定
 
 ![ログの設定](./images/logging-settings.png)
@@ -900,16 +875,43 @@ Ctrlキーを押しながらリンクをクリックすると、設定したア�
 独自ルールは最初に一致した一つを実行します。外部コマンドを起動するため、受け入れる形式を必要な範囲に限定してください。
 区切り文字の扱い、表示の選択肢、正規表現、INIの書式は[端末リンクの詳細](./docs/ja/terminal-links.md)を参照してください。
 
-## INIファイルの保存位置
+---
 
-設定ファイルは、XDGのユーザー設定ディレクトリ以下に保存されます。
-`XDG_CONFIG_HOME` が設定されていない通常の環境では、保存位置は次の通りです。
+## 表示言語の設定
 
-- グローバル設定（アプリケーション設定と接続の既定値）: `~/.config/elder-terms/global.ini`
-- 接続設定: `~/.config/elder-terms/connections/<接続名>.ini`
+![表示言語の設定](./images/language-settings.png)
 
-`XDG_CONFIG_HOME` が設定されている場合は、上記の `~/.config` がその値に置き換わります。
-接続設定ではグローバル設定ファイル内の接続の既定値を継承し、接続ごとに変更した値が接続の既定値より優先されます。
+ランチャーの「アプリケーション設定」にある「表示言語」では、
+システムの既定言語、英語、アラビア語、スペイン語、フランス語、ヒンディー語、日本語、韓国語、ポルトガル語、ロシア語、簡体字中国語を選択出来ます。
+
+表示言語はelder-termsの起動時に読み込まれるため、変更を保存した後にelder-termsを再起動する必要があります。
+保存時に表示されるダイアログで「今すぐ再起動」を選ぶか、後で手動で再起動して下さい。
+既に開いているターミナルやファイル転送ウインドウも、その場では表示言語が切り替わりません。
+
+> 注記: elder-termsのプロジェクトオーナーは日本語話者で、日本語及び英語が分かりますが、
+> 他の言語は全く読めません。そのため、elder-termsに含まれている多国語表記は完全に機械翻訳に頼っています。
+> もし、望ましくない表記を見つけた場合は、PRを送って下さい。
+
+## ターミナル種別の設定
+
+![ターミナル種別の設定](./images/terminal-type-settings.png)
+
+ターミナル種別は、接続先にelder-termsがエミュレートする端末の種類を伝えるための名前です。
+TELNETではターミナル種別のネゴシエーション時に、SSHでは仮想端末の確保時に、この値が接続先へ自動的に通知されます。
+
+接続先のシェルや `curses` を使用するアプリケーションは、
+この値に対応する `terminfo` を参照して、色、カーソル移動、ファンクションキーなどの制御シーケンスを選択します。
+通常はデフォルトのままで構いませんが、接続先がそのターミナル種別に対応していない場合は、
+接続先にインストールされている `xterm` などの値を指定して下さい。
+
+TELNETとSSHのデフォルトは`xterm-256color`です。グローバル設定または接続設定で、接続先に合う端末種別を指定できます。
+
+## 動作中のバージョンの確認
+
+![情報ダイアログのバージョン表示](./images/about-dialog.png)
+
+ランチャーまたはターミナルウインドウのアプリケーションメニューから「elder-termsについて」を選択して下さい。
+「情報」ページで、動作中のelder-termsのバージョンを確認できます。
 
 ---
 
@@ -921,6 +923,28 @@ Ctrlキーを押しながらリンクをクリックすると、設定したア�
 ## License
 
 Under MIT.
+
+### 同梱されるサードパーティライブラリ
+
+elder-termsに同梱しているライブラリと、それぞれに適用されるライセンスは次のとおりです。
+
+| ライブラリ | 用途 | ライセンス |
+| --- | --- | --- |
+| [boxrig](https://github.com/kekyo/boxrig) | 端末の制御シーケンスの解釈と画面描画 | [MIT](https://github.com/kekyo/boxrig/blob/8ae3e3f8caa5499b20eee7896eaa568bfdfdc9a9/LICENSE) |
+| [cardio](https://github.com/kekyo/cardio) | 非同期I/O | [MIT](https://github.com/kekyo/cardio/blob/31e8149ce52cdfdaaa48838ca9de39288074885c/LICENSE) |
+| [libxyzm](https://github.com/kekyo/libxyzm) | X/Y/ZMODEMによるファイル転送 | [MIT](https://github.com/kekyo/libxyzm/blob/b1cd04cfd2769bbd1a5a6bc6990d60338b5a3cf5/LICENSE) |
+| [jemalloc](https://github.com/jemalloc/jemalloc) | メモリの確保と管理 | [BSD-2-Clause](https://github.com/jemalloc/jemalloc/blob/7a34f18502e7b222724097cdcd499b437d189acc/COPYING) |
+| [libsmb2](https://github.com/sahlberg/libsmb2) | SMB2/3によるファイル転送と共有一覧の取得 | [LGPL-2.1-or-later](https://github.com/sahlberg/libsmb2/blob/727feaaa6d0f4fed1bae57745fbc2c5db9a30e64/COPYING) |
+| [libdsm](https://github.com/videolabs/libdsm) | SMB1によるファイル転送と共有一覧の取得 | [LGPL-2.1-or-later](https://github.com/videolabs/libdsm/blob/0f3edc6df6ab5950f2550d453035351440f71e31/COPYING) |
+
+boxrigには、utf8proc、libpng、zlibのほか、Unicode、WHATWG Encoding、Waylandプロトコル由来のデータや生成コードが含まれます。
+各コンポーネントのライセンスは、[boxrigのライセンス一覧](https://github.com/kekyo/boxrig/blob/8ae3e3f8caa5499b20eee7896eaa568bfdfdc9a9/packaging/licenses/README_ja.md)を参照してください。
+
+配布パッケージには、boxrig、jemalloc、libsmb2、libdsmのライセンスと通知を、`/usr/share/doc/elder-terms/licenses/`内の各ライブラリ名のディレクトリに同梱します。
+libsmb2とlibdsmのディレクトリには対応するソースも収録し、libdsmには適用した修正パッチを添付します。
+詳しくは[SMBライブラリのソースとライセンス](./docs/ja/smb.md#同梱ライブラリのソースとライセンス)を参照してください。
+
+### アイコンと絵文字画像
 
 同梱する接続アイコンと絵文字名には、それぞれの素材のライセンスが適用されます。
 [素材の配布元とライセンス](./docs/ja/connection-icon-artwork.md)を参照してください。
