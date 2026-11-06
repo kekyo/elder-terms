@@ -2,6 +2,18 @@
 
 See the [README selection and copying instructions](../../README.md#selecting-and-copying-terminal-text) for basic operations.
 
+## Selection Mode During a Drag
+
+Holding Ctrl when pressing the left button starts a block selection.
+During a drag, changes to Ctrl take effect on the next mouse movement: Ctrl selects a block, and no Ctrl selects normally.
+Movement within the same character also switches modes. Pressing or releasing Ctrl alone, wheel scrolling, autoscrolling, and releasing the left button do not switch modes.
+
+Switching preserves the starting point, even after scrolling moves it off screen.
+A normal selection started with a double click returns to word selection; one started with a triple click returns to line selection.
+A selection started with Ctrl held switches to character selection when returning to normal mode.
+
+Switching alone does not update either clipboard. Releasing the left button completes the selection using the last applied mode.
+
 ## Clipboards
 
 Completing a selection copies its text to the selection clipboard (PRIMARY), which supports middle-button pasting.

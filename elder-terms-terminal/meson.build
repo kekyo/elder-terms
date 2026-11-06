@@ -231,7 +231,8 @@ selection_state_test = executable('terminal-selection-state-test',
     liburing_dep, ssh_transport_dep, libudev_dep, boxrig_runtime_dep, boxrig_background_dep],
   link_with: libxyzm_async_static_library,
   link_args: ['-Wl,--wrap=main', '-Wl,--wrap=boxrig_gtk3_terminal_widget_frame',
-    '-Wl,--wrap=boxrig_gtk3_terminal_widget_create', '-Wl,--wrap=boxrig_ui_view_update_selection'])
+    '-Wl,--wrap=boxrig_gtk3_terminal_widget_create', '-Wl,--wrap=boxrig_ui_view_update_selection',
+    '-Wl,--wrap=boxrig_ui_view_begin_selection_with_options', '-Wl,--wrap=boxrig_ui_view_update_selection_with_options'])
 foreach backend : ['cairo', 'opengl']
   foreach scale : ['1', '2']
     appearance_env = ['GSETTINGS_BACKEND=memory', 'NO_AT_BRIDGE=1', 'G_DEBUG=fatal-criticals',
@@ -244,6 +245,12 @@ foreach backend : ['cairo', 'opengl']
     test('terminal-selection-state-' + backend + '-' + scale, find_program('xvfb-run'),
       args: ['-a', '-s', '-screen 0 2560x2048x24', selection_state_test], timeout: 60,
       env: appearance_env + ['GTK_IM_MODULE=gtk-im-context-simple'])
+    foreach scenario : ['baseline', 'integration', 'roundtrip-linear', 'roundtrip-rectangular',
+        'pending-linear', 'pending-rectangular', 'history-linear', 'history-rectangular']
+      test('terminal-selection-mode-' + scenario + '-' + backend + '-' + scale, find_program('xvfb-run'),
+        args: ['-a', '-s', '-screen 0 2560x2048x24', selection_state_test, 'mode-' + scenario], timeout: 60,
+        env: appearance_env + ['GTK_IM_MODULE=gtk-im-context-simple'])
+    endforeach
     foreach width : ['narrow', 'wide', 'font', 'default']
       test('terminal-cell-width-' + backend + '-' + scale + '-' + width, find_program('xvfb-run'),
         args: ['-a', '-s', '-screen 0 2560x2048x24', cell_width_test, width], timeout: 60,

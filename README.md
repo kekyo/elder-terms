@@ -594,7 +594,7 @@ A normal selection follows text order; a block selection is a rectangle aligned 
 | Left click | Clears the selection. A click alone does not copy a character |
 | Left drag | Makes a normal selection |
 | Double / triple click | Selects a word / line |
-| Ctrl + left drag | Makes a block selection. Releasing Ctrl during the drag keeps its rectangular shape |
+| Ctrl + left drag | Makes a block selection |
 | Ctrl + click on a link | Opens the link when you release over the same link. Dragging instead makes a block selection |
 | Right-click on a link, then “Copy Link” | Copies the link target to the clipboard |
 | Escape | Cancels the selection and any active drag |
@@ -604,6 +604,9 @@ A normal selection follows text order; a block selection is a rectangle aligned 
 
 When a terminal application uses mouse input, Shift + drag overrides it for normal selection, and Ctrl + drag for block selection.
 Ctrl + Shift + drag also makes a block selection. Ctrl + wheel changes the text size as usual when no selection gesture is active.
+
+Press Ctrl during a drag to switch to block selection on the next mouse movement. Release Ctrl to return to normal selection on the next mouse movement.
+Changing Ctrl alone leaves the selection unchanged. Switching preserves the same starting point.
 
 Selected text can also be pasted with the middle mouse button.
 Block copies trim trailing spaces by default. To preserve them, disable "Trim trailing spaces in block copies" on the "Terminal" tab.
