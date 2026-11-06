@@ -1255,10 +1255,10 @@ static void begin_new_connection(ApplicationState *state) {
   elder_terms::SettingsStore store = elder_terms::create_default_settings(
       elder_terms::default_terminal_display_settings(12.0), state->draft_name);
   const elder_terms::SettingsLoadResult global_defaults =
-      elder_terms::load_global_settings(state->global_config_path, 12.0);
+      elder_terms::load_settings({.config_path = std::nullopt, .startup_config_path = std::nullopt,
+          .global_config_path = state->global_config_path}, 12.0);
   print_warnings(global_defaults.warnings);
-  elder_terms::rebase_settings_store_fallbacks(&store,
-                                               global_defaults.store);
+  elder_terms::rebase_settings_theme(&store, global_defaults.store.theme_context);
   elder_terms::update_settings_widget_store(state->settings_widget,
                                              std::move(store));
   elder_terms::settings_widget_show_general_page(state->settings_widget);

@@ -10,6 +10,12 @@ import { expect, it } from 'vitest';
 
 const execute = promisify(execFile);
 
+it('shares UI-created themes across connections and preserves overrides and invalid drafts', async () => {
+  const result = await execute('xvfb-run', ['-a', fileURLToPath(new URL('../../.build/shared/named-theme-widget-test', import.meta.url))],
+    { env: { ...process.env, G_DEBUG: 'fatal-criticals', NO_AT_BRIDGE: '1' } });
+  expect(result.stdout).toContain('Theme widget passed');
+});
+
 it('saves independent settings files, detects conflicts and retries partial failures', async () => {
   const result = await execute(fileURLToPath(new URL('../../.build/shared/settings-edit-test', import.meta.url)));
   expect(result.stdout).toContain('Settings edits passed');

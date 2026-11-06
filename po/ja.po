@@ -3331,6 +3331,23 @@ msgstr "シリアル接続が終了しました。機器が利用可能になる
 msgid "Themes"
 msgstr "テーマ"
 
+msgid "Theme"
+msgstr "テーマ"
+
+#, c-format
+msgid "Theme: %s"
+msgstr "テーマ: %s"
+
+#, c-format
+msgid "%s (theme: %s)"
+msgstr "%s (テーマ: %s)"
+
+msgid "Unresolved theme:"
+msgstr "テーマ未解決:"
+
+msgid "Failed to reload connection defaults"
+msgstr "接続の既定値を再読み込みできませんでした"
+
 msgid "Theme name"
 msgstr "テーマ名"
 

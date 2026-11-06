@@ -72,7 +72,7 @@ void sync_terminal_background_editor(TerminalBackgroundEditor *editor, bool pres
   editor->synchronizing = true;
   const auto key = terminal_background_mode_setting_key();
   const auto fallback = value_text(setting_fallback_value(*editor->store, key, std::string("opaque")));
-  const auto inherited = inherited_setting_label(setting_choice_label(key, fallback), setting_fallback_source(*editor->store, key));
+  const auto inherited = setting_fallback_label(*editor->store, key, setting_choice_label(key, fallback));
   gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(editor->mode));
   gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(editor->mode), "inherit", inherited.c_str());
   for (const auto *mode : {"opaque", "transparent", "blur"})
@@ -82,8 +82,7 @@ void sync_terminal_background_editor(TerminalBackgroundEditor *editor, bool pres
       setting_has_explicit_value(*editor->store, key) ? effective.c_str() : "inherit");
   const auto cell_key = terminal_cell_background_mode_setting_key();
   const auto cell_fallback = value_text(setting_fallback_value(*editor->store, cell_key, std::string("transparent")));
-  const auto cell_label = inherited_setting_label(setting_choice_label(cell_key, cell_fallback),
-      setting_fallback_source(*editor->store, cell_key));
+  const auto cell_label = setting_fallback_label(*editor->store, cell_key, setting_choice_label(cell_key, cell_fallback));
   gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(editor->cell_mode));
   gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(editor->cell_mode), "inherit", cell_label.c_str());
   for (const auto *mode : {"transparent", "opaque"})
@@ -94,8 +93,7 @@ void sync_terminal_background_editor(TerminalBackgroundEditor *editor, bool pres
   for (auto &field : editor->fields) {
     const auto field_key = make_setting_key("terminal", field.name);
     const auto builtin = field.number ? SettingValue{gint64{0}} : SettingValue{std::string("#000000")};
-    const auto placeholder = inherited_setting_label(value_text(setting_fallback_value(*editor->store, field_key, builtin)),
-        setting_fallback_source(*editor->store, field_key));
+    const auto placeholder = setting_fallback_label(*editor->store, field_key, value_text(setting_fallback_value(*editor->store, field_key, builtin)));
     gtk_entry_set_placeholder_text(GTK_ENTRY(field.entry), placeholder.c_str());
     if (preserve_invalid && !field.valid) continue;
     gtk_entry_set_text(GTK_ENTRY(field.entry), setting_has_explicit_value(*editor->store, field_key)
@@ -105,7 +103,7 @@ void sync_terminal_background_editor(TerminalBackgroundEditor *editor, bool pres
   const auto image_key = terminal_background_image_setting_key();
   const auto image_fallback = setting_string_value_or_default(*editor->store, image_key, "");
   const auto placeholder = setting_has_explicit_value(*editor->store, image_key) ? std::string(_("No image")) :
-      inherited_setting_label(image_fallback.empty() ? _("No image") : image_fallback, setting_fallback_source(*editor->store, image_key));
+      setting_fallback_label(*editor->store, image_key, image_fallback.empty() ? _("No image") : image_fallback);
   gtk_entry_set_placeholder_text(GTK_ENTRY(editor->image_path), placeholder.c_str());
   if (!preserve_invalid || editor->image_valid) {
     gtk_entry_set_text(GTK_ENTRY(editor->image_path), setting_has_explicit_value(*editor->store, image_key) ? image_fallback.c_str() : "");
@@ -113,7 +111,7 @@ void sync_terminal_background_editor(TerminalBackgroundEditor *editor, bool pres
   }
   const auto fit_key = terminal_background_image_fit_setting_key();
   const auto fit_fallback = value_text(setting_fallback_value(*editor->store, fit_key, std::string("cover")));
-  const auto fit_label = inherited_setting_label(setting_choice_label(fit_key, fit_fallback), setting_fallback_source(*editor->store, fit_key));
+  const auto fit_label = setting_fallback_label(*editor->store, fit_key, setting_choice_label(fit_key, fit_fallback));
   gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(editor->image_fit));
   gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(editor->image_fit), "inherit", fit_label.c_str());
   for (const auto *fit : {"cover", "contain", "stretch"})

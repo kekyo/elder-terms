@@ -107,8 +107,7 @@ void sync_http_settings_editor(HttpSettingsEditor *editor, bool preserve_invalid
     const bool explicit_value = setting_has_explicit_value(*editor->store, key);
     if (field.combo) {
       gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(field.combo));
-      const auto inherited_label = inherited_setting_label(
-          setting_choice_label(key, inherited), setting_fallback_source(*editor->store, key));
+      const auto inherited_label = setting_fallback_label(*editor->store, key, setting_choice_label(key, inherited));
       gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(field.combo), "inherit", inherited_label.c_str());
       for (const auto *choice : field.choices)
         gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(field.combo), choice, setting_choice_label(key, choice).c_str());
@@ -119,7 +118,7 @@ void sync_http_settings_editor(HttpSettingsEditor *editor, bool preserve_invalid
     }
     if (field.entry) {
       gtk_entry_set_text(GTK_ENTRY(field.entry), explicit_value ? effective.c_str() : "");
-      gtk_entry_set_placeholder_text(GTK_ENTRY(field.entry), inherited_setting_label(inherited, setting_fallback_source(*editor->store, key)).c_str());
+      gtk_entry_set_placeholder_text(GTK_ENTRY(field.entry), setting_fallback_label(*editor->store, key, inherited).c_str());
     }
     field.valid = !unfinished;
     if (unfinished) {

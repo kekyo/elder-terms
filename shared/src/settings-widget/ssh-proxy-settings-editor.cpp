@@ -70,9 +70,7 @@ void sync_ssh_proxy_settings_editor(SshProxySettingsEditor *editor, bool preserv
   auto fallback = *editor->store;
   clear_explicit_setting_value(&fallback, enabled_key);
   const auto enabled_text = value_text(*editor->store, "enabled");
-  const auto inherited = inherited_setting_label(
-      value_text(fallback, "enabled") == "true" ? _("Enabled") : _("Disabled"),
-      setting_fallback_source(*editor->store, enabled_key));
+  const auto inherited = setting_fallback_label(*editor->store, enabled_key, value_text(fallback, "enabled") == "true" ? _("Enabled") : _("Disabled"));
   auto *combo = GTK_COMBO_BOX_TEXT(editor->enabled);
   gtk_combo_box_text_remove_all(combo);
   gtk_combo_box_text_append(combo, "inherit", inherited.c_str());
@@ -86,8 +84,7 @@ void sync_ssh_proxy_settings_editor(SshProxySettingsEditor *editor, bool preserv
     const auto key = ssh_proxy_setting_key(field.name);
     fallback = *editor->store;
     clear_explicit_setting_value(&fallback, key);
-    const auto placeholder = inherited_setting_label(value_text(fallback, field.name),
-        setting_fallback_source(*editor->store, key));
+    const auto placeholder = setting_fallback_label(*editor->store, key, value_text(fallback, field.name));
     gtk_entry_set_placeholder_text(GTK_ENTRY(field.entry), placeholder.c_str());
     if (preserve_invalid && !field.valid) continue;
     gtk_entry_set_text(GTK_ENTRY(field.entry), setting_has_explicit_value(*editor->store, key)

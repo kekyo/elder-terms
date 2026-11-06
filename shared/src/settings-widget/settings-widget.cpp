@@ -137,6 +137,9 @@ struct SettingsWidgetState {
   GtkWidget *root = nullptr;
   GtkWidget *notebook = nullptr;
   GtkWidget *general_name_entry = nullptr;
+  GtkWidget *general_theme_combo = nullptr;
+  std::string theme_refresh_error;
+  bool theme_valid = true;
   ConnectionIconEditor *connection_icon_editor = nullptr;
   GtkWidget *general_type_combo = nullptr;
   GtkWidget *general_auto_close_combo = nullptr;
@@ -470,13 +473,6 @@ static std::string format_setting_value(const SettingValue &value) {
              : settings_ui_text(SettingsUiText::disabled);
 }
 
-static std::string setting_fallback_label(const SettingsStore &store,
-                                          const SettingKey &key,
-                                          const std::string &display_value) {
-  return inherited_setting_label(display_value,
-                                 setting_fallback_source(store, key));
-}
-
 static void sync_inheritable_entry(GtkWidget *entry,
                                    const SettingsStore &store,
                                    const SettingKey &key,
@@ -631,8 +627,8 @@ static std::string terminal_encoding_fallback(
     const SettingsWidgetState *state,
     const TerminalTextSettings &built_in_defaults) {
   if (setting_fallback_source(state->draft_store,
-                              terminal_encoding_setting_key()) ==
-      SettingValueSource::global) {
+                              terminal_encoding_setting_key()) !=
+      SettingValueSource::built_in) {
     return std::get<std::string>(setting_fallback_value(
         state->draft_store, terminal_encoding_setting_key(),
         SettingValue{built_in_defaults.encoding}));
@@ -644,8 +640,8 @@ static std::string terminal_backspace_fallback(
     const SettingsWidgetState *state,
     const TerminalTextSettings &built_in_defaults) {
   if (setting_fallback_source(state->draft_store,
-                              terminal_backspace_code_setting_key()) ==
-      SettingValueSource::global) {
+                              terminal_backspace_code_setting_key()) !=
+      SettingValueSource::built_in) {
     return std::get<std::string>(setting_fallback_value(
         state->draft_store, terminal_backspace_code_setting_key(),
         SettingValue{std::string(terminal_backspace_code_to_string(
@@ -658,8 +654,8 @@ static std::string terminal_cursor_fallback(
     const SettingsWidgetState *state,
     const TerminalTextSettings &built_in_defaults) {
   if (setting_fallback_source(state->draft_store,
-                              terminal_cursor_key_mode_setting_key()) ==
-      SettingValueSource::global) {
+                              terminal_cursor_key_mode_setting_key()) !=
+      SettingValueSource::built_in) {
     return std::get<std::string>(setting_fallback_value(
         state->draft_store, terminal_cursor_key_mode_setting_key(),
         SettingValue{std::string(terminal_cursor_key_mode_to_string(
@@ -673,8 +669,8 @@ static std::string terminal_return_fallback(
     const SettingsWidgetState *state,
     const TerminalTextSettings &built_in_defaults) {
   if (setting_fallback_source(state->draft_store,
-                              terminal_return_code_setting_key()) ==
-      SettingValueSource::global) {
+                              terminal_return_code_setting_key()) !=
+      SettingValueSource::built_in) {
     return std::get<std::string>(setting_fallback_value(
         state->draft_store, terminal_return_code_setting_key(),
         SettingValue{std::string(terminal_return_code_to_string(
@@ -1559,7 +1555,8 @@ static bool macro_rules_are_valid(const SettingsWidgetState *state) {
 }
 
 static bool settings_inputs_valid(const SettingsWidgetState *state) {
-  return terminal_background_editor_is_valid(state->terminal_background_editor) &&
+  return state->theme_valid && state->theme_refresh_error.empty() &&
+         terminal_background_editor_is_valid(state->terminal_background_editor) &&
          ssh_proxy_settings_editor_is_valid(state->ssh_proxy_editor) &&
          state->local_command_line_valid && state->terminal_width_valid &&
          state->terminal_height_valid &&
@@ -3144,7 +3141,9 @@ static void sync_key_binding_reset_button(
               SettingValueSource::global
           ? settings_ui_text(SettingsUiText::use_global_default)
           : settings_ui_text(SettingsUiText::use_built_in_default);
-  gtk_widget_set_tooltip_text(button, tooltip);
+  const auto label = setting_fallback_source(state->draft_store, key) == SettingValueSource::theme
+      ? setting_fallback_label(state->draft_store, key, _("Inherit")) : std::string(tooltip);
+  gtk_widget_set_tooltip_text(button, label.c_str());
 }
 
 static void sync_terminal_type_entries(SettingsWidgetState *state) {
@@ -3363,7 +3362,33 @@ static void create_ftp_tls_controls(SettingsWidgetState *state, GtkWidget *page)
   gtk_grid_attach(GTK_GRID(page), state->ftp_tls_error_label, 0, row, 2, 1);
 }
 
+static void sync_theme_selector(SettingsWidgetState *state) {
+  if (!state->general_theme_combo) return;
+  auto *combo = GTK_COMBO_BOX_TEXT(state->general_theme_combo);
+  gtk_combo_box_text_remove_all(combo);
+  gtk_combo_box_text_append(combo, "", _("None"));
+  const auto selected = selected_settings_theme(state->draft_store);
+  bool found = selected.empty();
+  if (state->draft_store.theme_context) {
+    for (const auto &theme : state->draft_store.theme_context->catalog.themes) {
+      gtk_combo_box_text_append(combo, theme.id.c_str(), theme.name.c_str());
+      found = found || theme.id == selected;
+    }
+  }
+  if (!found) {
+    const auto text = std::string(_("Unresolved theme:")) + " " + selected;
+    gtk_combo_box_text_append(combo, selected.c_str(), text.c_str());
+  }
+  gtk_combo_box_set_active_id(GTK_COMBO_BOX(combo), selected.c_str());
+  state->theme_valid = found && (selected.empty() ||
+      (state->draft_store.theme_context && state->draft_store.theme_context->catalog.loaded));
+  set_settings_input_error(state->general_theme_combo,
+      !state->theme_refresh_error.empty() ? state->theme_refresh_error :
+      state->theme_valid ? "" : std::string(_("Unresolved theme:")) + " " + selected);
+}
+
 static void sync_widgets_from_draft(SettingsWidgetState *state, bool preserve_invalid_draft) {
+  sync_theme_selector(state);
   sync_connection_icon_editor(state->connection_icon_editor);
   sync_terminal_background_editor(state->terminal_background_editor, preserve_invalid_draft);
   sync_terminal_color_preview(state->terminal_color_preview);
@@ -4198,11 +4223,11 @@ static void update_terminal_font_draft(SettingsWidgetState *state) {
   state->synchronizing = true;
   gtk_combo_box_set_active_id(GTK_COMBO_BOX(state->terminal_fonts_mode_combo),
       state->terminal_font_draft.empty()
-          ? (state->mode != SettingsWidgetMode::connection ? inherit_choice : terminal_font_default)
+          ? (state->mode == SettingsWidgetMode::global_defaults ? inherit_choice : terminal_font_default)
           : terminal_font_custom);
   state->synchronizing = synchronizing;
   if (state->terminal_fonts_valid) {
-    if (state->terminal_font_draft.empty() && state->mode != SettingsWidgetMode::connection) {
+    if (state->terminal_font_draft.empty() && state->mode == SettingsWidgetMode::global_defaults) {
       clear_explicit_setting_value(&state->draft_store, terminal_font_families_setting_key());
     } else {
       set_explicit_setting_value(&state->draft_store,
@@ -4343,10 +4368,12 @@ static void rebuild_terminal_font_rows(SettingsWidgetState *state) {
 
 static void sync_terminal_font_controls(SettingsWidgetState *state) {
   const auto key = terminal_font_families_setting_key();
-  const bool global = state->mode != SettingsWidgetMode::connection;
+  const bool global = state->mode == SettingsWidgetMode::global_defaults;
   auto *combo = state->terminal_fonts_mode_combo;
   gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(combo));
-  append_combo_option(combo, inherit_choice, settings_ui_text(global
+  if (setting_fallback_source(state->draft_store, key) == SettingValueSource::theme) {
+    append_combo_option(combo, inherit_choice, setting_fallback_label(state->draft_store, key, _("Inherit")).c_str());
+  } else append_combo_option(combo, inherit_choice, settings_ui_text(global
       ? SettingsUiText::font_app_defaults
       : setting_fallback_source(state->draft_store, key) == SettingValueSource::global
           ? SettingsUiText::font_inherit_global : SettingsUiText::font_inherit_builtin));
@@ -5071,6 +5098,20 @@ static void on_cancel_clicked(GtkButton *, gpointer data) {
   }
 }
 
+static void on_theme_changed(GtkComboBox *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) return;
+  const auto id = active_combo_id(state->general_theme_combo, "");
+  set_explicit_setting_value(&state->draft_store, general_theme_setting_key(), id);
+  if (state->draft_store.theme_context) {
+    const auto context = state->draft_store;
+    settings_widget_rebase_fallbacks(state, context);
+  } else {
+    update_action_sensitivity(state);
+    notify_changed(state);
+  }
+}
+
 static GtkWidget *create_general_page(SettingsWidgetState *state) {
   const std::string page_id = widget_id(state, "general_page");
   GtkWidget *page = create_page_grid(page_id.c_str());
@@ -5088,6 +5129,12 @@ static GtkWidget *create_general_page(SettingsWidgetState *state) {
         state->id_prefix, [state] { notify_changed(state); });
     attach_row(page, row++, general_icon_setting_key(),
         connection_icon_editor_root(state->connection_icon_editor));
+  }
+
+  if (state->mode == SettingsWidgetMode::connection) {
+    state->general_theme_combo = create_combo_box(widget_id(state, "general_theme_combo").c_str());
+    g_signal_connect(state->general_theme_combo, "changed", G_CALLBACK(on_theme_changed), state);
+    attach_row(page, row++, general_theme_setting_key(), state->general_theme_combo);
   }
 
   const std::string type_id = widget_id(state, "general_type_combo");
@@ -6516,6 +6563,26 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   auto *state = new SettingsWidgetState();
   state->applied_store = options.store;
   state->draft_store = std::move(options.store);
+  if (options.is_runtime && state->draft_store.theme_context &&
+      !state->draft_store.theme_context->global_path.empty()) {
+    const auto previous = state->draft_store.theme_context;
+    const auto global = load_global_settings(previous->global_path, 12.0);
+    if (!global.loaded) {
+      state->theme_refresh_error = _("Failed to reload connection defaults");
+    } else {
+      auto context = std::make_shared<SettingsThemeContext>();
+      context->global = global.store;
+      context->global_path = previous->global_path;
+      context->theme_path = previous->theme_path;
+      context->catalog = context->theme_path.empty() ? previous->catalog : load_settings_themes(context->theme_path, context->global);
+      rebase_settings_theme(&state->draft_store, context);
+      for (std::size_t index = 0; index < state->draft_store.entries.size(); ++index) {
+        auto &entry = state->draft_store.entries[index];
+        if (entry.value != state->applied_store.entries[index].value ||
+            entry.validation_error != state->applied_store.entries[index].validation_error) entry.dirty = true;
+      }
+    }
+  }
   state->mode = options.mode;
   state->id_prefix =
       options.id_prefix.empty() ? std::string("settings")

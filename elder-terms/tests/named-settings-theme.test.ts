@@ -7,7 +7,26 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { expect, it } from 'vitest';
 import { waitForResult } from 'gestament/testing';
-import { expectElementKind, runLauncherGtkTest } from './test-helpers.ts';
+import type { GtkWidgetElement } from 'gestament';
+import { runLauncherGtkTest } from './test-helpers.ts';
+import { expectElementKind } from '../../shared/tests/connection-test-helpers.ts';
+
+const namedChild = async (
+  root: GtkWidgetElement,
+  name: string
+): Promise<GtkWidgetElement | undefined> => {
+  if ((await root.info()).name === name) return root;
+  if ('getChildCount' in root && 'childAt' in root) {
+    for (let index = 0; index < (await root.getChildCount()); index++) {
+      const child = await root.childAt(index);
+      if (child) {
+        const found = await namedChild(child, name);
+        if (found) return found;
+      }
+    }
+  }
+  return undefined;
+};
 
 it('edits defaults and named themes in shared application tabs and saves only the changed file', async (context) => {
   let globalPath = '';
@@ -42,10 +61,19 @@ it('edits defaults and named themes in shared application tabs and saves only th
         await app.getById('themes_name_entry'),
         'entry'
       ).setText('Red theme');
-      await expectElementKind(
-        await app.getById('theme_0_general_background_mode_combo'),
-        'comboBox'
-      ).selectChildAt(1);
+      for (const field of ['exterior_background', 'background']) {
+        const id = `theme_0_general_${field}_button`;
+        await expectElementKind(await app.getById(id), 'button').click();
+        const chooser = await app.getById(`${id}_dialog`);
+        await expectElementKind(
+          await namedChild(chooser, 'Red'),
+          'radio'
+        ).click();
+        await expectElementKind(
+          await namedChild(chooser, 'Select'),
+          'button'
+        ).click();
+      }
       expect(
         (
           await (
@@ -77,7 +105,8 @@ it('edits defaults and named themes in shared application tabs and saves only th
         '[general]\nbackground=#111111\n'
       );
       const themeContents = await readFile(themePath, 'utf8');
-      expect(themeContents).toContain('background=none');
+      expect(themeContents).toMatch(/exterior_background=#[0-9A-F]{6}/u);
+      expect(themeContents).toMatch(/\nbackground=#[0-9A-F]{6}/u);
       expect(themeContents).not.toContain('font_size_dip');
       await expectElementKind(
         await app.getById('application_menu_button'),

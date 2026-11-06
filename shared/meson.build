@@ -405,6 +405,10 @@ test('named-settings-theme-test', named_settings_theme_test)
 settings_edit_test = executable('settings-edit-test',
   'tests/settings-edit-test.cpp', dependencies: elder_terms_dep)
 test('settings-edit-test', settings_edit_test)
+named_theme_widget_test = executable('named-theme-widget-test',
+  'tests/named-theme-widget-test.cpp', dependencies: elder_terms_dep)
+test('named-theme-widget-test', find_program('xvfb-run'), args: ['-a', named_theme_widget_test],
+  env: ['GSETTINGS_BACKEND=memory', 'NO_AT_BRIDGE=1', 'G_DEBUG=fatal-criticals'])
 
 connection_icon_test = executable('connection-icon-test',
   'tests/connection-icon-test.cpp', dependencies: elder_terms_dep)
