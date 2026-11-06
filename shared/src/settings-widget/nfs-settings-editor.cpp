@@ -96,17 +96,15 @@ void sync_nfs_settings_editor(NfsSettingsEditor *editor, bool preserve_invalid) 
         [&](const auto &entry) { return entry.definition.key.section == key.section && entry.definition.key.name == key.name; });
     if (found == editor->store->entries.end()) continue;
     const bool explicit_value = setting_has_explicit_value(*editor->store, key);
-    const auto source = setting_fallback_source(*editor->store, key);
     if (GTK_IS_ENTRY(field.control))
       gtk_entry_set_placeholder_text(GTK_ENTRY(field.control),
-          inherited_setting_label(found->fallback_invalid_raw_value.value_or(value_text(found->fallback_value)), source).c_str());
+          setting_fallback_label(*editor->store, key, found->fallback_invalid_raw_value.value_or(value_text(found->fallback_value))).c_str());
     if (preserve_invalid && !field.valid) continue;
     const auto text = found->invalid_raw_value.value_or(value_text(found->value));
     if (field.kind == NfsFieldKind::boolean || field.kind == NfsFieldKind::version) {
       auto *combo = GTK_COMBO_BOX_TEXT(field.control);
       gtk_combo_box_text_remove_all(combo);
-      gtk_combo_box_text_append(combo, "inherit", inherited_setting_label(
-          found->fallback_invalid_raw_value.value_or(choice_label(field, found->fallback_value)), source).c_str());
+      gtk_combo_box_text_append(combo, "inherit", setting_fallback_label(*editor->store, key, found->fallback_invalid_raw_value.value_or(choice_label(field, found->fallback_value))).c_str());
       if (field.kind == NfsFieldKind::boolean) {
         gtk_combo_box_text_append(combo, "enabled", _("Enabled"));
         gtk_combo_box_text_append(combo, "disabled", _("Disabled"));
@@ -123,7 +121,7 @@ void sync_nfs_settings_editor(NfsSettingsEditor *editor, bool preserve_invalid) 
     } else if (field.kind == NfsFieldKind::list) {
       auto *combo = GTK_COMBO_BOX_TEXT(field.mode);
       gtk_combo_box_text_remove_all(combo);
-      gtk_combo_box_text_append(combo, "inherit", inherited_setting_label("", source).c_str());
+      gtk_combo_box_text_append(combo, "inherit", setting_fallback_label(*editor->store, key, "").c_str());
       gtk_combo_box_text_append(combo, "custom", _("Custom"));
       gtk_combo_box_set_active_id(GTK_COMBO_BOX(combo), explicit_value ? "custom" : "inherit");
       gtk_text_buffer_set_text(gtk_text_view_get_buffer(GTK_TEXT_VIEW(field.control)), text.c_str(), -1);

@@ -846,7 +846,10 @@ const clearKeyBinding = async (
 ): Promise<void> => {
   await waitForResult(async () => {
     await clickWidget(app, entry);
-    const { bounds } = await entry.capture();
+    const { bounds } = await captureWhenVisuallyStable(
+      entry,
+      'key binding clear icon'
+    );
     await app.input.moveMouseTo(
       Math.trunc(bounds.x + bounds.width - 18),
       Math.trunc(bounds.y + bounds.height / 2)

@@ -3327,3 +3327,53 @@ msgstr "TELNETセッションが終了しました。"
 #: elder-terms-terminal/src/main.cpp
 msgid "Serial connection closed. Waiting for the device to become available."
 msgstr "シリアル接続が終了しました。機器が利用可能になるまで待機しています。"
+
+msgid "Themes"
+msgstr "テーマ"
+
+msgid "Theme"
+msgstr "テーマ"
+
+#, c-format
+msgid "Theme: %s"
+msgstr "テーマ: %s"
+
+#, c-format
+msgid "%s (theme: %s)"
+msgstr "%s (テーマ: %s)"
+
+msgid "Unresolved theme:"
+msgstr "テーマ未解決:"
+
+msgid "Failed to reload connection defaults"
+msgstr "接続の既定値を再読み込みできませんでした"
+
+msgid "Theme is still used by connections:"
+msgstr "このテーマを使用中の接続があります:"
+
+msgid "Connection defaults or themes changed outside this editor. Reopen settings before applying."
+msgstr "接続の既定値またはテーマが外部で変更されました。設定を開き直してから適用してください。"
+
+msgid "Theme name"
+msgstr "テーマ名"
+
+msgid "Theme preview"
+msgstr "テーマのプレビュー"
+
+msgid "New theme"
+msgstr "新しいテーマ"
+
+msgid "No connections use this theme"
+msgstr "このテーマを使用する接続はありません"
+
+msgid "Current connection draft"
+msgstr "編集中の接続"
+
+msgid "Saved"
+msgstr "保存済み"
+
+msgid "Not saved"
+msgstr "未保存"
+
+msgid "Unchanged"
+msgstr "変更なし"

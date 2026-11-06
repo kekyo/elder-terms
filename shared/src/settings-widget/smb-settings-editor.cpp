@@ -93,8 +93,7 @@ void sync_smb_settings_editor(SmbSettingsEditor *editor, bool preserve_invalid) 
       const auto inherited = setting_text(*editor->store, field.name, true);
       auto *combo = GTK_COMBO_BOX_TEXT(field.combo);
       gtk_combo_box_text_remove_all(combo);
-      gtk_combo_box_text_append(combo, "inherit", inherited_setting_label(
-          setting_choice_label(key, inherited), setting_fallback_source(*editor->store, key)).c_str());
+      gtk_combo_box_text_append(combo, "inherit", setting_fallback_label(*editor->store, key, setting_choice_label(key, inherited)).c_str());
       for (const auto *version : {"auto", "1", "2", "3"})
         gtk_combo_box_text_append(combo, version, setting_choice_label(key, version).c_str());
       if (effective != "auto" && effective != "1" && effective != "2" && effective != "3")
@@ -108,8 +107,7 @@ void sync_smb_settings_editor(SmbSettingsEditor *editor, bool preserve_invalid) 
       const bool effective = explicit_value ? setting_boolean_value_or_default(*editor->store, key, false) : inherited;
       gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(field.combo));
       gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(field.combo), "inherit",
-          inherited_setting_label(inherited ? _("Enabled") : _("Disabled"),
-                                  setting_fallback_source(*editor->store, key)).c_str());
+          setting_fallback_label(*editor->store, key, inherited ? _("Enabled") : _("Disabled")).c_str());
       gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(field.combo), "enabled", _("Enabled"));
       gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(field.combo), "disabled", _("Disabled"));
       gtk_combo_box_set_active_id(GTK_COMBO_BOX(field.combo),
@@ -119,7 +117,7 @@ void sync_smb_settings_editor(SmbSettingsEditor *editor, bool preserve_invalid) 
       const auto inherited = setting_text(*editor->store, field.name, true);
       gtk_entry_set_text(GTK_ENTRY(field.entry), explicit_value ? effective.c_str() : "");
       gtk_entry_set_placeholder_text(GTK_ENTRY(field.entry),
-          inherited_setting_label(inherited, setting_fallback_source(*editor->store, key)).c_str());
+          setting_fallback_label(*editor->store, key, inherited).c_str());
       field.valid = !unfinished;
       if (unfinished) gtk_entry_set_text(GTK_ENTRY(field.entry), unfinished_text.c_str());
     }

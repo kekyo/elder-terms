@@ -121,10 +121,8 @@ static void sync_hotkey(ApplicationSettingsWidgetState *state) {
         GTK_ENTRY(entry),
         settings_ui_text(SettingsUiText::press_key_combination));
   } else {
-    const std::string placeholder = inherited_setting_label(
-        effective.empty() ? settings_ui_text(SettingsUiText::disabled)
-                          : effective,
-        setting_fallback_source(state->draft_store, key));
+    const std::string placeholder = setting_fallback_label(state->draft_store, key, effective.empty() ? settings_ui_text(SettingsUiText::disabled)
+                          : effective);
     gtk_entry_set_placeholder_text(GTK_ENTRY(entry), placeholder.c_str());
   }
   gtk_widget_set_sensitive(state->open_application_reset_button,
@@ -158,10 +156,7 @@ static void sync_widgets(ApplicationSettingsWidgetState *state) {
   const std::string fallback = std::get<std::string>(setting_fallback_value(
       state->draft_store, application_startup_mode_setting_key(),
       SettingValue{std::string(startup_window)}));
-  const std::string fallback_label = inherited_setting_label(
-      setting_choice_label(application_startup_mode_setting_key(), fallback),
-      setting_fallback_source(state->draft_store,
-                              application_startup_mode_setting_key()));
+  const std::string fallback_label = setting_fallback_label(state->draft_store, application_startup_mode_setting_key(), setting_choice_label(application_startup_mode_setting_key(), fallback));
   gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(state->startup_mode_combo),
                             inherit_choice, fallback_label.c_str());
   for (const char *mode : startup_modes) {

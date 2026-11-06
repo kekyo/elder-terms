@@ -10,6 +10,8 @@
 #include <chrono>
 #include <string>
 #include <system_error>
+#include <set>
+#include <sstream>
 #include <utility>
 
 #include <elder-terms/settings/general-settings.h>
@@ -491,6 +493,7 @@ static bool load_settings_file(SettingsStore *store,
     g_key_file_remove_key(key_file, "general", "connection_id", nullptr);
     g_key_file_remove_key(key_file, "general", "open_connection",
                           nullptr);
+    g_key_file_remove_key(key_file, "general", "theme", nullptr);
   }
   load_settings_store_from_key_file(store, key_file, warnings);
   if (!exclude_connection_settings) {
@@ -561,7 +564,164 @@ static bool is_connection_only_key(const SettingKey &key) {
   return (key.section == name.section && key.name == name.name) ||
          (key.section == icon.section && key.name == icon.name) ||
          (key.section == id.section && key.name == id.name) ||
-         (key.section == hotkey.section && key.name == hotkey.name);
+         (key.section == hotkey.section && key.name == hotkey.name) ||
+         (key.section == "general" && key.name == "theme");
+}
+
+bool setting_is_inheritable(const SettingKey &key) {
+  if (is_connection_only_key(key)) return false;
+  const auto application = application_setting_definitions();
+  return std::none_of(application.begin(), application.end(), [&key](const auto &definition) {
+    return definition.key.section == key.section && definition.key.name == key.name;
+  });
+}
+
+SettingKey general_theme_setting_key() {
+  return make_setting_key("general", "theme");
+}
+
+std::string selected_settings_theme(const SettingsStore &store) {
+  return setting_string_value_or_default(store, general_theme_setting_key(), "");
+}
+
+SettingsStore create_theme_settings(const SettingsStore &global) {
+  std::vector<SettingDefinition> definitions;
+  for (const auto &entry : global.entries) {
+    if (setting_is_inheritable(entry.definition.key)) definitions.push_back(entry.definition);
+  }
+  auto result = create_settings_store(std::move(definitions));
+  rebase_settings_store_fallbacks(&result, global);
+  return result;
+}
+
+static bool theme_id_is_valid(const std::string &id) {
+  return !id.empty() && std::all_of(id.begin(), id.end(), [](unsigned char c) {
+    return g_ascii_isalnum(c) || c == '-' || c == '_';
+  });
+}
+
+SettingsThemeCatalog load_settings_themes(const std::filesystem::path &path,
+                                          const SettingsStore &global) {
+  SettingsThemeCatalog result;
+  GKeyFile *file = g_key_file_new();
+  GError *error = nullptr;
+  gchar *contents = nullptr;
+  gsize size = 0;
+  const bool read = g_file_get_contents(path.c_str(), &contents, &size, &error);
+  if (!read || !g_key_file_load_from_data(file, contents, size, G_KEY_FILE_NONE, &error)) {
+    if (!g_error_matches(error, G_FILE_ERROR, G_FILE_ERROR_NOENT)) {
+      result.loaded = false;
+      result.warnings.push_back("Failed to read themes " + path_string(path) + ": " + glib_error_message(error));
+    }
+    g_clear_error(&error);
+    g_free(contents);
+    g_key_file_unref(file);
+    return result;
+  }
+  // GKeyFile merges repeated groups. Inspect the same bytes before accepting
+  // IDs so two definitions cannot silently become one theme.
+  std::istringstream input(std::string(contents, size));
+  g_free(contents);
+  std::set<std::string> declared_groups;
+  std::string line;
+  while (std::getline(input, line)) {
+    const auto header = trim_ascii_whitespace(line);
+    if (header.starts_with('[') && header.ends_with(']') && !declared_groups.insert(header).second)
+      result.warnings.push_back("Duplicate theme section/ID: " + header);
+  }
+  gsize count = 0;
+  gchar **groups = g_key_file_get_groups(file, &count);
+  std::set<std::string> names;
+  for (gsize index = 0; index < count; ++index) {
+    const std::string group = groups[index];
+    if (!group.starts_with("theme.")) {
+      result.warnings.push_back("Unknown theme section: " + group);
+      continue;
+    }
+    const auto suffix = group.substr(6);
+    if (suffix.find('.') != std::string::npos) continue;
+    auto name = key_file_string(file, group, "name", &error);
+    if (error || !theme_id_is_valid(suffix) || trim_ascii_whitespace(name).empty() ||
+        !names.insert(trim_ascii_whitespace(name)).second) {
+      result.warnings.push_back("Invalid or duplicate theme ID/name: " + group);
+      g_clear_error(&error);
+    }
+    result.themes.push_back({.id = suffix, .name = name, .store = create_theme_settings(global)});
+  }
+  for (gsize index = 0; index < count; ++index) {
+    const std::string group = groups[index];
+    if (!group.starts_with("theme.")) continue;
+    const auto split = group.find('.', 6);
+    const auto id = group.substr(6, split == std::string::npos ? split : split - 6);
+    const auto found = std::find_if(result.themes.begin(), result.themes.end(),
+        [&id](const auto &theme) { return theme.id == id; });
+    if (found == result.themes.end()) {
+      result.warnings.push_back("Theme has no name section: " + group);
+      continue;
+    }
+    GKeyFile *values = g_key_file_new();
+    gsize key_count = 0;
+    gchar **keys = g_key_file_get_keys(file, group.c_str(), &key_count, nullptr);
+    for (gsize key_index = 0; key_index < key_count; ++key_index) {
+      const std::string key = keys[key_index];
+      if (split == std::string::npos && key == "name") continue;
+      const std::string section = split == std::string::npos ? "" : group.substr(split + 1);
+      const auto entry = std::find_if(found->store.entries.begin(), found->store.entries.end(),
+          [&section, &key](const auto &value) {
+            return value.definition.key.section == section && value.definition.key.name == key;
+          });
+      if (entry == found->store.entries.end()) {
+        result.warnings.push_back("Unknown or non-inheritable theme setting: [" + group + "] " + key);
+        continue;
+      }
+      gchar *raw = g_key_file_get_value(file, group.c_str(), key.c_str(), nullptr);
+      g_key_file_set_value(values, section.c_str(), key.c_str(), raw);
+      g_free(raw);
+    }
+    std::vector<std::string> warnings;
+    load_settings_store_from_key_file(&found->store, values, &warnings);
+    for (const auto &warning : warnings) result.warnings.push_back(found->name + ": " + warning);
+    g_strfreev(keys);
+    g_key_file_unref(values);
+  }
+  g_strfreev(groups);
+  g_key_file_unref(file);
+  for (const auto &theme : result.themes)
+    if (terminal_key_bindings_conflict(theme.store)) result.warnings.push_back(theme.name + ": Conflicting terminal key bindings");
+  result.loaded = result.warnings.empty();
+  return result;
+}
+
+bool rebase_settings_theme(SettingsStore *store,
+                           std::shared_ptr<const SettingsThemeContext> context) {
+  auto fallbacks = create_theme_settings(context->global);
+  const auto id = selected_settings_theme(*store);
+  const auto found = std::find_if(context->catalog.themes.begin(), context->catalog.themes.end(),
+      [&id](const auto &theme) { return theme.id == id; });
+  const bool resolved = id.empty() || (found != context->catalog.themes.end() && context->catalog.loaded);
+  if (found != context->catalog.themes.end()) {
+    for (auto &entry : fallbacks.entries) {
+      const auto value = std::find_if(found->store.entries.begin(), found->store.entries.end(),
+          [&entry](const auto &candidate) {
+            return candidate.loaded && candidate.definition.key.section == entry.definition.key.section &&
+                candidate.definition.key.name == entry.definition.key.name;
+          });
+      if (value == found->store.entries.end()) continue;
+      entry.value = value->value;
+      entry.validation_error = value->validation_error;
+      entry.invalid_raw_value = value->invalid_raw_value;
+      entry.fallback_source = SettingValueSource::theme;
+      entry.fallback_theme_id = found->id;
+      entry.fallback_theme_name = found->name;
+    }
+  }
+  rebase_settings_store_fallbacks(store, fallbacks);
+  for (auto &entry : store->entries) {
+    if (entry.definition.key.section != "general" || entry.definition.key.name != "theme") continue;
+    entry.validation_error = resolved ? "" : "Unresolved theme: " + id;
+  }
+  store->theme_context = std::move(context);
+  return resolved;
 }
 
 static bool is_connection_only_entry(const SettingEntry &entry) {
@@ -716,6 +876,8 @@ SettingsStore create_default_settings(TerminalDisplaySettings terminal_defaults,
   append_definitions(
       &definitions,
       general_setting_definitions(std::move(default_connection_name)));
+  definitions.push_back({.key = general_theme_setting_key(), .default_value = std::string(),
+                         .retain_invalid = true});
   append_definitions(&definitions, terminal_log_setting_definitions());
   append_definitions(&definitions, terminal_setting_definitions(terminal_defaults));
   append_definitions(&definitions, local_shell_connection_setting_definitions());
@@ -776,14 +938,38 @@ load_settings(const SettingsLoadOptions &options, gdouble default_terminal_font_
       .warnings = {},
   };
 
+  auto context = std::make_shared<SettingsThemeContext>();
+  context->global = create_global_default_settings(
+      default_terminal_display_settings(default_terminal_font_size_dip));
   if (options.global_config_path.has_value()) {
-    SettingsLoadResult global =
-        load_global_settings(options.global_config_path.value(),
-                             default_terminal_font_size_dip);
-    rebase_settings_store_fallbacks(&result.store, global.store);
+    auto global = load_global_settings(*options.global_config_path, default_terminal_font_size_dip);
+    context->global = std::move(global.store);
+    context->global_path = *options.global_config_path;
+    result.loaded = global.loaded;
     result.warnings.insert(result.warnings.end(), global.warnings.begin(),
                            global.warnings.end());
   }
+  context->theme_path = options.theme_config_path.value_or(
+      options.global_config_path ? options.global_config_path->parent_path() / "theme.ini" : std::filesystem::path());
+  if (!context->theme_path.empty()) {
+    context->catalog = load_settings_themes(context->theme_path, context->global);
+    result.warnings.insert(result.warnings.end(), context->catalog.warnings.begin(), context->catalog.warnings.end());
+  }
+  // Resolve selection before applying connection/startup values. Loading these
+  // layers into an isolated store keeps their explicit values above the theme.
+  auto overrides = result.store;
+  for (const auto &path : {options.config_path, options.startup_config_path}) {
+    if (!path) continue;
+    std::vector<std::string> warnings;
+    load_settings_file(&overrides, *path, false, false, nullptr, &warnings);
+  }
+  for (auto &entry : result.store.entries) {
+    if (entry.definition.key.section == "general" && entry.definition.key.name == "theme") {
+      for (const auto &value : overrides.entries)
+        if (value.definition.key.section == "general" && value.definition.key.name == "theme") entry = value;
+    }
+  }
+  const bool theme_resolved = rebase_settings_theme(&result.store, context);
   if (options.config_path.has_value()) {
     const SettingsStore previous = result.store;
     std::vector<MacroRule> macros;
@@ -809,6 +995,14 @@ load_settings(const SettingsLoadOptions &options, gdouble default_terminal_font_
     result.loaded = loaded && result.loaded;
     resolve_terminal_key_binding_conflict(&result.store, previous,
                                           &result.warnings);
+  }
+
+  // Loading the reference clears parsing errors, so restore unresolved status
+  // after all explicit layers have been read.
+  rebase_settings_theme(&result.store, context);
+  if (!theme_resolved) {
+    result.loaded = false;
+    result.warnings.push_back("Unresolved theme: " + selected_settings_theme(result.store));
   }
 
   mark_settings_store_clean(&result.store);
@@ -923,6 +1117,199 @@ SettingsSaveResult save_new_window_connection(
     set_explicit_setting_value(&store, key, SettingValue{connection});
   }
   return save_application_setting_keys(store, global_config_path, {key});
+}
+
+static SettingsFileSnapshot settings_file_snapshot(const std::filesystem::path &path) {
+  SettingsFileSnapshot snapshot{.path = path, .contents = std::nullopt};
+  gchar *contents = nullptr;
+  gsize size = 0;
+  GError *error = nullptr;
+  if (g_file_get_contents(path.c_str(), &contents, &size, &error)) {
+    snapshot.contents = std::string(contents, size);
+    g_free(contents);
+  } else if (!g_error_matches(error, G_FILE_ERROR, G_FILE_ERROR_NOENT)) {
+    snapshot.readable = false;
+  }
+  g_clear_error(&error);
+  return snapshot;
+}
+
+static bool settings_file_unchanged(const SettingsFileSnapshot &snapshot) {
+  const auto current = settings_file_snapshot(snapshot.path);
+  return snapshot.readable && current.readable && snapshot.contents == current.contents;
+}
+
+SettingsEditSession begin_settings_edit(const std::filesystem::path &global_path,
+    const std::filesystem::path &theme_path, gdouble font_size) {
+  SettingsEditSession session;
+  session.global_file = settings_file_snapshot(global_path);
+  session.theme_file = settings_file_snapshot(theme_path);
+  auto global = load_global_settings(global_path, font_size);
+  session.global = std::move(global.store);
+  session.catalog = load_settings_themes(theme_path, session.global);
+  session.warnings = std::move(global.warnings);
+  session.warnings.insert(session.warnings.end(), session.catalog.warnings.begin(), session.catalog.warnings.end());
+  session.loaded = global.loaded && session.catalog.loaded &&
+      settings_file_unchanged(session.global_file) && settings_file_unchanged(session.theme_file);
+  if (!session.loaded && session.warnings.empty()) session.warnings.push_back("Configuration changed while opening the editor");
+  return session;
+}
+
+bool explicit_settings_equal(const SettingsStore &left, const SettingsStore &right) {
+  const auto matches = [](const auto &source, const auto &target) {
+    for (const auto &entry : source.entries) {
+      if (!entry.loaded) continue;
+      const auto found = std::find_if(target.entries.begin(), target.entries.end(), [&entry](const auto &other) {
+        return other.definition.key.section == entry.definition.key.section && other.definition.key.name == entry.definition.key.name;
+      });
+      if (found == target.entries.end() || !found->loaded || entry.value != found->value ||
+          entry.invalid_raw_value != found->invalid_raw_value || entry.validation_error != found->validation_error) return false;
+    }
+    return true;
+  };
+  return matches(left, right) && matches(right, left);
+}
+
+bool settings_themes_equal(const SettingsThemeCatalog &left, const SettingsThemeCatalog &right) {
+  if (left.themes.size() != right.themes.size()) return false;
+  for (std::size_t index = 0; index < left.themes.size(); ++index) {
+    const auto &a = left.themes[index];
+    const auto &b = right.themes[index];
+    if (a.id != b.id || a.name != b.name || !explicit_settings_equal(a.store, b.store)) return false;
+  }
+  return true;
+}
+
+bool settings_theme_is_resolved(const SettingsStore &store) {
+  const auto selected = selected_settings_theme(store);
+  if (selected.empty()) return true;
+  const auto context = store.theme_context;
+  return context && context->catalog.loaded && std::any_of(context->catalog.themes.begin(), context->catalog.themes.end(),
+      [&selected](const auto &theme) { return theme.id == selected; });
+}
+
+bool settings_theme_inputs_unchanged(const SettingsStore &store) {
+  const auto context = store.theme_context;
+  if (!context) return true;
+  if (!context->global_path.empty()) {
+    const auto global = load_global_settings(context->global_path, 12);
+    if (!global.loaded || !explicit_settings_equal(global.store, context->global)) return false;
+  }
+  if (!selected_settings_theme(store).empty() && !context->theme_path.empty()) {
+    const auto themes = load_settings_themes(context->theme_path, context->global);
+    if (!themes.loaded || !settings_themes_equal(themes, context->catalog)) return false;
+  }
+  return true;
+}
+
+static std::vector<std::string> validate_explicit_settings(const SettingsStore &store) {
+  std::vector<std::string> errors;
+  for (const auto &entry : store.entries) {
+    if (!entry.loaded) continue;
+    std::string reason = entry.validation_error;
+    if (entry.value.index() != entry.definition.default_value.index()) reason = "Invalid setting type";
+    else if (entry.definition.validate) entry.definition.validate(entry.value, &reason);
+    if (!reason.empty()) errors.push_back("[" + entry.definition.key.section + "] " + entry.definition.key.name + ": " + reason);
+  }
+  if (terminal_key_bindings_conflict(store)) errors.push_back("Conflicting terminal key bindings");
+  return errors;
+}
+
+std::vector<std::string> validate_settings_themes(const SettingsThemeCatalog &catalog) {
+  auto errors = catalog.loaded ? std::vector<std::string>() : catalog.warnings;
+  if (!catalog.loaded && errors.empty()) errors.push_back("Theme catalog could not be loaded");
+  std::set<std::string> ids, names;
+  for (const auto &theme : catalog.themes) {
+    if (!theme_id_is_valid(theme.id) || !ids.insert(theme.id).second) errors.push_back("Invalid or duplicate theme ID: " + theme.id);
+    if (trim_ascii_whitespace(theme.name).empty() || !names.insert(trim_ascii_whitespace(theme.name)).second)
+      errors.push_back("Theme names must be nonblank and unique");
+    for (const auto &entry : theme.store.entries)
+      if (!setting_is_inheritable(entry.definition.key)) errors.push_back("Non-inheritable theme setting: " + entry.definition.key.name);
+    const auto values = validate_explicit_settings(theme.store);
+    for (const auto &error : values) errors.push_back(theme.name + ": " + error);
+  }
+  return errors;
+}
+
+static GKeyFile *serialize_themes(const SettingsThemeCatalog &catalog) {
+  GKeyFile *file = g_key_file_new();
+  for (const auto &theme : catalog.themes) {
+    const auto group = "theme." + theme.id;
+    g_key_file_set_string(file, group.c_str(), "name", theme.name.c_str());
+    for (auto entry : theme.store.entries) {
+      if (!entry.loaded) continue;
+      entry.definition.key.section = group + "." + entry.definition.key.section;
+      set_key_file_value(file, entry);
+    }
+  }
+  return file;
+}
+
+SettingsEditResult save_settings_edit(SettingsEditSession *session,
+    const SettingsStore &global, const SettingsThemeCatalog &catalog) {
+  SettingsEditResult result;
+  if (!session->loaded) {
+    result.warnings = session->warnings;
+    return result;
+  }
+  result.warnings = validate_explicit_settings(global);
+  const auto errors = validate_settings_themes(catalog);
+  result.warnings.insert(result.warnings.end(), errors.begin(), errors.end());
+  if (!result.warnings.empty()) return result;
+  const auto save_file = [&result](SettingsFileSnapshot *snapshot, GKeyFile *file) {
+    if (!settings_file_unchanged(*snapshot)) {
+      g_key_file_unref(file);
+      result.warnings.push_back("Configuration changed outside the editor: " + snapshot->path.string());
+      return SettingsFileSaveStatus::failed;
+    }
+    const auto saved = write_global_settings_key_file(file, snapshot->path);
+    result.warnings.insert(result.warnings.end(), saved.warnings.begin(), saved.warnings.end());
+    if (!saved.saved) return SettingsFileSaveStatus::failed;
+    *snapshot = settings_file_snapshot(snapshot->path);
+    return SettingsFileSaveStatus::saved;
+  };
+  if (!explicit_settings_equal(global, session->global)) {
+    auto previous_defaults = session->global;
+    auto edited_defaults = global;
+    const auto application_entry = [](const auto &entry) { return !setting_is_inheritable(entry.definition.key); };
+    std::erase_if(previous_defaults.entries, application_entry);
+    std::erase_if(edited_defaults.entries, application_entry);
+    const bool defaults_changed = !explicit_settings_equal(previous_defaults, edited_defaults);
+    // Keep the existing contracts: editing connection defaults normalizes the
+    // file; application-only edits preserve unrelated keys and comments.
+    GKeyFile *file = defaults_changed ? serialize_settings(global, true) : g_key_file_new();
+    if (!defaults_changed && session->global_file.contents)
+      g_key_file_load_from_data(file, session->global_file.contents->data(), session->global_file.contents->size(),
+                               G_KEY_FILE_KEEP_COMMENTS, nullptr);
+    for (const auto &entry : global.entries) {
+      if (is_connection_only_entry(entry)) continue;
+      if (entry.loaded) set_key_file_value(file, entry);
+      else g_key_file_remove_key(file, entry.definition.key.section.c_str(), entry.definition.key.name.c_str(), nullptr);
+    }
+    gsize group_count = 0;
+    gchar **groups = g_key_file_get_groups(file, &group_count);
+    for (gsize index = 0; index < group_count; ++index) {
+      gsize key_count = 0;
+      gchar **keys = g_key_file_get_keys(file, groups[index], &key_count, nullptr);
+      g_strfreev(keys);
+      if (key_count == 0) g_key_file_remove_group(file, groups[index], nullptr);
+    }
+    g_strfreev(groups);
+    result.global = save_file(&session->global_file, file);
+    if (result.global == SettingsFileSaveStatus::saved) {
+      session->global = global;
+      mark_settings_store_clean(&session->global);
+    }
+  }
+  if (!settings_themes_equal(catalog, session->catalog)) {
+    result.themes = save_file(&session->theme_file, serialize_themes(catalog));
+    if (result.themes == SettingsFileSaveStatus::saved) {
+      session->catalog = catalog;
+      for (auto &theme : session->catalog.themes) mark_settings_store_clean(&theme.store);
+    }
+  }
+  result.complete = result.global != SettingsFileSaveStatus::failed && result.themes != SettingsFileSaveStatus::failed;
+  return result;
 }
 
 const char *terminal_backspace_code_to_string(TerminalBackspaceCode code) {

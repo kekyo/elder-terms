@@ -40,6 +40,39 @@ const japaneseTestEnvironment = {
   LC_ALL: 'ja_JP.UTF-8',
 } as const;
 
+it('retains an unresolved theme reference for repair before allowing launch', async (context) => {
+  let path = '';
+  await runLauncherGtkTest(
+    context,
+    async (connections) => {
+      path = join(connections, 'Missing theme.ini');
+      await writeFile(path, '[general]\ntheme=missing\n');
+    },
+    async ({ app }) => {
+      await selectConnectionRow(app, await app.getById('connection_list'), 0);
+      const theme = expectElementKind(
+        await app.getById('settings_general_theme_combo'),
+        'comboBox'
+      );
+      expect(
+        (await (await app.getById('connect_button')).info()).states
+      ).not.toContain('sensitive');
+      expect(await readFile(path, 'utf8')).toContain('theme=missing');
+      await theme.selectChildAt(0);
+      await expectElementKind(
+        await app.getById('apply_button'),
+        'button'
+      ).click();
+      await waitForResult(async () => {
+        expect(await readFile(path, 'utf8')).toContain('theme=\n');
+        expect(
+          (await (await app.getById('connect_button')).info()).states
+        ).toContain('sensitive');
+      });
+    }
+  );
+});
+
 const selectConnectionRow = async (
   app: GtkApp,
   element: GtkWidgetElement,
@@ -165,16 +198,12 @@ const waitForWindowCount = async (
 };
 
 const openGlobalDefaults = async (app: GtkApp) => {
+  await openApplicationDialogPage(app, 'application_settings_menu_item');
   await expectElementKind(
-    await app.getById('global_defaults_button'),
-    'button'
-  ).click();
-  await waitForWindowCount(app, 2);
-  const dialog = expectElementKind(
-    await app.getById('global_defaults_dialog'),
-    'window'
-  );
-  return dialog;
+    await app.getById('application_dialog_notebook'),
+    'tabList'
+  ).selectChildAt(1);
+  return expectElementKind(await app.getById('application_dialog'), 'window');
 };
 
 const openApplicationDialogPage = async (
@@ -640,13 +669,13 @@ describe('elder-terms main window', () => {
     {
       language: 'English',
       env: {},
-      tabNames: ['Application', 'About'],
+      tabNames: ['Application', 'Connection defaults', 'Themes', 'About'],
       newWindowLabel: 'Use for "New Window"',
     },
     {
       language: 'Japanese',
       env: japaneseTestEnvironment,
-      tabNames: ['アプリケーション', '情報'],
+      tabNames: ['アプリケーション', '接続の既定値', 'テーマ', '情報'],
       newWindowLabel: '"New Window"で使用',
     },
   ]) {
@@ -681,9 +710,9 @@ describe('elder-terms main window', () => {
             );
             const bounds = await dialog.bounds();
             expect(bounds.width).toBeGreaterThanOrEqual(600);
-            expect(bounds.width).toBeLessThanOrEqual(660);
+            expect(bounds.width).toBeLessThanOrEqual(1040);
             expect(bounds.height).toBeGreaterThanOrEqual(340);
-            expect(bounds.height).toBeLessThanOrEqual(420);
+            expect(bounds.height).toBeLessThanOrEqual(760);
 
             const tabs = expectElementKind(
               await app.getById('application_dialog_notebook'),
@@ -729,8 +758,9 @@ describe('elder-terms main window', () => {
       },
       async ({ app, configHome }) => {
         expect(
-          (await (await app.getById('global_defaults_button')).info()).name
-        ).toBe('Connection defaults');
+          (await (await app.getById('application_settings_menu_item')).info())
+            .name
+        ).toBe('Application settings');
         await openApplicationDialogPage(app, 'application_settings_menu_item');
         await expectElementKind(
           await app.getById('application_settings_startup_mode_combo'),
@@ -951,8 +981,9 @@ describe('elder-terms main window', () => {
       },
       async ({ app }) => {
         expect(
-          (await (await app.getById('global_defaults_button')).info()).name
-        ).toBe('接続の既定値');
+          (await (await app.getById('application_settings_menu_item')).info())
+            .name
+        ).toBe('アプリケーション設定');
       }
     );
   });
@@ -969,8 +1000,9 @@ describe('elder-terms main window', () => {
       },
       async ({ app }) => {
         expect(
-          (await (await app.getById('global_defaults_button')).info()).name
-        ).toBe('Connection defaults');
+          (await (await app.getById('application_settings_menu_item')).info())
+            .name
+        ).toBe('Application settings');
       },
       {
         args: [],
@@ -997,8 +1029,9 @@ describe('elder-terms main window', () => {
           ).text()
         ).toBe('接続を選択するか、新しい接続を作成してください。');
         expect(
-          (await (await app.getById('global_defaults_button')).info()).name
-        ).toBe('接続の既定値');
+          (await (await app.getById('application_settings_menu_item')).info())
+            .name
+        ).toBe('アプリケーション設定');
         expect((await (await app.getById('apply_button')).info()).name).toBe(
           '保存'
         );
@@ -1018,7 +1051,7 @@ describe('elder-terms main window', () => {
 
         const dialog = await openGlobalDefaults(app);
         await waitForResult(async () => {
-          expect((await dialog.x11Info()).title).toBe('接続の既定値');
+          expect((await dialog.x11Info()).title).toBe('アプリケーション');
           expect(await visibleSettingsTabNames(app, 'global_settings')).toEqual(
             [
               '一般',
@@ -1042,10 +1075,11 @@ describe('elder-terms main window', () => {
           );
         });
         expect(
-          (await (await app.getById('global_defaults_save_button')).info()).name
+          (await (await app.getById('application_dialog_save_button')).info())
+            .name
         ).toBe('保存');
         const cancel = expectElementKind(
-          await app.getById('global_defaults_cancel_button'),
+          await app.getById('application_dialog_cancel_button'),
           'button'
         );
         expect((await cancel.info()).name).toBe('キャンセル');
@@ -1096,8 +1130,9 @@ describe('elder-terms main window', () => {
           await readFile(join(configHome, 'elder-terms', 'global.ini'), 'utf8')
         ).toContain('ui_language=ja');
         expect(
-          (await (await app.getById('global_defaults_button')).info()).name
-        ).toBe('Connection defaults');
+          (await (await app.getById('application_settings_menu_item')).info())
+            .name
+        ).toBe('Application settings');
       }
     );
   });
@@ -1114,8 +1149,9 @@ describe('elder-terms main window', () => {
       },
       async ({ app }) => {
         expect(
-          (await (await app.getById('global_defaults_button')).info()).name
-        ).toBe('接続の既定値');
+          (await (await app.getById('application_settings_menu_item')).info())
+            .name
+        ).toBe('アプリケーション設定');
         await openApplicationDialogPage(app, 'application_settings_menu_item');
         const language = expectElementKind(
           await app.getById('application_settings_ui_language_combo'),
@@ -1141,8 +1177,9 @@ describe('elder-terms main window', () => {
 
         await waitForResult(async () => {
           expect(
-            (await (await app.getById('global_defaults_button')).info()).name
-          ).toBe('Connection defaults');
+            (await (await app.getById('application_settings_menu_item')).info())
+              .name
+          ).toBe('Application settings');
         });
       },
       {
@@ -1330,7 +1367,7 @@ describe('elder-terms main window', () => {
         await expectSensitive(settings);
         await expectInsensitive(main);
         await expectElementKind(
-          await app.getById('global_defaults_cancel_button'),
+          await app.getById('application_dialog_cancel_button'),
           'button'
         ).click();
         await waitForWindowCount(app, 1);
@@ -1376,7 +1413,7 @@ describe('elder-terms main window', () => {
           expect(await x11MapRecorder.focusedWindow()).toBe(dialogWindowId);
         });
         await expectElementKind(
-          await app.getById('global_defaults_cancel_button'),
+          await app.getById('application_dialog_cancel_button'),
           'button'
         ).click();
         await waitForWindowCount(app, 1);
@@ -1397,18 +1434,18 @@ describe('elder-terms main window', () => {
     await runLauncherGtkTest(context, prepareProfiles, async ({ app }) => {
       const dialog = await openGlobalDefaults(app);
       const actionRow = expectElementKind(
-        await app.getById('global_defaults_action_row'),
+        await app.getById('application_dialog_action_row'),
         'container'
       );
       const cancel = expectElementKind(
-        await app.getById('global_defaults_cancel_button'),
+        await app.getById('application_dialog_cancel_button'),
         'button'
       );
       const save = expectElementKind(
-        await app.getById('global_defaults_save_button'),
+        await app.getById('application_dialog_save_button'),
         'button'
       );
-      const initialBounds = await dialog.moveTo(200, 160);
+      const initialBounds = await dialog.moveTo(20, 20);
       const [actionCapture, cancelCapture, saveCapture] = await Promise.all([
         actionRow.capture(),
         cancel.capture(),
@@ -1462,47 +1499,19 @@ describe('elder-terms main window', () => {
           await app.getById('new_button'),
           'button'
         );
-        const globalButton = expectElementKind(
-          await app.getById('global_defaults_button'),
-          'button'
+        const applyButton = await app.getById('apply_button');
+        const launchButton = await app.getById('connect_button');
+        const [newBounds, applyBounds, launchBounds] = await Promise.all([
+          newButton.capture(),
+          applyButton.capture(),
+          launchButton.capture(),
+        ]);
+        expect(newBounds.bounds.x + newBounds.bounds.width).toBeLessThan(
+          applyBounds.bounds.x
         );
-        const applyButton = expectElementKind(
-          await app.getById('apply_button'),
-          'button'
-        );
-        const launchButton = expectElementKind(
-          await app.getById('connect_button'),
-          'button'
-        );
-        expect((await globalButton.info()).name).toBe('Connection defaults');
-
-        await waitForResult(async () => {
-          const [newCapture, globalCapture, applyCapture, launchCapture] =
-            await Promise.all([
-              newButton.capture(),
-              globalButton.capture(),
-              applyButton.capture(),
-              launchButton.capture(),
-            ]);
-          const newBounds = newCapture.bounds;
-          const globalBounds = globalCapture.bounds;
-          const applyBounds = applyCapture.bounds;
-          const launchBounds = launchCapture.bounds;
-          const newToGlobalGap =
-            globalBounds.x - (newBounds.x + newBounds.width);
-          const globalToApplyGap =
-            applyBounds.x - (globalBounds.x + globalBounds.width);
-          expect(newBounds.x + newBounds.width).toBeLessThanOrEqual(
-            globalBounds.x
-          );
-          expect(globalBounds.x + globalBounds.width).toBeLessThan(
-            applyBounds.x
-          );
-          expect(applyBounds.x + applyBounds.width).toBeLessThanOrEqual(
-            launchBounds.x
-          );
-          expect(globalToApplyGap).toBeGreaterThan(newToGlobalGap);
-        });
+        expect(
+          applyBounds.bounds.x + applyBounds.bounds.width
+        ).toBeLessThanOrEqual(launchBounds.bounds.x);
 
         await openGlobalDefaults(app);
         expectElementKind(
@@ -1583,7 +1592,7 @@ describe('elder-terms main window', () => {
         expect(Number(await width.text())).toBe(91);
         await width.setText('92');
         await expectElementKind(
-          await app.getById('global_defaults_cancel_button'),
+          await app.getById('application_dialog_cancel_button'),
           'button'
         ).click();
         await waitForWindowCount(app, 1);
@@ -1599,7 +1608,7 @@ describe('elder-terms main window', () => {
         );
         expect(Number(await reopenedWidth.text())).toBe(91);
         await expectElementKind(
-          await app.getById('global_defaults_cancel_button'),
+          await app.getById('application_dialog_cancel_button'),
           'button'
         ).click();
         await waitForWindowCount(app, 1);
@@ -1635,7 +1644,7 @@ describe('elder-terms main window', () => {
           'entry'
         );
         const save = expectElementKind(
-          await app.getById('global_defaults_save_button'),
+          await app.getById('application_dialog_save_button'),
           'button'
         );
         expect(Number(await width.text())).toBe(90);
@@ -1679,7 +1688,7 @@ describe('elder-terms main window', () => {
         expect(await basePath.text()).toBe('file:///tmp/original');
         await basePath.setText('');
         const clearSave = expectElementKind(
-          await app.getById('global_defaults_save_button'),
+          await app.getById('application_dialog_save_button'),
           'button'
         );
         await waitForResult(async () => {
@@ -1694,7 +1703,7 @@ describe('elder-terms main window', () => {
     );
   });
 
-  it('keeps the global defaults draft open when saving fails', async (context) => {
+  it('keeps unreadable global defaults open without allowing an overwrite', async (context) => {
     await runLauncherGtkTest(
       context,
       async (connections) => {
@@ -1709,33 +1718,24 @@ describe('elder-terms main window', () => {
           'entry'
         );
         const save = expectElementKind(
-          await app.getById('global_defaults_save_button'),
+          await app.getById('application_dialog_save_button'),
           'button'
         );
         await width.setText('95');
-        await waitForResult(async () => {
-          await expectSensitive(save);
-        });
-        await save.click();
-
-        await waitForWindowCount(app, 3);
-        expectElementKind(
-          await app.getById('operation_error_dialog'),
-          'infoBar'
-        );
-        expectElementKind(
-          await app.getById('global_defaults_dialog'),
-          'window'
-        );
-        expect(
-          await app.findById('ui_language_restart_dialog')
-        ).toBeUndefined();
-        expect(await width.text()).toBe('95');
         await expectInsensitive(save);
-        await app.input.pressKey('Escape');
-        await waitForWindowCount(app, 2);
+        expectElementKind(await app.getById('application_dialog'), 'window');
         expect(await width.text()).toBe('95');
-        await expectSensitive(save);
+        expect(
+          await expectElementKind(
+            await app.getById('settings_save_status'),
+            'label'
+          ).text()
+        ).toContain('failed to read');
+        await expectElementKind(
+          await app.getById('application_dialog_cancel_button'),
+          'button'
+        ).click();
+        await waitForWindowCount(app, 1);
       }
     );
   });
@@ -1804,7 +1804,7 @@ describe('elder-terms main window', () => {
         await selectSettingsTab(app, 'global_settings', 'General');
         await globalAutoClose.selectChildAt(1);
         const globalSave = expectElementKind(
-          await app.getById('global_defaults_save_button'),
+          await app.getById('application_dialog_save_button'),
           'button'
         );
         await waitForResult(async () => {
@@ -2656,7 +2656,7 @@ ${mode === 'clean' ? "await writeFile(args[0], '[terminal]\\nwidth=95\\n');" : '
       );
       await selectSettingsTab(app, 'global_settings', 'Terminal');
       await expectElementKind(
-        await app.getById('global_defaults_cancel_button'),
+        await app.getById('application_dialog_cancel_button'),
         'button'
       ).click();
       await waitForWindowCount(app, 1);

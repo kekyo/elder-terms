@@ -97,6 +97,9 @@ std::string setting_choice_label(const SettingKey &key,
 
 std::string inherited_setting_label(const std::string &value,
                                     SettingValueSource source);
+/** Formats an inherited value with its global/built-in source or named theme. */
+std::string setting_fallback_label(const SettingsStore &store, const SettingKey &key,
+                                   const std::string &value);
 
 std::string settings_validation_message(const std::string &reason);
 

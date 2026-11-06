@@ -268,6 +268,8 @@ export interface TerminalGridSize {
  * Launch options forwarded by runGtkTest.
  */
 export interface RunGtkTestOptions {
+  /** Whether this test needs the visible Xvfb tray host. Defaults to true. */
+  readonly trayHost?: boolean;
   /** Use a disposable display when testing a window manager or compositor. */
   readonly isolatedDisplay?: boolean;
   /** Environment overrides, including the isolated XDG config home. */
@@ -726,7 +728,7 @@ export const runGtkTest = async (
             maxIdleTotal: 8,
             type: 'xvfb',
           },
-      xvfbTrayHost: true,
+      xvfbTrayHost: options?.trayHost ?? true,
     });
     const apps: GtkApp[] = [];
 

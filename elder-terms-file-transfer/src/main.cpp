@@ -670,6 +670,8 @@ int main(int argc, char **argv) {
     std::cerr << warning << '\n';
   }
 
+  if (!elder_terms::settings_theme_is_resolved(settings_result.store)) return 1;
+
   (void)elder_terms::initialize_connection_desktop_session(
       &settings_result.store, launch_options.config_path,
       launch_options.startup_config_path, argv[0]);

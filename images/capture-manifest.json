@@ -50,15 +50,33 @@
     {
       "file": "launcher-settings.png",
       "scope": "window",
-      "capturedAt": "2026-10-23T00:30:02.798Z",
+      "capturedAt": "2026-11-06T09:11:37.473Z",
       "bounds": {
-        "x": 4826,
-        "y": 1353,
-        "width": 1028,
-        "height": 658
+        "x": 0,
+        "y": 0,
+        "width": 1050,
+        "height": 760
       },
       "description": "Launcher with six sample connection profiles; General tab of Local terminal.",
-      "sha256": "9974274a973f8e65b98dd5c247ffc535de210f58ad91db7835c4ab61180a86e4"
+      "sha256": "d001fdcc4ff55305e5c809d83b7afc51cb07584505c0007253ea15a60575cde5",
+      "application": {
+        "version": "1.12.171",
+        "sourceCommit": "3a7895b1cfc7909bfdb2ec3e30ffce28e0420a18",
+        "sourceDirty": true,
+        "buildCommand": "make build"
+      },
+      "environment": {
+        "display": ":645",
+        "screen": "1600x1000x24",
+        "scale": 1,
+        "gtkTheme": "Yaru-dark",
+        "uiFont": "Ubuntu Sans 11",
+        "uiLanguage": "en",
+        "locale": "C.UTF-8",
+        "session": "X11 (Xvfb)",
+        "isolatedSettings": true,
+        "isolatedDBus": true
+      }
     },
     {
       "file": "complex-terminal.png",

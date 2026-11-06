@@ -6,6 +6,7 @@
 #include "settings-presentation.h"
 
 #include <array>
+#include <algorithm>
 #include <string>
 
 #define GETTEXT_PACKAGE "elder-terms"
@@ -27,6 +28,7 @@ struct SettingChoiceEntry {
 };
 
 static constexpr std::array setting_labels{
+    SettingLabelEntry{"general", "theme", N_("Theme")},
     SettingLabelEntry{"ssh_proxy", "address", N_("Address")},
     SettingLabelEntry{"ssh_proxy", "port", N_("Port")},
     SettingLabelEntry{"ssh_proxy", "username", N_("User name")},
@@ -531,6 +533,22 @@ std::string inherited_setting_label(const std::string &value,
   const std::string result = label;
   g_free(label);
   return result;
+}
+
+std::string setting_fallback_label(const SettingsStore &store, const SettingKey &key,
+                                   const std::string &value) {
+  const auto found = std::find_if(store.entries.begin(), store.entries.end(), [&key](const auto &entry) {
+    return entry.definition.key.section == key.section && entry.definition.key.name == key.name;
+  });
+  if (found != store.entries.end() && found->fallback_source == SettingValueSource::theme) {
+    gchar *label = value.empty()
+        ? g_strdup_printf(_("Theme: %s"), found->fallback_theme_name.c_str())
+        : g_strdup_printf(_("%s (theme: %s)"), value.c_str(), found->fallback_theme_name.c_str());
+    const std::string text = label;
+    g_free(label);
+    return text;
+  }
+  return inherited_setting_label(value, setting_fallback_source(store, key));
 }
 
 std::string settings_validation_message(const std::string &reason) {
