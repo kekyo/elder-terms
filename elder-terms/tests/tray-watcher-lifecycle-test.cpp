@@ -376,6 +376,12 @@ static cardio::promise<void> exercise_async(
       g_variant_unref(group_items);
       g_variant_unref(group);
 
+      // An unrelated refresh may arrive after the host reads the menu and
+      // before it dispatches the user's selection.
+      elder_terms::update_tray_connections(backend, {
+          {"first", "First_connection", "Ctrl+Alt+X", "default"},
+          {"second", "Renamed second", "", "default"},
+      });
       GVariant *event = co_await call_async(
           first->connection, destination, "/StatusNotifierMenu",
           "com.canonical.dbusmenu", "Event",

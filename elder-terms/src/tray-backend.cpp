@@ -1531,15 +1531,24 @@ void update_tray_connections(TrayBackendState *state,
                              std::vector<TrayConnectionItem> connections) {
   if (state == nullptr || state->implementation->destroyed) return;
   const auto implementation = state->implementation;
-  for (const auto &entry : implementation->connections)
+  const auto previous = std::move(implementation->connections);
+  for (const auto &entry : previous)
     (void)entry->cancellation.cancel();
   implementation->connections.clear();
   implementation->connections.reserve(connections.size());
   for (auto &item : connections) {
-    if (implementation->next_connection_id >
-        std::numeric_limits<int>::max()) break;
     auto entry = std::make_shared<TrayConnectionEntry>();
-    entry->id = static_cast<int>(implementation->next_connection_id++);
+    const auto existing = std::find_if(previous.begin(), previous.end(),
+        [&item](const auto &candidate) { return candidate->item.key == item.key; });
+    // Hosts may dispatch a selection from the preceding layout. Keep its ID
+    // while the connection identity survives, but never reuse a removed ID.
+    if (existing != previous.end()) {
+      entry->id = (*existing)->id;
+    } else {
+      if (implementation->next_connection_id >
+          std::numeric_limits<int>::max()) break;
+      entry->id = static_cast<int>(implementation->next_connection_id++);
+    }
     entry->item = std::move(item);
     set_connection_entry_pixels(entry.get(), default_connection_icon());
     implementation->connections.push_back(std::move(entry));
