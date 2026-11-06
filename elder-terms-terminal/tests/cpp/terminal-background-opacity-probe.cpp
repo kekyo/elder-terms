@@ -186,7 +186,7 @@ int main(int argc, char **argv) {
   assert(fixture.runtime);
   // Observe after GTK draws a completed presentation, without timed sleeps.
   g_signal_connect_after(terminal_runtime_widget(fixture.runtime), "draw",
-      G_CALLBACK(+[](GtkWidget *, cairo_t *, gpointer context) -> gboolean {
+      G_CALLBACK(+[](GtkWidget *, cairo_t *, gpointer context) {
         auto *fixture = static_cast<Fixture *>(context);
         if (!fixture->observation) fixture->observation = g_idle_add(observe, fixture);
         return FALSE;
