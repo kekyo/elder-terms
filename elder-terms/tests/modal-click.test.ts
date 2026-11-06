@@ -35,7 +35,7 @@ describe('Modal owner clicks', () => {
         );
         await owner.moveTo(20, 20);
         const ownerId = (await owner.x11Info()).windowId;
-        const button = await app.getById('global_defaults_button');
+        const button = await app.getById('application_menu_button');
         const buttonBounds = (await button.capture()).bounds;
         await app.input.moveMouseTo(
           Math.round(buttonBounds.x + buttonBounds.width / 2),
@@ -43,8 +43,16 @@ describe('Modal owner clicks', () => {
         );
         // First prove the same native input opens a normal, sensitive button.
         await x11MapRecorder.clickWindowWithoutFocus(ownerId);
+        await expectElementKind(
+          await app.getById('application_settings_menu_item'),
+          'menuItem'
+        ).click();
+        await expectElementKind(
+          await app.getById('application_dialog_notebook'),
+          'tabList'
+        ).selectChildAt(1);
         const dialog = expectElementKind(
-          await app.getById('global_defaults_dialog'),
+          await app.getById('application_dialog'),
           'window'
         );
         await dialog.moveTo(420, 100);
@@ -55,6 +63,7 @@ describe('Modal owner clicks', () => {
           expect(await x11MapRecorder.focusedWindow()).toBe(dialogId)
         );
         const environment = { ...process.env, ...(await app.environment()) };
+        await app.input.moveMouseTo(0, 0);
         const bounds = await dialog.bounds();
         const area = {
           x: bounds.x + 30,
@@ -62,7 +71,14 @@ describe('Modal owner clicks', () => {
           width: 240,
           height: 15,
         };
-        const screen = PNG.sync.read((await app.capture()).image);
+        // Moving the larger dialog schedules GTK redraws of both windows.
+        // Wait for complete consecutive captures before fixing the video reference.
+        const screen = await waitForResult(async () => {
+          const first = await app.capture();
+          const second = await app.capture();
+          expect(first.image.equals(second.image)).toBe(true);
+          return PNG.sync.read(second.image);
+        });
         const reference = Buffer.alloc(area.width * area.height * 3);
         for (let y = 0; y < area.height; y++) {
           for (let x = 0; x < area.width; x++) {
@@ -79,6 +95,14 @@ describe('Modal owner clicks', () => {
           )
         );
         await mkdir(directory, { recursive: true });
+        await writeFile(
+          join(directory, 'reference-screen.png'),
+          PNG.sync.write(screen)
+        );
+        await writeFile(
+          join(directory, 'area.json'),
+          JSON.stringify({ area, bounds })
+        );
         const recorder = spawn(
           'ffmpeg',
           [
@@ -211,7 +235,7 @@ describe('Modal owner clicks', () => {
             await expectVideo(`dialog raised after native click at ${y}`, true);
           }
           await expectElementKind(
-            await app.getById('global_defaults_cancel_button'),
+            await app.getById('application_dialog_cancel_button'),
             'button'
           ).click();
           await waitForResult(async () => {

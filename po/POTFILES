@@ -1,6 +1,7 @@
 shared/src/settings-widget/settings-presentation.cpp
 shared/src/settings-widget/settings-widget.cpp
 shared/src/settings-widget/application-settings-widget.cpp
+shared/src/settings-widget/settings-preferences-widget.cpp
 shared/src/settings-widget/hyperlink-settings-editor.cpp
 elder-terms/src/main.cpp
 elder-terms/src/main-window.ui

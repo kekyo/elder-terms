@@ -3327,3 +3327,30 @@ msgstr "TELNETセッションが終了しました。"
 #: elder-terms-terminal/src/main.cpp
 msgid "Serial connection closed. Waiting for the device to become available."
 msgstr "シリアル接続が終了しました。機器が利用可能になるまで待機しています。"
+
+msgid "Themes"
+msgstr "テーマ"
+
+msgid "Theme name"
+msgstr "テーマ名"
+
+msgid "Theme preview"
+msgstr "テーマのプレビュー"
+
+msgid "New theme"
+msgstr "新しいテーマ"
+
+msgid "No connections use this theme"
+msgstr "このテーマを使用する接続はありません"
+
+msgid "Current connection draft"
+msgstr "編集中の接続"
+
+msgid "Saved"
+msgstr "保存済み"
+
+msgid "Not saved"
+msgstr "未保存"
+
+msgid "Unchanged"
+msgstr "変更なし"

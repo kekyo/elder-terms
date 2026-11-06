@@ -155,6 +155,7 @@ elder_terms_shared_sources = elder_terms_shared_resources + elder_terms_noto_pre
   'src/settings-widget/settings-presentation.cpp',
   'src/settings-widget/settings-validation.cpp',
   'src/settings-widget/application-settings-widget.cpp',
+  'src/settings-widget/settings-preferences-widget.cpp',
   'src/settings-widget/connection-icon-editor.cpp',
   'src/settings-widget/connection-icon-picker.cpp',
   'src/settings-widget/hyperlink-settings-editor.cpp',
@@ -401,6 +402,9 @@ test('elder-terms-shared-test', elder_terms_shared_test)
 named_settings_theme_test = executable('named-settings-theme-test',
   'tests/named-settings-theme-test.cpp', dependencies: elder_terms_dep)
 test('named-settings-theme-test', named_settings_theme_test)
+settings_edit_test = executable('settings-edit-test',
+  'tests/settings-edit-test.cpp', dependencies: elder_terms_dep)
+test('settings-edit-test', settings_edit_test)
 
 connection_icon_test = executable('connection-icon-test',
   'tests/connection-icon-test.cpp', dependencies: elder_terms_dep)

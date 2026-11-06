@@ -189,8 +189,7 @@ struct SettingsLoadOptions {
 struct SettingsLoadResult {
   /** Loaded store, with defaults applied for missing or invalid values. */
   SettingsStore store;
-  /** True when every requested connection and startup INI file was read
-   * successfully. */
+  /** True when requested settings files were read and the selected theme resolved. */
   bool loaded = true;
   /** Non-fatal warnings encountered while loading. */
   std::vector<std::string> warnings;
@@ -271,6 +270,86 @@ ELDER_TERMS_API SettingsThemeCatalog load_settings_themes(
  */
 ELDER_TERMS_API bool rebase_settings_theme(
     SettingsStore *store, std::shared_ptr<const SettingsThemeContext> context);
+
+/** Original bytes for detecting changes to one edited configuration file. */
+struct SettingsFileSnapshot {
+  /** File being edited. */
+  std::filesystem::path path;
+  /** Original contents; absent means the file did not exist. */
+  std::optional<std::string> contents;
+  /** Whether the file could be inspected. */
+  bool readable = true;
+};
+
+/** Saved baselines for independently committing global.ini and theme.ini. */
+struct SettingsEditSession {
+  /** Most recently saved global values. */
+  SettingsStore global;
+  /** Most recently saved theme definitions. */
+  SettingsThemeCatalog catalog;
+  /** Expected global file contents. */
+  SettingsFileSnapshot global_file;
+  /** Expected theme file contents. */
+  SettingsFileSnapshot theme_file;
+  /** False when an input file could not be loaded for editing. */
+  bool loaded = true;
+  /** Read diagnostics. */
+  std::vector<std::string> warnings;
+};
+
+/** Outcome for a single file in a settings save operation. */
+enum class SettingsFileSaveStatus {
+  /** No edits required writing this file. */
+  unchanged,
+  /** The file was successfully replaced. */
+  saved,
+  /** A conflict or write failure left this file unsaved. */
+  failed,
+};
+
+/** Independent file results; a partial success leaves the editor open. */
+struct SettingsEditResult {
+  /** Result for global.ini. */
+  SettingsFileSaveStatus global = SettingsFileSaveStatus::unchanged;
+  /** Result for theme.ini. */
+  SettingsFileSaveStatus themes = SettingsFileSaveStatus::unchanged;
+  /** True when every changed file was saved. */
+  bool complete = false;
+  /** Validation, conflict, or write diagnostics. */
+  std::vector<std::string> warnings;
+};
+
+/**
+ * Starts an editor session without modifying either file.
+ * @param global_path Global configuration path.
+ * @param theme_path Theme configuration path.
+ * @param font_size Built-in terminal font size in DIP.
+ * @returns Saved baselines, expected file bytes and diagnostics.
+ */
+ELDER_TERMS_API SettingsEditSession begin_settings_edit(
+    const std::filesystem::path &global_path, const std::filesystem::path &theme_path,
+    gdouble font_size);
+
+/** @param left First store. @param right Second store.
+ * @returns Whether their explicit registered values match, ignoring inherited values and dirtiness. */
+ELDER_TERMS_API bool explicit_settings_equal(const SettingsStore &left, const SettingsStore &right);
+
+/** @param left First catalog. @param right Second catalog.
+ * @returns Whether IDs, names and explicit settings match in catalog order. */
+ELDER_TERMS_API bool settings_themes_equal(const SettingsThemeCatalog &left, const SettingsThemeCatalog &right);
+
+/** @param catalog Candidate themes. @returns Name, identity and value errors, or an empty vector. */
+ELDER_TERMS_API std::vector<std::string> validate_settings_themes(const SettingsThemeCatalog &catalog);
+
+/**
+ * Validates all drafts and saves changed files against their own baseline.
+ * @param session Saved baselines, advanced only for files successfully saved.
+ * @param global Edited application settings and connection defaults.
+ * @param catalog Edited theme catalog.
+ * @returns Per-file results. Retrying naturally writes only remaining changes.
+ */
+ELDER_TERMS_API SettingsEditResult save_settings_edit(
+    SettingsEditSession *session, const SettingsStore &global, const SettingsThemeCatalog &catalog);
 
 /**
  * Creates a settings store initialized with application defaults.

@@ -10,6 +10,11 @@ import { expect, it } from 'vitest';
 
 const execute = promisify(execFile);
 
+it('saves independent settings files, detects conflicts and retries partial failures', async () => {
+  const result = await execute(fileURLToPath(new URL('../../.build/shared/settings-edit-test', import.meta.url)));
+  expect(result.stdout).toContain('Settings edits passed');
+});
+
 it('resolves theme inheritance, explicit values, startup selection and invalid input', async () => {
   const result = await execute(fileURLToPath(new URL('../../.build/shared/named-settings-theme-test', import.meta.url)));
   expect(result.stdout).toContain('Named settings themes passed');

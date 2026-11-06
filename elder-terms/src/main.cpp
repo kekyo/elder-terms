@@ -34,7 +34,7 @@
 #include <elder-terms/connection-icon.h>
 #include <elder-terms/connection-identity.h>
 #include <elder-terms/connection-desktop.h>
-#include <elder-terms/application-settings-widget.h>
+#include <elder-terms/settings-preferences-widget.h>
 #include <elder-terms/application-version.h>
 #include <elder-terms/localization.h>
 #include <elder-terms/settings/application-settings.h>
@@ -71,7 +71,7 @@ enum class PendingActionKind {
 
 enum class ApplicationDialogPage {
   application = 0,
-  about = 1,
+  about = 3,
 };
 
 struct PendingAction {
@@ -133,8 +133,7 @@ struct ApplicationState {
   std::vector<elder_terms::TrayConnectionItem> tray_connections;
   std::vector<TrayConnectionTarget> tray_connection_targets;
   elder_terms::SettingsWidgetState *settings_widget = nullptr;
-  elder_terms::SettingsWidgetState *global_defaults_widget = nullptr;
-  elder_terms::ApplicationSettingsWidgetState *application_settings_widget =
+  elder_terms::SettingsPreferencesWidget *application_settings_widget =
       nullptr;
   std::filesystem::path connection_directory;
   std::filesystem::path global_config_path;
@@ -164,8 +163,6 @@ struct ApplicationState {
   std::optional<std::filesystem::path> context_connection_path;
   std::string context_connection_name;
   std::optional<std::filesystem::path> delete_connection_path;
-  GtkWidget *global_defaults_dialog = nullptr;
-  GtkWidget *global_defaults_save_button = nullptr;
   GtkWidget *application_dialog = nullptr;
   GtkWidget *application_about_hotkey_status = nullptr;
   GtkWidget *application_dialog_notebook = nullptr;
@@ -431,18 +428,6 @@ static void update_action_sensitivity(ApplicationState *state) {
       state->name_error.empty() ? nullptr : state->name_error.c_str());
 }
 
-static void
-update_global_defaults_save_sensitivity(ApplicationState *state) {
-  if (state->global_defaults_save_button == nullptr) {
-    return;
-  }
-  const bool sensitive =
-      state->global_defaults_widget != nullptr &&
-      elder_terms::settings_widget_is_valid(state->global_defaults_widget) &&
-      elder_terms::settings_widget_is_dirty(state->global_defaults_widget);
-  gtk_widget_set_sensitive(state->global_defaults_save_button, sensitive);
-}
-
 static gboolean on_window_drag_button_press(GtkWidget *,
                                             GdkEventButton *event,
                                             gpointer user_data) {
@@ -459,146 +444,6 @@ static gboolean on_window_drag_button_press(GtkWidget *,
   return GDK_EVENT_STOP;
 }
 
-static void on_global_defaults_dialog_destroy(GtkWidget *,
-                                              gpointer user_data) {
-  auto *state = static_cast<ApplicationState *>(user_data);
-  state->global_defaults_dialog = nullptr;
-  state->global_defaults_save_button = nullptr;
-  if (state->global_defaults_widget != nullptr) {
-    elder_terms::destroy_settings_widget(state->global_defaults_widget);
-    state->global_defaults_widget = nullptr;
-  }
-}
-
-static void close_global_defaults_dialog(ApplicationState *state) {
-  if (state != nullptr && state->global_defaults_dialog != nullptr) {
-    gtk_widget_destroy(state->global_defaults_dialog);
-  }
-}
-
-static void on_global_defaults_dialog_response(GtkDialog *dialog,
-                                               gint response,
-                                               gpointer user_data) {
-  auto *state = static_cast<ApplicationState *>(user_data);
-  if (response != GTK_RESPONSE_ACCEPT) {
-    gtk_widget_destroy(GTK_WIDGET(dialog));
-    return;
-  }
-  if (state->global_defaults_widget == nullptr ||
-      !elder_terms::settings_widget_is_valid(
-          state->global_defaults_widget) ||
-      !elder_terms::settings_widget_is_dirty(
-          state->global_defaults_widget)) {
-    update_global_defaults_save_sensitivity(state);
-    return;
-  }
-
-  const elder_terms::SettingsStore store =
-      elder_terms::settings_widget_draft_store(
-          state->global_defaults_widget);
-  const elder_terms::SettingsSaveResult result =
-      elder_terms::save_global_settings(store, state->global_config_path);
-  if (!result.saved) {
-    show_error_for_parent(GTK_WINDOW(dialog),
-                          _("Failed to save connection defaults"),
-                          result.warnings);
-    return;
-  }
-  print_warnings(result.warnings);
-  elder_terms::settings_widget_rebase_fallbacks(state->settings_widget, store);
-  update_action_sensitivity(state);
-  gtk_widget_destroy(GTK_WIDGET(dialog));
-}
-
-static void on_global_defaults_cancel_clicked(GtkButton *,
-                                              gpointer user_data) {
-  gtk_dialog_response(GTK_DIALOG(user_data), GTK_RESPONSE_CANCEL);
-}
-
-static void on_global_defaults_save_clicked(GtkButton *,
-                                            gpointer user_data) {
-  gtk_dialog_response(GTK_DIALOG(user_data), GTK_RESPONSE_ACCEPT);
-}
-
-static void open_global_defaults_dialog(ApplicationState *state) {
-  if (state->global_defaults_dialog != nullptr) {
-    elder_terms::present_modal_dialog(state->global_defaults_dialog);
-    return;
-  }
-
-  elder_terms::SettingsLoadResult loaded =
-      elder_terms::load_global_settings(state->global_config_path, 12.0);
-  print_warnings(loaded.warnings);
-  GtkWidget *dialog = gtk_dialog_new();
-  gestament_gtk_assign_accessible_id(dialog, "global_defaults_dialog");
-  gtk_window_set_title(GTK_WINDOW(dialog), _("Connection defaults"));
-
-  gtk_window_set_default_size(GTK_WINDOW(dialog), 720, 420);
-
-  GtkWidget *action_row = gtk_event_box_new();
-  gestament_gtk_assign_accessible_id(action_row,
-                                     "global_defaults_action_row");
-  GtkWidget *action_content = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
-  gtk_widget_set_margin_start(action_content, 12);
-  gtk_widget_set_margin_end(action_content, 12);
-  gtk_widget_set_margin_top(action_content, 10);
-  gtk_widget_set_margin_bottom(action_content, 10);
-  gtk_container_add(GTK_CONTAINER(action_row), action_content);
-
-  GtkWidget *spacer = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
-  gtk_widget_set_hexpand(spacer, TRUE);
-  GtkWidget *cancel = gtk_button_new_with_label(_("Cancel"));
-  GtkWidget *save = gtk_button_new_with_label(_("Save"));
-  gestament_gtk_assign_accessible_id(cancel,
-                                     "global_defaults_cancel_button");
-  gestament_gtk_assign_accessible_id(save, "global_defaults_save_button");
-  gtk_widget_set_can_default(save, TRUE);
-  gtk_box_pack_start(GTK_BOX(action_content), spacer, TRUE, TRUE, 0);
-  gtk_box_pack_start(GTK_BOX(action_content), cancel, FALSE, TRUE, 0);
-  gtk_box_pack_start(GTK_BOX(action_content), save, FALSE, TRUE, 0);
-
-  state->global_defaults_dialog = dialog;
-  state->global_defaults_save_button = save;
-  elder_terms::SettingsWidgetCallbacks callbacks;
-  callbacks.changed = [state]() {
-    update_global_defaults_save_sensitivity(state);
-  };
-  state->global_defaults_widget = elder_terms::create_settings_widget({
-      .store = std::move(loaded.store),
-      .is_runtime = false,
-      .show_actions = false,
-      .mode = elder_terms::SettingsWidgetMode::global_defaults,
-      .id_prefix = "global_settings",
-      .callbacks = std::move(callbacks),
-  });
-  gtk_box_pack_start(
-      GTK_BOX(gtk_dialog_get_content_area(GTK_DIALOG(dialog))),
-      elder_terms::settings_widget_root(state->global_defaults_widget), TRUE,
-      TRUE, 0);
-  gtk_box_pack_start(
-      GTK_BOX(gtk_dialog_get_content_area(GTK_DIALOG(dialog))), action_row,
-      FALSE, TRUE, 0);
-  gtk_widget_grab_default(save);
-
-  g_signal_connect(cancel, "clicked",
-                   G_CALLBACK(on_global_defaults_cancel_clicked), dialog);
-  g_signal_connect(save, "clicked",
-                   G_CALLBACK(on_global_defaults_save_clicked), dialog);
-  g_signal_connect(dialog, "response",
-                   G_CALLBACK(on_global_defaults_dialog_response), state);
-  g_signal_connect(dialog, "destroy",
-                   G_CALLBACK(on_global_defaults_dialog_destroy), state);
-  g_signal_connect(action_row, "button-press-event",
-                   G_CALLBACK(on_window_drag_button_press), dialog);
-  update_global_defaults_save_sensitivity(state);
-  elder_terms::show_modal_dialog(dialog, GTK_WINDOW(state->main_window->window));
-}
-
-static void on_global_defaults_clicked(GtkButton *, gpointer user_data) {
-  open_global_defaults_dialog(
-      static_cast<ApplicationState *>(user_data));
-}
-
 static void update_application_dialog_actions(ApplicationState *state) {
   if (state == nullptr || state->application_dialog_notebook == nullptr ||
       state->application_dialog_save_button == nullptr ||
@@ -608,7 +453,8 @@ static void update_application_dialog_actions(ApplicationState *state) {
   const int page = gtk_notebook_get_current_page(
       GTK_NOTEBOOK(state->application_dialog_notebook));
   const bool editing =
-      page == static_cast<int>(ApplicationDialogPage::application);
+      page != static_cast<int>(ApplicationDialogPage::about) ||
+      elder_terms::settings_preferences_widget_is_dirty(state->application_settings_widget);
   gtk_widget_set_visible(state->application_dialog_save_button,
                          editing ? TRUE : FALSE);
   gtk_button_set_label(
@@ -616,9 +462,9 @@ static void update_application_dialog_actions(ApplicationState *state) {
       editing ? _("Cancel") : _("Close"));
   if (editing && state->application_settings_widget != nullptr) {
     const bool sensitive =
-        elder_terms::application_settings_widget_is_valid(
+        elder_terms::settings_preferences_widget_is_valid(
             state->application_settings_widget) &&
-        elder_terms::application_settings_widget_is_dirty(
+        elder_terms::settings_preferences_widget_is_dirty(
             state->application_settings_widget);
     gtk_widget_set_sensitive(state->application_dialog_save_button,
                              sensitive ? TRUE : FALSE);
@@ -643,7 +489,7 @@ static void on_application_dialog_destroy(GtkWidget *dialog,
   state->application_dialog_save_button = nullptr;
   state->application_dialog_cancel_button = nullptr;
   if (state->application_settings_widget != nullptr) {
-    elder_terms::destroy_application_settings_widget(
+    elder_terms::destroy_settings_preferences_widget(
         state->application_settings_widget);
     state->application_settings_widget = nullptr;
   }
@@ -663,35 +509,29 @@ static void on_application_dialog_response(GtkDialog *dialog, gint response,
     return;
   }
   if (state->application_settings_widget == nullptr ||
-      !elder_terms::application_settings_widget_is_valid(
+      !elder_terms::settings_preferences_widget_is_valid(
           state->application_settings_widget) ||
-      !elder_terms::application_settings_widget_is_dirty(
+      !elder_terms::settings_preferences_widget_is_dirty(
           state->application_settings_widget)) {
     update_application_dialog_actions(state);
     return;
   }
 
-  const elder_terms::SettingsStore store =
-      elder_terms::application_settings_widget_draft_store(
-          state->application_settings_widget);
-  const bool ui_language_changed =
-      elder_terms::application_ui_language(store) !=
-      state->application_initial_ui_language;
-  const elder_terms::SettingsSaveResult result =
-      elder_terms::save_application_settings(store,
-                                             state->global_config_path);
-  if (!result.saved) {
-    show_error_for_parent(GTK_WINDOW(dialog),
-                          _("Failed to save application settings"),
-                          result.warnings);
-    return;
-  }
+  const auto result = elder_terms::settings_preferences_widget_save(state->application_settings_widget);
+  const auto store = elder_terms::settings_preferences_widget_saved_global(state->application_settings_widget);
+  const bool ui_language_changed = elder_terms::application_ui_language(store) != state->application_initial_ui_language;
   print_warnings(result.warnings);
-  replace_registered_hotkeys(state, store);
-  gtk_widget_destroy(GTK_WIDGET(dialog));
-  if (ui_language_changed) {
-    show_ui_language_restart_dialog(state);
+  if (result.global == elder_terms::SettingsFileSaveStatus::saved) {
+    replace_registered_hotkeys(state, store);
+    state->application_initial_ui_language = elder_terms::application_ui_language(store);
   }
+  auto inherited = store;
+  inherited.theme_context = elder_terms::settings_preferences_widget_saved_context(state->application_settings_widget);
+  elder_terms::settings_widget_rebase_fallbacks(state->settings_widget, inherited);
+  update_action_sensitivity(state);
+  if (result.complete) gtk_widget_destroy(GTK_WIDGET(dialog));
+  else update_application_dialog_actions(state);
+  if (ui_language_changed) show_ui_language_restart_dialog(state);
 }
 
 static void on_application_dialog_cancel_clicked(GtkButton *,
@@ -787,16 +627,11 @@ static void open_application_dialog(ApplicationState *state,
     elder_terms::present_modal_dialog(state->application_dialog);
     return;
   }
-  if (state->global_defaults_dialog != nullptr) {
-    elder_terms::present_modal_dialog(state->global_defaults_dialog);
-    return;
-  }
 
-  elder_terms::SettingsLoadResult loaded =
-      elder_terms::load_global_settings(state->global_config_path, 12.0);
-  print_warnings(loaded.warnings);
-  state->application_initial_ui_language =
-      elder_terms::application_ui_language(loaded.store);
+  auto session = elder_terms::begin_settings_edit(state->global_config_path,
+      state->global_config_path.parent_path() / "theme.ini", 12.0);
+  print_warnings(session.warnings);
+  state->application_initial_ui_language = elder_terms::application_ui_language(session.global);
 
   std::vector<std::string> new_window_connections;
   for (const elder_terms::ConnectionProfile &profile :
@@ -812,33 +647,31 @@ static void open_application_dialog(ApplicationState *state,
   gestament_gtk_assign_accessible_id(dialog, "application_dialog");
   gtk_window_set_title(GTK_WINDOW(dialog), _("Application"));
 
-  gtk_window_set_default_size(GTK_WINDOW(dialog), 620, 350);
+  gtk_window_set_default_size(GTK_WINDOW(dialog), 1000, 640);
 
-  GtkWidget *notebook = gtk_notebook_new();
-  gestament_gtk_assign_accessible_id(notebook,
-                                     "application_dialog_notebook");
-  GtkWidget *settings_page =
-      gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-  elder_terms::ApplicationSettingsWidgetOptions options{
-      .store = std::move(loaded.store),
-      .id_prefix = "application_settings",
+  state->application_settings_widget = elder_terms::create_settings_preferences_widget({
+      .session = std::move(session),
       .new_window_connections = std::move(new_window_connections),
-      .changed = [state]() { update_application_dialog_actions(state); },
-  };
-  state->application_settings_widget =
-      elder_terms::create_application_settings_widget(std::move(options));
-  gtk_box_pack_start(
-      GTK_BOX(settings_page),
-      elder_terms::application_settings_widget_root(
-          state->application_settings_widget),
-      TRUE, TRUE, 0);
-  gtk_notebook_append_page(GTK_NOTEBOOK(notebook), settings_page,
-                           gtk_label_new(_("Application")));
+      .references = [state](const std::string &id) {
+        std::vector<std::string> names;
+        for (const auto &profile : elder_terms::list_connection_profiles(state->connection_directory)) {
+          const auto connection = elder_terms::load_connection_profile(profile.path);
+          if (elder_terms::selected_settings_theme(connection.store) == id) names.push_back(profile.name);
+        }
+        if (state->settings_widget && elder_terms::selected_settings_theme(
+            elder_terms::settings_widget_draft_store(state->settings_widget)) == id)
+          names.push_back(_("Current connection draft"));
+        return names;
+      },
+      .changed = [state] { update_application_dialog_actions(state); },
+  });
+  GtkWidget *notebook = elder_terms::settings_preferences_widget_root(state->application_settings_widget);
   gtk_notebook_append_page(GTK_NOTEBOOK(notebook),
                            create_application_about_page(state),
                            gtk_label_new(_("About")));
 
   GtkWidget *action_row = gtk_event_box_new();
+  gestament_gtk_assign_accessible_id(action_row, "application_dialog_action_row");
   GtkWidget *action_content = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
   gtk_widget_set_margin_start(action_content, 12);
   gtk_widget_set_margin_end(action_content, 12);
@@ -864,6 +697,8 @@ static void open_application_dialog(ApplicationState *state,
   state->application_dialog_cancel_button = cancel;
   GtkWidget *content = gtk_dialog_get_content_area(GTK_DIALOG(dialog));
   gtk_box_pack_start(GTK_BOX(content), notebook, TRUE, TRUE, 0);
+  gtk_box_pack_start(GTK_BOX(content),
+      elder_terms::settings_preferences_widget_status(state->application_settings_widget), FALSE, FALSE, 0);
   gtk_box_pack_start(GTK_BOX(content), action_row, FALSE, TRUE, 0);
   gtk_widget_grab_default(save);
 
@@ -2927,7 +2762,6 @@ static void on_window_destroy(GtkWidget *, gpointer user_data) {
     }
   }
   close_application_dialog(state);
-  close_global_defaults_dialog(state);
   if (state->settings_widget != nullptr) {
     elder_terms::destroy_settings_widget(state->settings_widget);
     state->settings_widget = nullptr;
@@ -3008,8 +2842,6 @@ static bool initialize_main_window(ApplicationState *state) {
                    G_CALLBACK(on_connection_list_key_press), state);
   g_signal_connect(main_window->new_button, "clicked",
                    G_CALLBACK(on_new_clicked), state);
-  g_signal_connect(main_window->global_defaults_button, "clicked",
-                   G_CALLBACK(on_global_defaults_clicked), state);
   g_signal_connect(main_window->action_row, "button-press-event",
                    G_CALLBACK(on_window_drag_button_press),
                    main_window->window);

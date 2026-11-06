@@ -879,7 +879,7 @@ static void update_connection_pages(SettingsWidgetState *state) {
   const std::string active_type = connection_type_value(state->draft_store);
   for (const ConnectionSettingsPage &page : state->connection_pages) {
     const bool visible =
-        state->mode == SettingsWidgetMode::global_defaults ||
+        state->mode != SettingsWidgetMode::connection ||
         !settings_validation_summary(page.page).empty() ||
         std::any_of(page.connection_types.begin(),
                     page.connection_types.end(),
@@ -895,10 +895,10 @@ static void update_connection_pages(SettingsWidgetState *state) {
   if (state->ssh_proxy_experimental_label != nullptr) {
     gtk_widget_set_visible(state->ssh_proxy_experimental_label,
                            active_type == smb_connection_type &&
-                           state->mode != SettingsWidgetMode::global_defaults);
+                           state->mode == SettingsWidgetMode::connection);
   }
   const bool terminal_type_visible =
-      state->mode == SettingsWidgetMode::global_defaults ||
+      state->mode != SettingsWidgetMode::connection ||
       active_type == ssh_connection_type;
   if (state->ssh_terminal_type_label != nullptr) {
     gtk_widget_set_visible(state->ssh_terminal_type_label,
@@ -1570,15 +1570,15 @@ static bool settings_inputs_valid(const SettingsWidgetState *state) {
          state->terminal_bell_sound_valid && state->terminal_fonts_valid &&
          state->telnet_port_valid && state->ssh_port_valid &&
          state->ftp_port_valid && (state->ftp_tls_valid ||
-         (state->mode != SettingsWidgetMode::global_defaults && connection_type_value(state->draft_store) != ftp_connection_type)) &&
+         (state->mode == SettingsWidgetMode::connection && connection_type_value(state->draft_store) != ftp_connection_type)) &&
          (http_settings_editor_is_valid(state->http_editor) ||
-          (state->mode != SettingsWidgetMode::global_defaults && connection_type_value(state->draft_store) != http_connection_type)) &&
+          (state->mode == SettingsWidgetMode::connection && connection_type_value(state->draft_store) != http_connection_type)) &&
          (webdav_settings_editor_is_valid(state->webdav_editor) ||
-          (state->mode != SettingsWidgetMode::global_defaults && connection_type_value(state->draft_store) != webdav_connection_type)) &&
+          (state->mode == SettingsWidgetMode::connection && connection_type_value(state->draft_store) != webdav_connection_type)) &&
          (smb_settings_editor_is_valid(state->smb_editor) ||
-          (state->mode != SettingsWidgetMode::global_defaults && connection_type_value(state->draft_store) != smb_connection_type)) &&
+          (state->mode == SettingsWidgetMode::connection && connection_type_value(state->draft_store) != smb_connection_type)) &&
          (nfs_settings_editor_is_valid(state->nfs_editor) ||
-          (state->mode != SettingsWidgetMode::global_defaults && connection_type_value(state->draft_store) != nfs_connection_type)) &&
+          (state->mode == SettingsWidgetMode::connection && connection_type_value(state->draft_store) != nfs_connection_type)) &&
          state->serial_baudrate_valid &&
          state->transfer_text_send_rate_valid &&
          terminal_key_binding_inputs_valid(state) &&
@@ -1594,7 +1594,7 @@ static void update_action_sensitivity(SettingsWidgetState *state) {
     issues.insert(issues.end(), settings.validation_issues.begin(), settings.validation_issues.end());
   };
   const auto type = connection_type_value(state->draft_store);
-  const bool global = state->mode == SettingsWidgetMode::global_defaults;
+  const bool global = state->mode != SettingsWidgetMode::connection;
   if (state->http_editor) set_settings_validation_enabled(http_settings_editor_root(state->http_editor), global || type == http_connection_type);
   if (state->webdav_editor) set_settings_validation_enabled(webdav_settings_editor_root(state->webdav_editor), global || type == webdav_connection_type);
   if (state->smb_editor) set_settings_validation_enabled(smb_settings_editor_root(state->smb_editor), global || type == smb_connection_type);
@@ -3203,7 +3203,7 @@ static void sync_ftp_tls_controls(SettingsWidgetState *state) {
     std::vector<ComboOption> options;
     if (control.choices.empty()) {
       const auto builtin = std::string(control.name) == "ca_file" ? _("System CA certificates") : _("Library default");
-      if (state->mode == SettingsWidgetMode::global_defaults && std::string(control.name) == "ca_file") {
+      if (state->mode != SettingsWidgetMode::connection && std::string(control.name) == "ca_file") {
         gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(control.combo));
         append_combo_option(control.combo, "default", builtin);
         append_combo_option(control.combo, "custom", _("Custom"));
@@ -4198,11 +4198,11 @@ static void update_terminal_font_draft(SettingsWidgetState *state) {
   state->synchronizing = true;
   gtk_combo_box_set_active_id(GTK_COMBO_BOX(state->terminal_fonts_mode_combo),
       state->terminal_font_draft.empty()
-          ? (state->mode == SettingsWidgetMode::global_defaults ? inherit_choice : terminal_font_default)
+          ? (state->mode != SettingsWidgetMode::connection ? inherit_choice : terminal_font_default)
           : terminal_font_custom);
   state->synchronizing = synchronizing;
   if (state->terminal_fonts_valid) {
-    if (state->terminal_font_draft.empty() && state->mode == SettingsWidgetMode::global_defaults) {
+    if (state->terminal_font_draft.empty() && state->mode != SettingsWidgetMode::connection) {
       clear_explicit_setting_value(&state->draft_store, terminal_font_families_setting_key());
     } else {
       set_explicit_setting_value(&state->draft_store,
@@ -4343,7 +4343,7 @@ static void rebuild_terminal_font_rows(SettingsWidgetState *state) {
 
 static void sync_terminal_font_controls(SettingsWidgetState *state) {
   const auto key = terminal_font_families_setting_key();
-  const bool global = state->mode == SettingsWidgetMode::global_defaults;
+  const bool global = state->mode != SettingsWidgetMode::connection;
   auto *combo = state->terminal_fonts_mode_combo;
   gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(combo));
   append_combo_option(combo, inherit_choice, settings_ui_text(global
@@ -6536,7 +6536,7 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   // Global defaults include every protocol. Keep the added HTTP tab from
   // forcing the dialog wider than the screen and hiding its action buttons.
   gtk_notebook_set_scrollable(GTK_NOTEBOOK(state->notebook),
-      state->mode == SettingsWidgetMode::global_defaults);
+      state->mode != SettingsWidgetMode::connection);
   const std::string notebook_id = widget_id(state, "notebook");
   assign_accessible_id(state->notebook, notebook_id.c_str());
   gtk_widget_set_vexpand(state->notebook, TRUE);
@@ -6765,7 +6765,7 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
 
   state->ssh_proxy_editor = create_ssh_proxy_settings_editor(
       &state->draft_store, state->id_prefix, state->is_runtime,
-      state->mode == SettingsWidgetMode::global_defaults, [state] {
+      state->mode != SettingsWidgetMode::connection, [state] {
         update_action_sensitivity(state);
         notify_changed(state);
       });
@@ -7034,8 +7034,13 @@ void settings_widget_rebase_fallbacks(
     if (!control.valid && control.entry)
       invalid_tls_text.emplace_back(control.name, entry_text(control.entry));
 
-  rebase_settings_store_fallbacks(&state->applied_store, fallbacks);
-  rebase_settings_store_fallbacks(&state->draft_store, fallbacks);
+  if (state->mode == SettingsWidgetMode::connection && fallbacks.theme_context) {
+    rebase_settings_theme(&state->applied_store, fallbacks.theme_context);
+    rebase_settings_theme(&state->draft_store, fallbacks.theme_context);
+  } else {
+    rebase_settings_store_fallbacks(&state->applied_store, fallbacks);
+    rebase_settings_store_fallbacks(&state->draft_store, fallbacks);
+  }
   state->synchronizing = true;
   sync_widgets_from_draft(state, true);
 

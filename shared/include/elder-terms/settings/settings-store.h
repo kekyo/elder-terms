@@ -125,7 +125,7 @@ struct SettingEntry {
 };
 
 /**
- * Owns all loaded settings for the application.
+ * Global and theme inputs shared by connection settings.
  */
 struct SettingsThemeContext;
 
