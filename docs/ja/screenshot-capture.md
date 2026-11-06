@@ -30,6 +30,14 @@ IPスキャン画像は、このボタンから実際の探索を完了し、9�
 
 同日、列見出しを`WebDAV(443)`・`WebDAV(80)`へ短縮した後、IPスキャン画像を再撮影しました。バージョンは1.10.72、対象ソースは`cee8b4a12541235618f901d584f278e2baff6e6f`です。表示先は`DISPLAY=:605`で、ほかの撮影条件は同じです。スクリプトと取得結果は`artifacts/plan14/header-labels/capture.mts`と`artifacts/plan14/header-labels/capture.json`に保存しています。
 
+## 2026年11月6日のランチャー画像の更新
+
+`launcher-settings.png`を、名前付きテーマを追加した画面で再撮影しました。バージョンは1.12.171です。ソースは`3a7895b1`を基点とし、plan23の段階4の未コミット変更を含みます。`make build`で作成したランチャーを使用しました。
+
+表示先は撮影専用のXvfb（1600×1000、24 bit、`DISPLAY=:645`）です。Yaru-dark、Ubuntu Sans 11、英語表示、表示倍率1の条件を維持しています。設定、データ、実行時ディレクトリとD-Busを分離し、サンプル接続6件のうち「Local terminal」を選択しました。FFmpegの`x11grab`で1050×760のウインドウ全体を取得し、Theme欄と、旧「Connection defaults」ボタンを削除した下部を目視確認しています。合成やリサイズは行っていません。
+
+撮影用スクリプトと取得結果は`test-results/plan23/capture-launcher.mts`と`test-results/plan23/launcher-capture.json`に保存しました。これらは作業用の記録です。画像のハッシュと個別の撮影条件は`images/capture-manifest.json`に反映しています。
+
 ## 画像ごとの条件
 
 | 用途 | 画像 | 再撮影する状態 |

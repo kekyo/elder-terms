@@ -1887,6 +1887,7 @@ int main(int argc, char **argv) {
     std::cerr << "Error: failed to load the New Window connection\n";
     return 1;
   }
+  if (!elder_terms::settings_theme_is_resolved(settings_result.store)) return 1;
 
   const std::optional<elder_terms::TerminalConnectionProfile>
       connection_profile =

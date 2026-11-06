@@ -246,8 +246,8 @@ static GtkWidget *create_themes_page(SettingsPreferencesWidget *state) {
     auto removed = std::move(*found);
     state->themes.erase(found);
     gtk_widget_destroy(removed->row);
-    gtk_widget_destroy(removed->page);
     destroy_settings_widget(removed->widget);
+    gtk_widget_destroy(removed->page);
     if (!state->themes.empty()) gtk_list_box_select_row(GTK_LIST_BOX(state->list), GTK_LIST_BOX_ROW(state->themes.front()->row));
     changed(state);
   }), state);
@@ -314,6 +314,18 @@ bool settings_preferences_widget_is_dirty(const SettingsPreferencesWidget *state
 
 SettingsEditResult settings_preferences_widget_save(SettingsPreferencesWidget *state) {
   if (!settings_preferences_widget_is_valid(state)) return {};
+  // Connections may have been saved externally after Delete was clicked.
+  for (const auto &saved : state->options.session.catalog.themes) {
+    const bool retained = std::any_of(state->themes.begin(), state->themes.end(), [&saved](const auto &editor) {
+      return editor->theme.id == saved.id;
+    });
+    if (!retained && state->options.references && !state->options.references(saved.id).empty()) {
+      const auto message = std::string(_("Theme is still used by connections:")) + " " + saved.name;
+      gtk_label_set_text(GTK_LABEL(state->message), message.c_str());
+      gtk_widget_show(state->message);
+      return {.warnings = {message}};
+    }
+  }
   auto result = save_settings_edit(&state->options.session, global_draft(state), theme_draft(state));
   const auto status = [](SettingsFileSaveStatus value) {
     return value == SettingsFileSaveStatus::saved ? _("Saved") : value == SettingsFileSaveStatus::failed ? _("Not saved") : _("Unchanged");
@@ -329,9 +341,17 @@ SettingsEditResult settings_preferences_widget_save(SettingsPreferencesWidget *s
 SettingsStore settings_preferences_widget_saved_global(const SettingsPreferencesWidget *state) { return state->options.session.global; }
 
 std::shared_ptr<const SettingsThemeContext> settings_preferences_widget_saved_context(const SettingsPreferencesWidget *state) {
-  return std::make_shared<SettingsThemeContext>(SettingsThemeContext{.global = state->options.session.global,
-      .catalog = state->options.session.catalog, .global_path = state->options.session.global_file.path,
-      .theme_path = state->options.session.theme_file.path});
+  const auto &session = state->options.session;
+  const auto global = load_global_settings(session.global_file.path, 12.0);
+  auto catalog = load_settings_themes(session.theme_file.path, global.store);
+  if (!global.loaded) {
+    catalog.loaded = false;
+    catalog.warnings.insert(catalog.warnings.end(), global.warnings.begin(), global.warnings.end());
+  }
+  // Failed baselines remain unchanged for retry/conflict checks. Inheritance
+  // separately follows the actual persisted combination, including external edits.
+  return std::make_shared<SettingsThemeContext>(SettingsThemeContext{.global = global.store,
+      .catalog = std::move(catalog), .global_path = session.global_file.path, .theme_path = session.theme_file.path});
 }
 
 void destroy_settings_preferences_widget(SettingsPreferencesWidget *state) {

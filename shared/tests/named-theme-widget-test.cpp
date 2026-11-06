@@ -166,6 +166,66 @@ static void test_widget(const std::filesystem::path &directory) {
   gtk_widget_destroy(window);
 }
 
+static void test_preferences_conflicts(const std::filesystem::path &directory) {
+  const auto global = directory / "conflict-global.ini";
+  const auto themes = directory / "conflict-theme.ini";
+  write(global, "[general]\nbackground=#111111\n");
+  write(themes, "[theme.red]\nname=Red\n");
+  bool referenced = false;
+  auto *state = create_settings_preferences_widget({.session = begin_settings_edit(global, themes, 12),
+      .new_window_connections = {}, .references = [&referenced](const auto &) {
+        return referenced ? std::vector<std::string>{"Saved connection", "Current draft"} : std::vector<std::string>{};
+      }, .changed = {}});
+  auto *root = settings_preferences_widget_root(state);
+  g_object_ref_sink(root);
+  gtk_entry_set_text(GTK_ENTRY(find(root, "global_settings_terminal_font_size_dip_entry")), "18");
+  gtk_entry_set_text(GTK_ENTRY(find(root, "themes_name_entry")), "Renamed");
+  write(global, "[general]\nbackground=#abcdef\n");
+  const auto result = settings_preferences_widget_save(state);
+  require(result.global == SettingsFileSaveStatus::failed && result.themes == SettingsFileSaveStatus::saved,
+      "file statuses must remain independently visible after a conflict");
+  require(settings_preferences_widget_is_dirty(state), "failed global draft must remain dirty");
+  const auto status = std::string(gtk_label_get_text(GTK_LABEL(settings_preferences_widget_status(state))));
+  require(status.find("global.ini: Not saved") != std::string::npos && status.find("theme.ini: Saved") != std::string::npos,
+      "partial results must display both file statuses");
+  const auto persisted = settings_preferences_widget_saved_context(state);
+  const auto background = general_color_settings(persisted->global).background;
+  require(background && background->red == 171 && background->green == 205 && background->blue == 239,
+      "launcher inheritance must use the actual external global file with the saved theme");
+  gtk_button_clicked(GTK_BUTTON(find(root, "themes_delete_button")));
+  referenced = true;
+  require(!settings_preferences_widget_save(state).complete, "references added after Delete must prevent Save");
+  require(load_settings_themes(themes, persisted->global).themes.size() == 1, "late references must preserve the saved theme");
+  destroy_settings_preferences_widget(state);
+  gtk_widget_destroy(root);
+  g_object_unref(root);
+}
+
+static void test_runtime_conflict(const std::filesystem::path &directory) {
+  const auto global = directory / "runtime-global.ini";
+  const auto themes = directory / "runtime-theme.ini";
+  const auto connection = directory / "runtime-connection.ini";
+  write(themes, "[theme.red]\nname=Red\n[theme.red.general]\nbackground=#990000\n");
+  write(connection, "[general]\ntheme=red\n");
+  auto store = load_settings({.config_path = connection, .startup_config_path = std::nullopt,
+      .global_config_path = global, .theme_config_path = themes}, 12).store;
+  int applied = 0;
+  auto *state = create_settings_widget({.store = store, .is_runtime = true, .callbacks = {
+      .apply = [&applied](const auto &, SettingsWidgetAction action) { ++applied; action.complete(true, ""); },
+      .save = {}, .cancel = {}, .changed = {}}});
+  auto *root = settings_widget_root(state);
+  g_object_ref_sink(root);
+  gtk_entry_set_text(GTK_ENTRY(find(root, "settings_terminal_width_entry")), "100");
+  write(themes, "[theme.red]\nname=Changed externally\n[theme.red.general]\nbackground=#009900\n");
+  gtk_button_clicked(GTK_BUTTON(find(root, "settings_apply_button")));
+  require(applied == 0, "Apply must detect a theme changed after the editor opened");
+  require(std::string(gtk_entry_get_text(GTK_ENTRY(find(root, "settings_terminal_width_entry")))) == "100",
+      "conflict must retain the user's draft");
+  destroy_settings_widget(state);
+  gtk_widget_destroy(root);
+  g_object_unref(root);
+}
+
 int main(int argc, char **argv) {
   gtk_init(&argc, &argv);
   gchar *temporary = g_dir_make_tmp("elder-theme-widget-XXXXXX", nullptr);
@@ -175,6 +235,8 @@ int main(int argc, char **argv) {
   try {
     test_widget(directory);
     test_shared_theme_editing(directory);
+    test_preferences_conflicts(directory);
+    test_runtime_conflict(directory);
     std::filesystem::remove_all(directory);
     std::cout << "Theme widget passed\n";
     return 0;

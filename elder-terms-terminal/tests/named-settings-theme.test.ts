@@ -267,7 +267,7 @@ it('records unchanged preview and cancel, explicit runtime Apply, and refreshed 
           ).toEqual(states[index].color);
         }
       },
-      { env: { XDG_CONFIG_HOME: directory } }
+      { trayHost: false, env: { XDG_CONFIG_HOME: directory } }
     );
   });
 });

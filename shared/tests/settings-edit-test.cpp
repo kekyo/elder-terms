@@ -63,6 +63,22 @@ static void test_edits(const std::filesystem::path &directory) {
   result = save_settings_edit(&session, draft, catalog);
   require(result.complete && result.global == SettingsFileSaveStatus::unchanged && result.themes == SettingsFileSaveStatus::saved,
           "retry must write only the previously failed file");
+  set_explicit_setting_value(&draft, terminal_font_size_dip_setting_key(), 18.0);
+  catalog.themes[0].name = "Theme saved while global failed";
+  const auto previous_global = read(global);
+  std::filesystem::permissions(directory, std::filesystem::perms::owner_read | std::filesystem::perms::owner_exec);
+  result = save_settings_edit(&session, draft, catalog);
+  std::filesystem::permissions(directory, std::filesystem::perms::owner_all);
+  require(result.global == SettingsFileSaveStatus::failed && result.themes == SettingsFileSaveStatus::saved,
+          "global write failure must allow the independent theme save");
+  require(read(global) == previous_global, "failed global write must preserve old bytes");
+  const auto reverse_restart = begin_settings_edit(global, themes, 12);
+  require(reverse_restart.catalog.themes[0].name == catalog.themes[0].name &&
+      terminal_display_settings(reverse_restart.global).font_size_dip != 18,
+      "cancel and restart after reverse partial save must keep only committed values");
+  result = save_settings_edit(&session, draft, catalog);
+  require(result.complete && result.global == SettingsFileSaveStatus::saved && result.themes == SettingsFileSaveStatus::unchanged,
+          "reverse retry must write only the failed global file");
   set_explicit_setting_value(&draft, general_background_setting_key(), std::string("#333333"));
   write(global, "[general]\nbackground=#abcdef\n");
   catalog.themes[0].name = "Saved despite global conflict";

@@ -6,11 +6,41 @@ This reference covers the settings introduced in the README.
 
 ## Inheritance
 
-Omitting a connection setting inherits connection defaults, followed by the built-in default.
+A theme is a group of settings shared by multiple connections.
+Omitting a connection setting inherits the first defined value from the selected theme, connection defaults, or built-in defaults, in that order.
 Application-wide settings belong in `global.ini`.
 See the individual guides for settings specific to a connection, including icons, macros, and link rules.
 
 An empty value and an omitted key can have different meanings. For example, `font_families=` explicitly selects the built-in font list.
+
+## Named Themes
+
+Themes are stored in `theme.ini` beside `global.ini`. Each has a reference ID and a display name. Renaming a theme in the editor keeps its ID.
+
+```ini
+; theme.ini
+[theme.red]
+name=Red theme
+
+[theme.red.general]
+exterior_background=#7A2222
+background=#281818
+```
+
+Reference the ID, rather than the display name, in the connection INI:
+
+```ini
+[general]
+theme=red
+```
+
+Put only the settings to share under `[theme.ID.original-section]`. Types and ranges match connection settings. Explicit connection values take precedence over the theme. Omitting a key inherits it; `false`, zero, empty strings, and color `none` remain explicit values where the setting allows them. An explicit value equal to its inherited value is still an independent override.
+
+Connections save only the reference and their own overrides. Theme values are not expanded into connection INI files. Theme names must be nonblank and unique. IDs allow ASCII letters, digits, hyphens, and underscores. Duplicate IDs, unknown keys, and invalid values produce diagnostics. A missing file means an empty catalog; an unreadable or malformed file is never overwritten as an empty catalog.
+
+With a startup INI, precedence is: built-in values → `global.ini` → selected theme → connection INI → startup INI → runtime Apply. Omitting `theme` from the startup INI keeps the connection's selection; `theme=` removes it. A connection with an unresolved reference cannot start. Correct its ID or use `theme=` to clear the reference.
+
+See [Sharing Named Themes](../../README.md#sharing-named-themes) for editing, update timing, and partial-save behavior.
 
 ## The New Window Connection
 

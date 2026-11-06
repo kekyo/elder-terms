@@ -271,6 +271,16 @@ ELDER_TERMS_API SettingsThemeCatalog load_settings_themes(
 ELDER_TERMS_API bool rebase_settings_theme(
     SettingsStore *store, std::shared_ptr<const SettingsThemeContext> context);
 
+/** @param store Connection settings. @returns Whether its selected theme exists and is valid; no selection is valid. */
+ELDER_TERMS_API bool settings_theme_is_resolved(const SettingsStore &store);
+
+/**
+ * Checks current global and selected-theme definitions before applying an open editor.
+ * @param store Draft whose inheritance context was read when the editor opened.
+ * @returns True when persisted inputs still match that context, or no file context is attached.
+ */
+ELDER_TERMS_API bool settings_theme_inputs_unchanged(const SettingsStore &store);
+
 /** Original bytes for detecting changes to one edited configuration file. */
 struct SettingsFileSnapshot {
   /** File being edited. */

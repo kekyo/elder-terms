@@ -3348,6 +3348,12 @@ msgstr "テーマ未解決:"
 msgid "Failed to reload connection defaults"
 msgstr "接続の既定値を再読み込みできませんでした"
 
+msgid "Theme is still used by connections:"
+msgstr "このテーマを使用中の接続があります:"
+
+msgid "Connection defaults or themes changed outside this editor. Reopen settings before applying."
+msgstr "接続の既定値またはテーマが外部で変更されました。設定を開き直してから適用してください。"
+
 msgid "Theme name"
 msgstr "テーマ名"
 

@@ -40,6 +40,39 @@ const japaneseTestEnvironment = {
   LC_ALL: 'ja_JP.UTF-8',
 } as const;
 
+it('retains an unresolved theme reference for repair before allowing launch', async (context) => {
+  let path = '';
+  await runLauncherGtkTest(
+    context,
+    async (connections) => {
+      path = join(connections, 'Missing theme.ini');
+      await writeFile(path, '[general]\ntheme=missing\n');
+    },
+    async ({ app }) => {
+      await selectConnectionRow(app, await app.getById('connection_list'), 0);
+      const theme = expectElementKind(
+        await app.getById('settings_general_theme_combo'),
+        'comboBox'
+      );
+      expect(
+        (await (await app.getById('connect_button')).info()).states
+      ).not.toContain('sensitive');
+      expect(await readFile(path, 'utf8')).toContain('theme=missing');
+      await theme.selectChildAt(0);
+      await expectElementKind(
+        await app.getById('apply_button'),
+        'button'
+      ).click();
+      await waitForResult(async () => {
+        expect(await readFile(path, 'utf8')).toContain('theme=\n');
+        expect(
+          (await (await app.getById('connect_button')).info()).states
+        ).toContain('sensitive');
+      });
+    }
+  );
+});
+
 const selectConnectionRow = async (
   app: GtkApp,
   element: GtkWidgetElement,

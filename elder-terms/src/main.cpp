@@ -1161,7 +1161,7 @@ static bool load_existing_connection(ApplicationState *state,
   const elder_terms::SettingsLoadResult result =
       elder_terms::load_connection_profile(path);
   print_warnings(result.warnings);
-  if (!result.loaded) {
+  if (!result.loaded && elder_terms::settings_theme_is_resolved(result.store)) {
     show_error(state, _("Failed to load connection"), result.warnings);
     return false;
   }
@@ -1863,6 +1863,11 @@ static void launch_selected_connection(ApplicationState *state) {
   }
   const elder_terms::SettingsStore &draft_store =
       elder_terms::settings_widget_draft_store(state->settings_widget);
+  if (!elder_terms::settings_theme_inputs_unchanged(draft_store)) {
+    show_error(state, _("Failed to load connection"),
+        {_("Connection defaults or themes changed outside this editor. Reopen settings before applying.")});
+    return;
+  }
   const elder_terms::ConnectionKind kind =
       elder_terms::general_connection_kind(draft_store);
   const bool file_transfer =
@@ -2459,6 +2464,11 @@ static bool save_current_connection(ApplicationState *state) {
   }
   const elder_terms::SettingsStore draft =
       elder_terms::settings_widget_draft_store(state->settings_widget);
+  if (!elder_terms::settings_theme_inputs_unchanged(draft)) {
+    show_error(state, _("Failed to save connection"),
+        {_("Connection defaults or themes changed outside this editor. Reopen settings before applying.")});
+    return false;
+  }
   const elder_terms::ConnectionSaveResult result =
       elder_terms::save_connection_profile(
           state->connection_directory, state->selected_path, validation.name,

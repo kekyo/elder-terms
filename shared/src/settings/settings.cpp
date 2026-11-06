@@ -11,6 +11,7 @@
 #include <string>
 #include <system_error>
 #include <set>
+#include <sstream>
 #include <utility>
 
 #include <elder-terms/settings/general-settings.h>
@@ -604,14 +605,29 @@ SettingsThemeCatalog load_settings_themes(const std::filesystem::path &path,
   SettingsThemeCatalog result;
   GKeyFile *file = g_key_file_new();
   GError *error = nullptr;
-  if (!g_key_file_load_from_file(file, path.c_str(), G_KEY_FILE_NONE, &error)) {
+  gchar *contents = nullptr;
+  gsize size = 0;
+  const bool read = g_file_get_contents(path.c_str(), &contents, &size, &error);
+  if (!read || !g_key_file_load_from_data(file, contents, size, G_KEY_FILE_NONE, &error)) {
     if (!g_error_matches(error, G_FILE_ERROR, G_FILE_ERROR_NOENT)) {
       result.loaded = false;
       result.warnings.push_back("Failed to read themes " + path_string(path) + ": " + glib_error_message(error));
     }
     g_clear_error(&error);
+    g_free(contents);
     g_key_file_unref(file);
     return result;
+  }
+  // GKeyFile merges repeated groups. Inspect the same bytes before accepting
+  // IDs so two definitions cannot silently become one theme.
+  std::istringstream input(std::string(contents, size));
+  g_free(contents);
+  std::set<std::string> declared_groups;
+  std::string line;
+  while (std::getline(input, line)) {
+    const auto header = trim_ascii_whitespace(line);
+    if (header.starts_with('[') && header.ends_with(']') && !declared_groups.insert(header).second)
+      result.warnings.push_back("Duplicate theme section/ID: " + header);
   }
   gsize count = 0;
   gchar **groups = g_key_file_get_groups(file, &count);
@@ -626,7 +642,7 @@ SettingsThemeCatalog load_settings_themes(const std::filesystem::path &path,
     if (suffix.find('.') != std::string::npos) continue;
     auto name = key_file_string(file, group, "name", &error);
     if (error || !theme_id_is_valid(suffix) || trim_ascii_whitespace(name).empty() ||
-        !names.insert(name).second) {
+        !names.insert(trim_ascii_whitespace(name)).second) {
       result.warnings.push_back("Invalid or duplicate theme ID/name: " + group);
       g_clear_error(&error);
     }
@@ -670,6 +686,8 @@ SettingsThemeCatalog load_settings_themes(const std::filesystem::path &path,
   }
   g_strfreev(groups);
   g_key_file_unref(file);
+  for (const auto &theme : result.themes)
+    if (terminal_key_bindings_conflict(theme.store)) result.warnings.push_back(theme.name + ": Conflicting terminal key bindings");
   result.loaded = result.warnings.empty();
   return result;
 }
@@ -1158,6 +1176,28 @@ bool settings_themes_equal(const SettingsThemeCatalog &left, const SettingsTheme
     const auto &a = left.themes[index];
     const auto &b = right.themes[index];
     if (a.id != b.id || a.name != b.name || !explicit_settings_equal(a.store, b.store)) return false;
+  }
+  return true;
+}
+
+bool settings_theme_is_resolved(const SettingsStore &store) {
+  const auto selected = selected_settings_theme(store);
+  if (selected.empty()) return true;
+  const auto context = store.theme_context;
+  return context && context->catalog.loaded && std::any_of(context->catalog.themes.begin(), context->catalog.themes.end(),
+      [&selected](const auto &theme) { return theme.id == selected; });
+}
+
+bool settings_theme_inputs_unchanged(const SettingsStore &store) {
+  const auto context = store.theme_context;
+  if (!context) return true;
+  if (!context->global_path.empty()) {
+    const auto global = load_global_settings(context->global_path, 12);
+    if (!global.loaded || !explicit_settings_equal(global.store, context->global)) return false;
+  }
+  if (!selected_settings_theme(store).empty() && !context->theme_path.empty()) {
+    const auto themes = load_settings_themes(context->theme_path, context->global);
+    if (!themes.loaded || !settings_themes_equal(themes, context->catalog)) return false;
   }
   return true;
 }

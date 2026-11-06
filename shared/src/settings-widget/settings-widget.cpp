@@ -4379,8 +4379,8 @@ static void sync_terminal_font_controls(SettingsWidgetState *state) {
           ? SettingsUiText::font_inherit_global : SettingsUiText::font_inherit_builtin));
   if (!global) append_combo_option(combo, terminal_font_default,
       settings_ui_text(SettingsUiText::font_use_app_defaults));
-  append_combo_option(combo, terminal_font_custom, settings_ui_text(global
-      ? SettingsUiText::font_specify : SettingsUiText::font_specify_connection));
+  append_combo_option(combo, terminal_font_custom, settings_ui_text(state->mode == SettingsWidgetMode::connection
+      ? SettingsUiText::font_specify_connection : SettingsUiText::font_specify));
   const auto value = std::get<std::vector<std::string>>(setting_value_or_default(
       state->draft_store, key, SettingValue{std::vector<std::string>{}}));
   gtk_combo_box_set_active_id(GTK_COMBO_BOX(combo), !setting_has_explicit_value(state->draft_store, key)
@@ -5049,6 +5049,11 @@ static void on_log_mode_changed(GtkComboBox *, gpointer data) {
 
 static void request_settings_action(SettingsWidgetState *state, SettingsWidgetApplyCallback callback) {
   if (state->action_pending || !settings_inputs_valid(state)) return;
+  if (state->mode == SettingsWidgetMode::connection && !settings_theme_inputs_unchanged(state->draft_store)) {
+    gtk_label_set_text(GTK_LABEL(state->action_message), _("Connection defaults or themes changed outside this editor. Reopen settings before applying."));
+    gtk_widget_show(state->action_message);
+    return;
+  }
   const auto draft = state->draft_store;
   const auto generation = ++state->action_generation;
   const auto owner = state->action_owner;

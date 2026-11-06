@@ -133,6 +133,21 @@ static void test_themes(const std::filesystem::path &directory) {
   }
 }
 
+static void test_catalog_validation(const std::filesystem::path &directory) {
+  const auto path = directory / "invalid-theme.ini";
+  const auto global = load_global_settings(directory / "absent-global.ini", 12).store;
+  for (const auto &text : {
+      "[theme.red]\nname=Red\n[theme.red]\nname=Other\n",
+      "[theme.red]\nname=Red\n[theme.green]\nname=Red \\s\n",
+      "[theme.red]\nname=Red\n[theme.red.general]\nunknown=true\n",
+      "[theme.red]\nname=Red\n[theme.red.general]\nauto_close=broken\n",
+      "[theme.red]\nname=Red\n[theme.red.terminal]\nzoom_in_key=F12\nsend_break_key=F12\n"}) {
+    write(path, text);
+    const auto catalog = load_settings_themes(path, global);
+    require(!catalog.loaded && !catalog.warnings.empty(), "duplicate identities, unknown keys, invalid values and key conflicts must be diagnosed");
+  }
+}
+
 int main(int argc, char **argv) {
   try {
     if (argc == 4) {
@@ -160,7 +175,7 @@ int main(int argc, char **argv) {
     require(temporary != nullptr, "temporary directory must exist");
     const std::filesystem::path directory(temporary);
     g_free(temporary);
-    try { test_themes(directory); }
+    try { test_themes(directory); test_catalog_validation(directory); }
     catch (...) { std::filesystem::remove_all(directory); throw; }
     std::filesystem::remove_all(directory);
     std::cout << "Named settings themes passed\n";

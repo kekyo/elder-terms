@@ -200,16 +200,17 @@ Well then, enjoy elder-terms!
 ## INI File Locations
 
 elder-terms configuration files are stored under the XDG user configuration directory.
+A theme gives a name to settings shared by several connections.
 In a typical environment where `XDG_CONFIG_HOME` is not set, their locations are:
 
 - Global settings (application settings and connection defaults):
   `~/.config/elder-terms/global.ini`
+- Named themes: `~/.config/elder-terms/theme.ini`
 - Connection settings:
   `~/.config/elder-terms/connections/<connection-name>.ini`
 
 When `XDG_CONFIG_HOME` is set, its value replaces `~/.config` in the paths above.
-Connection settings inherit the connection defaults in the global file,
-and values changed for an individual connection take precedence over them.
+Settings take precedence in this order: explicit connection values, the selected theme's values, then global connection defaults.
 
 ## Configuration Structure
 
@@ -220,9 +221,9 @@ in the list take precedence.
 
 1. Built-in defaults: Defaults provided by elder-terms itself. They are
    determined by the connection type and other factors.
-2. Settings saved in INI files: Connection values in `global.ini`, edited with
-   "Connection defaults", override the built-in defaults, and each
-   connection's INI file overrides `global.ini`. Application-wide settings are
+2. Settings saved in INI files: Connection values in `global.ini`, edited on
+   the "Connection defaults" tab of Application settings, override built-in defaults.
+   The selected theme's values and then each connection's explicit values take precedence. Application-wide settings are
    edited with "Application settings", including the New Window connection.
    These settings are stored in `global.ini` and preserved for the next launch.
 3. Settings for the current connection: Unsaved changes used to launch a
@@ -232,7 +233,7 @@ in the list take precedence.
    session ends.
 
 In the settings dialog, inherited values show their source as
-`(built-in default)` or `(global default)`. Text fields show defaults as faint
+`(built-in default)`, `(global default)`, or `(theme: name)`. Text fields show defaults as faint
 placeholder text, while selection fields append the source to the default
 option.
 
@@ -241,11 +242,24 @@ connection's INI file or in the current launch session. The displayed value
 alone does not distinguish between the two. Use "Save" to keep changes for the next launch.
 
 Clearing a text field or selecting the default item in a selection field
-removes the explicit value, causing the setting to inherit the global or
-built-in default again.
+removes the explicit value, causing the setting to inherit the first defined value from the selected theme, global defaults, or built-in defaults.
 
 For the settings below, "Apply" changes the current connection, "Save" keeps changes for the next launch, and "Cancel" discards unapplied edits.
 See the [INI settings reference](./docs/en/configuration.md) for file syntax and examples.
+
+## Sharing Named Themes
+
+For example, a "Red theme" can define only titlebar and content background colors.
+
+Open "Application settings" from the launcher's menu, choose the "Themes" tab, and click "New". Enter a name and the settings to share, then click "Save". The preview shows the titlebar and content background together. Select the theme on each connection's "General" page to inherit its settings. Choose "None" to return to connection defaults.
+
+Explicit connection settings survive theme changes. Clear an override to inherit the current theme's value. Clearing an item in the theme restores connection defaults for that item. Connection names, icons, launch hotkeys, application-wide settings, macros, and link rules are outside themes.
+
+Renaming a theme keeps existing references. "Duplicate" creates a separate theme. Themes in use list their connections and cannot be deleted until those references are removed. If an external edit removes a referenced theme, select an existing theme or "None" before launching the connection.
+
+Saved themes affect new sessions and the connection being edited in the launcher. For a running terminal or transfer window, reopen settings and click "Apply". Previewing or selecting a theme does not change the running session. Changes such as connection destinations still require reconnection.
+
+Application settings retain edits across tabs, and "Save" covers all editing tabs. If only one of `global.ini` and `theme.ini` saves, the dialog stays open and reports each file's result. Retry writes only unsaved changes; a subsequent "Cancel" discards only those unsaved changes. If an external-edit conflict is reported, review the persisted files and reopen settings.
 
 ## Configuring Connection Icons
 
@@ -763,7 +777,7 @@ The image stays fixed within the terminal viewport while text scrolls.
 Image opacity and transparent PNG pixels let the image combine with desktop transparency.
 Images also work in opaque mode; lower the background opacity if the image is difficult to see.
 
-"Clear image" explicitly selects no image for this connection. "Inherit" follows connection defaults.
+"Clear image" explicitly selects no image for this connection. "Inherit" follows the selected theme or connection defaults.
 The file is neither moved nor embedded, so keep it available at the same path for future starts.
 See the [settings reference](./docs/en/configuration.md#background-and-color-correction) for image size limits and INI syntax.
 
@@ -865,10 +879,11 @@ Uninstalled family names may be saved and are skipped during fallback.
 The drop-down applies to the whole list.
 "Inherited from: global settings" or "Inherited from: app defaults" follows the inherited settings,
 including later global changes.
+If the selected theme defines fonts, the inherited option displays its name and follows that list.
 "Use app defaults" fixes this connection to `Noto Sans Mono`, then `Monospace`, regardless of global settings.
 "Specify for this connection" sets its own list.
 The global editor offers "App defaults" and "Specify fonts".
-Connection overrides replace the global list rather than extending it.
+Connection overrides replace the theme or global list rather than extending it.
 
 These settings save only the font families; they do not include font size, weight, or style.
 Font size follows "Text size (DIP)", `Ctrl`+`=`, `Ctrl`+`-`, or the mouse wheel while holding `Ctrl`.

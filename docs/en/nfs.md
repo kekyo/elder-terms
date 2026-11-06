@@ -52,7 +52,7 @@ Disable "Close window when session ends" to keep the window after a disconnect a
 
 The default is UTF-8. Set "Filename encoding" to CP932, Shift_JIS, EUC-JP, or another supported encoding when appropriate for the server's names. File contents are never converted. CP932 and Shift_JIS are treated as distinct encodings.
 
-Each setting can inherit from global connection defaults or be overridden for one connection. Theme inheritance is not yet supported. Saving a new filename encoding during a connection leaves that connection unchanged; reconnect to apply it. Existing job labels retain their original display names.
+Each setting can inherit from the selected theme or global connection defaults, or be overridden for one connection. Saving a new filename encoding during a connection leaves that connection unchanged; reconnect to apply it. Existing job labels retain their original display names.
 
 Clear a text or numeric entry to display and use its inherited value. Version and enabled/disabled selectors include a default option to restore inheritance. Select "Custom" to edit a multiline list. An empty custom list overrides any inherited entries with an empty list.
 
