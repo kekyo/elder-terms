@@ -38,12 +38,15 @@ int main(int argc, char **argv) {
     requests.push_back(std::move(complete));
   });
   auto store = create_default_settings(default_terminal_display_settings(12), "Background");
+  auto *view = boxrig_gtk3_terminal_widget_view(terminal_runtime_widget(window.runtime));
+  assert(boxrig_ui_view_get_cell_background_mode(view) == BOXRIG_UI_CELL_BACKGROUND_TRANSPARENT);
+  set_setting_value(&store, make_setting_key("terminal", "cell_background_mode"), std::string("opaque"));
   set_setting_value(&store, terminal_background_opacity_setting_key(), gint64{0});
   set_setting_value(&store, terminal_background_image_setting_key(), std::string("/image.png"));
   auto image = std::make_shared<TerminalBackgroundImage>(TerminalBackgroundImage{"/image.png", 2, 1,
       {255, 0, 0, 128, 0, 255, 0, 255}});
   assert(apply_terminal_background(background, store, image));
-  auto *view = boxrig_gtk3_terminal_widget_view(terminal_runtime_widget(window.runtime));
+  assert(boxrig_ui_view_get_cell_background_mode(view) == BOXRIG_UI_CELL_BACKGROUND_OPAQUE_EXPLICIT);
   auto native = boxrig_ui_view_get_background_image(view);
   assert(native.width == 2 && native.height == 1 && native.pixels[0] == 0x80800000 && native.pixels[1] == 0xff00ff00);
   bool prepared = false;
@@ -60,6 +63,22 @@ int main(int argc, char **argv) {
   attach_terminal_background(background);
   native = boxrig_ui_view_get_background_image(view);
   assert(native.width == 2 && native.pixels[0] == 0x40400000);
+
+  // Replacing the runtime must restore the independently retained cell policy.
+  destroy_terminal_runtime(window.runtime);
+  window.runtime = create_terminal_runtime(GTK_WINDOW(window.window), GTK_BOX(window.root_box),
+      GTK_BOX(window.root_box), TerminalAmbiguousWidth::narrow);
+  assert(window.runtime);
+  attach_terminal_background(background);
+  view = boxrig_gtk3_terminal_widget_view(terminal_runtime_widget(window.runtime));
+  assert(boxrig_ui_view_get_cell_background_mode(view) == BOXRIG_UI_CELL_BACKGROUND_OPAQUE_EXPLICIT);
+  auto transparent = store;
+  set_setting_value(&transparent, make_setting_key("terminal", "cell_background_mode"), std::string("transparent"));
+  auto invalid = std::make_shared<TerminalBackgroundImage>(TerminalBackgroundImage{"/invalid.png", 0, 0, {}});
+  assert(!apply_terminal_background(background, transparent, invalid));
+  assert(boxrig_ui_view_get_cell_background_mode(view) == BOXRIG_UI_CELL_BACKGROUND_OPAQUE_EXPLICIT);
+  assert(apply_terminal_background(background, transparent, image));
+  assert(boxrig_ui_view_get_cell_background_mode(view) == BOXRIG_UI_CELL_BACKGROUND_TRANSPARENT);
 
   set_setting_value(&store, terminal_background_image_setting_key(), std::string("/replacement.png"));
   int completed = 0;

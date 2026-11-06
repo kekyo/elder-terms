@@ -243,6 +243,13 @@ static bool validate_background_percent(const SettingValue &value, std::string *
   return false;
 }
 
+static bool validate_cell_background_mode(const SettingValue &value, std::string *reason) {
+  const auto *text = std::get_if<std::string>(&value);
+  if (text && (*text == "transparent" || *text == "opaque")) return true;
+  *reason = "must be transparent or opaque";
+  return false;
+}
+
 static bool validate_background_tint(const SettingValue &value, std::string *reason) {
   const auto *text = std::get_if<std::string>(&value);
   if (text && parse_rgb_color(*text)) return true;
@@ -375,6 +382,7 @@ TerminalCursorSettings terminal_cursor_settings(const SettingsStore &store) {
 }
 
 SettingKey terminal_background_mode_setting_key() { return terminal_key("background_mode"); }
+SettingKey terminal_cell_background_mode_setting_key() { return terminal_key("cell_background_mode"); }
 SettingKey terminal_background_opacity_setting_key() { return terminal_key("background_opacity"); }
 SettingKey terminal_background_tint_color_setting_key() { return terminal_key("background_tint_color"); }
 SettingKey terminal_background_tint_opacity_setting_key() { return terminal_key("background_tint_opacity"); }
@@ -397,7 +405,9 @@ TerminalBackgroundSettings terminal_background_settings(const SettingsStore &sto
       static_cast<int>(setting_integer_value_or_default(store, terminal_background_opacity_setting_key(), 80)),
       parse_rgb_color(setting_string_value_or_default(store, terminal_background_tint_color_setting_key(), "#000000"))
           .value_or(RgbColor{0, 0, 0}),
-      static_cast<int>(setting_integer_value_or_default(store, terminal_background_tint_opacity_setting_key(), 0))};
+      static_cast<int>(setting_integer_value_or_default(store, terminal_background_tint_opacity_setting_key(), 0)),
+      setting_string_value_or_default(store, terminal_cell_background_mode_setting_key(), "transparent") == "opaque"
+          ? TerminalCellBackgroundMode::opaque : TerminalCellBackgroundMode::transparent};
 }
 
 SettingKey terminal_accessibility_enabled_setting_key() {
@@ -527,6 +537,7 @@ terminal_setting_definitions(TerminalDisplaySettings terminal_defaults) {
       {.key = terminal_color_vision_setting_key(), .default_value = SettingValue{std::string("none")}, .validate = validate_color_vision},
       {.key = terminal_color_vision_strength_setting_key(), .default_value = SettingValue{gint64{100}}, .validate = validate_background_percent},
       {.key = terminal_background_mode_setting_key(), .default_value = SettingValue{std::string("opaque")}, .validate = validate_background_mode},
+      {.key = terminal_cell_background_mode_setting_key(), .default_value = SettingValue{std::string("transparent")}, .validate = validate_cell_background_mode},
       {.key = terminal_background_opacity_setting_key(), .default_value = SettingValue{gint64{80}}, .validate = validate_background_percent},
       {.key = terminal_background_tint_color_setting_key(), .default_value = SettingValue{std::string("#000000")}, .validate = validate_background_tint},
       {.key = terminal_background_tint_opacity_setting_key(), .default_value = SettingValue{gint64{0}}, .validate = validate_background_percent},

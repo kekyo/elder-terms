@@ -191,7 +191,8 @@ test('terminal-background-state-test', find_program('xvfb-run'), args: ['-a', ba
   env: ['GDK_GL=disable', 'NO_AT_BRIDGE=1', 'G_DEBUG=fatal-criticals'])
 
 background_opacity_probe = executable('terminal-background-opacity-probe',
-  'tests/cpp/terminal-background-opacity-probe.cpp', dependencies: [boxrig_runtime_dep])
+  ['tests/cpp/terminal-background-opacity-probe.cpp', 'src/terminal-background.cpp', 'src/terminal-background-image.cpp'],
+  dependencies: [boxrig_runtime_dep, boxrig_background_dep])
 foreach backend : ['cairo', 'opengl']
   foreach scale : ['1', '2']
     # Both policies must preserve default-background transparency.

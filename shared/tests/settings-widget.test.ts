@@ -197,7 +197,7 @@ const scrollTerminalFieldIntoView = async (
     ? 'global_settings'
     : 'settings';
   const appearance =
-    /_terminal_(font|cursor_shape|cursor_blink|background|color_|visual_bell)/.test(
+    /_terminal_(font|cursor_shape|cursor_blink|background|cell_background|color_|visual_bell)/.test(
       id
     );
   const pageId = `${prefix}_terminal${appearance ? '_appearance' : ''}_page`;
@@ -2317,6 +2317,74 @@ describe.concurrent('shared settings widget', () => {
     }
   });
 
+  for (const mode of ['launcher', 'runtime', 'global']) {
+    it(`saves and inherits cell background transparency in ${mode} settings`, async (context) => {
+      const directory = await mkdtemp(
+        join(tmpdir(), 'elder-terms-cell-background-')
+      );
+      const path = join(directory, 'settings.ini');
+      const prefix = mode === 'global' ? 'global_settings' : 'settings';
+      try {
+        await runSharedGtkTest(
+          context,
+          [
+            '--page=terminal_appearance',
+            `--save-file=${path}`,
+            ...(mode === 'global'
+              ? ['--global-mode']
+              : ['--global=terminal.cell_background_mode=opaque']),
+            ...(mode === 'runtime' ? ['--runtime'] : []),
+          ],
+          async ({ app }) => {
+            const id = `${prefix}_terminal_cell_background_mode_combo`;
+            const combo = expectElementKind(await app.getById(id), 'comboBox');
+            await scrollTerminalFieldIntoView(app, id);
+            const names = await comboOptionNames(app, id);
+            expect(names.slice(1)).toEqual(['Transparent', 'Opaque']);
+            expect(names[0]).toContain(
+              mode === 'global' ? 'Transparent' : 'Opaque'
+            );
+            expect(await combo.isChildSelected(0)).toBe(true);
+            const save = expectElementKind(
+              await app.getById(`${prefix}_save_button`),
+              'button'
+            );
+            for (const [index, value] of [
+              [2, 'opaque'],
+              [1, 'transparent'],
+            ] as const) {
+              await combo.selectChildAt(index);
+              await save.click();
+              await waitForResult(async () =>
+                expect(await readFile(path, 'utf8')).toContain(
+                  `cell_background_mode=${value}`
+                )
+              );
+            }
+            await combo.selectChildAt(0);
+            await save.click();
+            await waitForResult(async () =>
+              expect(await readFile(path, 'utf8')).not.toContain(
+                'cell_background_mode='
+              )
+            );
+            await writeFile(
+              fileURLToPath(
+                new URL(
+                  `../../artifacts/plan22-implementation/settings-${mode}.png`,
+                  import.meta.url
+                )
+              ),
+              (await app.capture()).image
+            );
+          }
+        );
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
+    });
+  }
+
   for (const mode of ['launcher', 'runtime']) {
     it(`aligns all terminal appearance controls in ${mode} settings`, async (context) => {
       await runSharedGtkTest(
@@ -2335,6 +2403,7 @@ describe.concurrent('shared settings widget', () => {
             'cursor_shape_combo',
             'cursor_blink_combo',
             'background_mode_combo',
+            'cell_background_mode_combo',
             'background_opacity_entry',
             'background_tint_color_entry',
             'background_tint_opacity_entry',

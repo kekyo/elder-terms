@@ -2589,6 +2589,9 @@ msgstr "下線ボックス"
 msgid "Background mode"
 msgstr "背景モード"
 
+msgid "Cell background transparency"
+msgstr "文字背景の透過"
+
 msgid "Background opacity (%)"
 msgstr "背景色の不透明度 (%)"
 

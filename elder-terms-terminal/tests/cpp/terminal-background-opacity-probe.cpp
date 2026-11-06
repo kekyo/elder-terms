@@ -4,6 +4,7 @@
 // https://github.com/kekyo/elder-terms/
 
 #include "../../src/terminal-runtime.h"
+#include "../../src/terminal-background.h"
 
 #include <array>
 #include <cassert>
@@ -42,6 +43,9 @@ static constexpr std::size_t sample_column = 27;
 struct Fixture {
   TerminalRuntime *runtime = nullptr;
   GtkWidget *window = nullptr;
+  MainWindow main_window{};
+  TerminalBackground *background = nullptr;
+  SettingsStore settings;
   boxrig_gtk_render_backend backend = BOXRIG_GTK_RENDER_BACKEND_OPENGL;
   std::string backend_name;
   std::string evidence_directory;
@@ -70,13 +74,11 @@ static void prepare_scene(Fixture *fixture) {
   auto *widget = terminal_runtime_widget(fixture->runtime);
   auto *view = boxrig_gtk3_terminal_widget_view(widget);
   if (fixture->backdrop == 0) {
-    assert(boxrig_ui_view_set_cell_background_mode(view, fixture->require_opaque
-        ? BOXRIG_UI_CELL_BACKGROUND_OPAQUE_EXPLICIT : BOXRIG_UI_CELL_BACKGROUND_TRANSPARENT) == BOXRIG_UI_OK);
-    auto transparency = boxrig_ui_transparency_config_default();
-    transparency.request = BOXRIG_UI_TRANSPARENCY_REQUIRED;
-    transparency.requested_scopes = BOXRIG_UI_TRANSPARENCY_VIEW_SURFACE;
-    transparency.background_opacity = 128;
-    assert(boxrig_gtk3_terminal_widget_set_transparency(widget, &transparency) == BOXRIG_UI_OK);
+    set_setting_value(&fixture->settings, terminal_cell_background_mode_setting_key(),
+        std::string(fixture->require_opaque ? "opaque" : "transparent"));
+    set_setting_value(&fixture->settings, terminal_background_mode_setting_key(), std::string("transparent"));
+    set_setting_value(&fixture->settings, terminal_background_opacity_setting_key(), gint64{50});
+    set_setting_value(&fixture->settings, terminal_background_tint_opacity_setting_key(), gint64{100});
     // Pin the palette and dynamic defaults so host themes cannot affect pixels.
     assert(terminal_runtime_feed(fixture->runtime,
         "\033[?25l\033[0m\033[2J\033[H\033]10;#e0e0e0\a\033]11;#202020\a"
@@ -89,8 +91,11 @@ static void prepare_scene(Fixture *fixture) {
   }
   // Only replace the lower layer. The second presentation must reuse the same
   // logical cells, making a backdrop-dependent color directly observable.
-  const auto color = backdrops[fixture->backdrop];
-  assert(boxrig_ui_view_set_background_color(view, {color.red, color.green, color.blue, 255}) == BOXRIG_UI_OK);
+  set_setting_value(&fixture->settings, terminal_background_tint_color_setting_key(),
+      std::string(fixture->backdrop == 0 ? "#ff0000" : "#0000ff"));
+  assert(apply_terminal_background(fixture->background, fixture->settings, nullptr));
+  assert(boxrig_ui_view_get_cell_background_mode(view) == (fixture->require_opaque
+      ? BOXRIG_UI_CELL_BACKGROUND_OPAQUE_EXPLICIT : BOXRIG_UI_CELL_BACKGROUND_TRANSPARENT));
   terminal_runtime_refresh(fixture->runtime);
 }
 
@@ -185,6 +190,11 @@ int main(int argc, char **argv) {
   gtk_container_add(GTK_CONTAINER(fixture.window), content);
   fixture.runtime = create_terminal_runtime(GTK_WINDOW(fixture.window), GTK_BOX(content), GTK_BOX(content), TerminalAmbiguousWidth::narrow);
   assert(fixture.runtime);
+  fixture.main_window.window = fixture.window;
+  fixture.main_window.root_box = content;
+  fixture.main_window.runtime = fixture.runtime;
+  fixture.settings = create_default_settings(default_terminal_display_settings(12), "Opacity probe");
+  fixture.background = create_terminal_background(&fixture.main_window);
   // Observe after GTK draws a completed presentation, without timed sleeps.
   g_signal_connect_after(terminal_runtime_widget(fixture.runtime), "draw",
       G_CALLBACK(+[](GtkWidget *, cairo_t *, gpointer context) {
@@ -203,6 +213,7 @@ int main(int argc, char **argv) {
     std::printf("%s backdrop-invariance case=%s actual=%d expected=%d\n",
         passed ? "PASS" : "FAIL", cases[row].name, invariant, expected);
   }
+  destroy_terminal_background(fixture.background);
   destroy_terminal_runtime(fixture.runtime);
   gtk_widget_destroy(fixture.window);
   return fixture.success ? 0 : 1;
