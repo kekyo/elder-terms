@@ -106,6 +106,7 @@ cursor_shape=bar
 cursor_blink=false
 background_mode=blur
 background_opacity=40
+cell_background_mode=opaque
 background_tint_color=#203040
 background_tint_opacity=20
 background_image=/home/user/Pictures/terminal.png
@@ -118,6 +119,15 @@ Opacity values range from 0 to 100%. Specify an absolute path to a PNG or JPEG i
 Both the file and decoded RGBA image are limited to 64 MiB, with each dimension limited to 16384 pixels.
 Keep the image at the same path so it remains available on the next launch.
 See the [README background settings](../../README.md#configuring-the-cursor-and-background) for transparency and blur requirements.
+
+`cell_background_mode` controls transparency for backgrounds assigned to individual terminal cells.
+The default, `transparent`, applies `background_opacity` to cell backgrounds as well.
+`opaque` makes backgrounds specified with 16 colors, 256 colors, or RGB opaque. This includes explicit colors matching the default background, blank cells, and backgrounds left after erasing text.
+The default background keeps its existing opacity. SGR 49, the escape sequence that restores the default background, also restores normal transparency.
+For inverse text, the color moved into the background becomes opaque. Color correction is applied before displaying that color.
+
+This setting works with background modes and images. Selection, cursor, and IME opacity retain their own settings.
+An unset value inherits the connection defaults. Applying a change during a session also updates existing text and history.
 
 `color_filter` accepts the following values. See the [README color filters](../../README.md#reversing-background-and-text-polarity) for how the modes look.
 

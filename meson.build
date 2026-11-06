@@ -142,7 +142,7 @@ install_data(
   'deps/boxrig/deps/utf8proc/LICENSE.md',
   'deps/boxrig/deps/libpng/LICENSE',
   'deps/boxrig/deps/zlib/LICENSE',
-  'deps/boxrig/resources/unicode/17.0.0/LICENSE.txt',
+  'deps/boxrig/resources/unicode/18.0.0/LICENSE.txt',
   'deps/boxrig/data/encoding/whatwg/LICENSE',
   rename: ['LICENSE', 'README.md', 'README_ja.md', 'sources.json',
     'utf8proc-LICENSE.md', 'libpng-LICENSE', 'zlib-LICENSE',

@@ -842,6 +842,44 @@ static void test_terminal_background_image_settings() {
   std::filesystem::remove(connection_path);
 }
 
+static void test_terminal_cell_background_settings() {
+  const auto global = temporary_config_path("cell-background-global");
+  const auto path = temporary_config_path("cell-background-connection");
+  const auto key = elder_terms::make_setting_key("terminal", "cell_background_mode");
+  const SettingsLoadOptions options{.config_path = path,
+      .startup_config_path = std::nullopt, .global_config_path = global};
+  write_config(global, "");
+  write_config(path, "");
+  auto loaded = load_settings(options, 12);
+  expect_true(elder_terms::setting_string_value_or_default(loaded.store, key, "missing") == "transparent",
+              "unset cell backgrounds must retain transparent rendering");
+  write_config(global, "[terminal]\ncell_background_mode=opaque\n");
+  loaded = load_settings(options, 12);
+  expect_true(elder_terms::setting_string_value_or_default(loaded.store, key, "missing") == "opaque",
+              "connections must inherit the global cell background policy");
+  expect_true(set_explicit_setting_value(&loaded.store, key, std::string("transparent")) &&
+                  save_settings(loaded.store, path).saved,
+              "connections may save an independent transparent override");
+  loaded = load_settings(options, 12);
+  expect_true(elder_terms::setting_string_value_or_default(loaded.store, key, "missing") == "transparent",
+              "cell background overrides survive restart");
+  for (const auto *invalid : {"", "blur", "invalid"})
+    expect_true(!set_explicit_setting_value(&loaded.store, key, std::string(invalid)),
+                "cell background modes accept only transparent or opaque");
+  clear_explicit_setting_value(&loaded.store, key);
+  expect_true(save_settings(loaded.store, path).saved && read_config(path).empty(),
+              "clearing a cell background override restores inheritance");
+  loaded = load_settings(options, 12);
+  expect_true(elder_terms::setting_string_value_or_default(loaded.store, key, "missing") == "opaque",
+              "the inherited opaque preference survives override removal");
+  write_config(path, "[terminal]\ncell_background_mode=invalid\n");
+  loaded = load_settings(options, 12);
+  expect_true(elder_terms::setting_string_value_or_default(loaded.store, key, "missing") == "opaque",
+              "invalid stored modes must retain the valid inherited policy");
+  remove_config(path);
+  remove_config(global);
+}
+
 static void test_terminal_background_settings() {
   const auto global = temporary_config_path("background-global");
   const auto path = temporary_config_path("background-connection");
@@ -5002,6 +5040,7 @@ int main() {
     elder_terms_settings_test::test_terminal_ambiguous_width_setting();
     elder_terms_settings_test::test_terminal_block_copy_trailing_spaces_setting();
     elder_terms_settings_test::test_terminal_background_settings();
+    elder_terms_settings_test::test_terminal_cell_background_settings();
     elder_terms_settings_test::test_terminal_link_decoration_settings();
     elder_terms_settings_test::test_terminal_color_filter_settings();
     elder_terms_settings_test::test_terminal_color_vision_settings();

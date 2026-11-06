@@ -165,6 +165,10 @@ foreach backend : ['cairo', 'opengl']
     args: ['-a', color_rendering_test, backend], timeout: 60,
     env: ['LIBGL_ALWAYS_SOFTWARE=1', 'GTK_IM_MODULE=gtk-im-context-simple', 'NO_AT_BRIDGE=1', 'GDK_SCALE=1'] +
       (backend == 'cairo' ? ['GDK_GL=disable'] : []))
+  test('terminal-color-rendering-' + backend + '-opaque-test', find_program('xvfb-run'),
+    args: ['-a', color_rendering_test, backend, '--opaque'], timeout: 60,
+    env: ['LIBGL_ALWAYS_SOFTWARE=1', 'GTK_IM_MODULE=gtk-im-context-simple', 'NO_AT_BRIDGE=1', 'GDK_SCALE=1'] +
+      (backend == 'cairo' ? ['GDK_GL=disable'] : []))
 endforeach
 
 executable('terminal-color-vision-demo',
@@ -189,6 +193,22 @@ background_state_test = executable('terminal-background-state-test',
   dependencies: [boxrig_runtime_dep, boxrig_background_dep])
 test('terminal-background-state-test', find_program('xvfb-run'), args: ['-a', background_state_test],
   env: ['GDK_GL=disable', 'NO_AT_BRIDGE=1', 'G_DEBUG=fatal-criticals'])
+
+background_opacity_probe = executable('terminal-background-opacity-probe',
+  ['tests/cpp/terminal-background-opacity-probe.cpp', 'src/terminal-background.cpp', 'src/terminal-background-image.cpp'],
+  dependencies: [boxrig_runtime_dep, boxrig_background_dep])
+foreach backend : ['cairo', 'opengl']
+  foreach scale : ['1', '2']
+    # Both policies must preserve default-background transparency.
+    foreach mode : ['transparent', 'require-opaque']
+      test('terminal-background-opacity-' + backend + '-' + scale + '-' + mode, find_program('xvfb-run'),
+        args: ['-a', '-s', '-screen 0 2560x2048x24', background_opacity_probe, backend, mode],
+        timeout: 60, env: ['G_DEBUG=fatal-criticals', 'NO_AT_BRIDGE=1', 'GDK_SCALE=' + scale,
+          'LIBGL_ALWAYS_SOFTWARE=1', 'GTK_IM_MODULE=gtk-im-context-simple'] +
+          (backend == 'cairo' ? ['GDK_GL=disable'] : []))
+    endforeach
+  endforeach
+endforeach
 
 terminal_dispatch_test = executable('terminal-dispatch-test',
   'tests/cpp/terminal-dispatch-test.cpp',

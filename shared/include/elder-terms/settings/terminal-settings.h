@@ -90,15 +90,23 @@ enum class TerminalBackgroundMode {
   transparent, /**< Prefer desktop alpha composition when supported. */
   blur,        /**< Prefer compositor blur behind the transparent terminal region. */
 };
+/** Opacity policy for backgrounds explicitly assigned to terminal cells. */
+enum class TerminalCellBackgroundMode {
+  transparent, /**< Follow the terminal background opacity. */
+  opaque,      /**< Keep explicit cell backgrounds opaque; preserve default-background opacity. */
+};
 /** Independent cell-background and tint-layer preferences. */
 struct TerminalBackgroundSettings {
   TerminalBackgroundMode mode; /**< Requested desktop transparency. */
   int opacity;                /**< Cell background opacity, zero through one hundred. */
   RgbColor tint;              /**< Unassociated sRGB tint color. */
   int tint_opacity;           /**< Tint-layer opacity, zero through one hundred. */
+  TerminalCellBackgroundMode cell_mode; /**< Opacity policy for explicit cell backgrounds. */
 };
 /** @returns Key for the requested background mode. */
 ELDER_TERMS_API SettingKey terminal_background_mode_setting_key();
+/** @returns Key for explicit cell background transparency. */
+ELDER_TERMS_API SettingKey terminal_cell_background_mode_setting_key();
 /** @returns Key for terminal cell background opacity. */
 ELDER_TERMS_API SettingKey terminal_background_opacity_setting_key();
 /** @returns Key for the independent RGB tint. */

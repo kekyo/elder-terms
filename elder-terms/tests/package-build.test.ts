@@ -371,7 +371,24 @@ container_image_for_target debian trixie riscv64
     }
   });
 
-  it('reports the boxrig release version from the build SDK', () => {
+  it('prepares the current boxrig checkout and reports its SDK release version', () => {
+    expectSuccess(
+      run(process.execPath, [
+        join(projectRoot, 'scripts/prepare-boxrig.mts'),
+        projectRoot,
+        join(projectRoot, '.build'),
+      ]),
+      'current boxrig checkout SDK preparation failed'
+    );
+    expectSuccess(
+      run('meson', [
+        'setup',
+        join(projectRoot, '.build'),
+        projectRoot,
+        '--reconfigure',
+      ]),
+      'current boxrig checkout application configuration failed'
+    );
     const versions = run(
       'pkg-config',
       [

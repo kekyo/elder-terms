@@ -182,6 +182,9 @@ int main(int argc, char **argv) {
   gtk_container_add(GTK_CONTAINER(fixture.window), content);
   fixture.runtime = create_terminal_runtime(GTK_WINDOW(fixture.window), GTK_BOX(content), GTK_BOX(content), elder_terms::TerminalAmbiguousWidth::narrow);
   assert(fixture.runtime);
+  if (argc > 2 && std::string_view(argv[2]) == "--opaque")
+    assert(boxrig_ui_view_set_cell_background_mode(boxrig_gtk3_terminal_widget_view(terminal_runtime_widget(fixture.runtime)),
+        BOXRIG_UI_CELL_BACKGROUND_OPAQUE_EXPLICIT) == BOXRIG_UI_OK);
   terminal_runtime_set_prepare_frame_callback(fixture.runtime, [&fixture] {
     auto *view = boxrig_gtk3_terminal_widget_view(terminal_runtime_widget(fixture.runtime));
     const auto previous = fixture.filter.reverse_palette;
