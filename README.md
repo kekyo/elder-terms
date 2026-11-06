@@ -739,7 +739,7 @@ Lower "Background opacity (%)" to reveal more of the background image or desktop
 Opacity ranges from 0 to 100%; a 0% tint adds no visible color. Text itself stays opaque.
 
 To keep terminal-assigned cell backgrounds from showing through, set "Cell background transparency" to "Opaque".
-The default background retains its transparency, while explicitly assigned cell backgrounds become opaque. The default "Transparent" option applies "Background opacity (%)" to cell backgrounds too.
+The default background retains its existing transparency setting, while explicitly assigned cell backgrounds become opaque. The default "Transparent" option applies "Background opacity (%)" to cell backgrounds too.
 Changes during a session also apply to existing text and history.
 
 Choose a local PNG or JPEG file, or enter its absolute path.
