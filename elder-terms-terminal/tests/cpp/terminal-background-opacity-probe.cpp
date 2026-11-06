@@ -70,6 +70,8 @@ static void prepare_scene(Fixture *fixture) {
   auto *widget = terminal_runtime_widget(fixture->runtime);
   auto *view = boxrig_gtk3_terminal_widget_view(widget);
   if (fixture->backdrop == 0) {
+    assert(boxrig_ui_view_set_cell_background_mode(view, fixture->require_opaque
+        ? BOXRIG_UI_CELL_BACKGROUND_OPAQUE_EXPLICIT : BOXRIG_UI_CELL_BACKGROUND_TRANSPARENT) == BOXRIG_UI_OK);
     auto transparency = boxrig_ui_transparency_config_default();
     transparency.request = BOXRIG_UI_TRANSPARENCY_REQUIRED;
     transparency.requested_scopes = BOXRIG_UI_TRANSPARENCY_VIEW_SURFACE;
@@ -175,8 +177,7 @@ int main(int argc, char **argv) {
   Fixture fixture;
   fixture.backend_name = argv[1];
   if (fixture.backend_name == "cairo") fixture.backend = BOXRIG_GTK_RENDER_BACKEND_CAIRO;
-  // This selects the acceptance assertion, not a boxrig setting: the pinned
-  // public API has no per-origin opacity policy. Keep the unmet requirement RED.
+  // Select both the public view policy and its independently calculated pixels.
   fixture.require_opaque = std::string_view(argv[2]) == "require-opaque";
   if (argc == 4) fixture.evidence_directory = argv[3];
   fixture.window = gtk_window_new(GTK_WINDOW_TOPLEVEL);

@@ -194,13 +194,14 @@ background_opacity_probe = executable('terminal-background-opacity-probe',
   'tests/cpp/terminal-background-opacity-probe.cpp', dependencies: [boxrig_runtime_dep])
 foreach backend : ['cairo', 'opengl']
   foreach scale : ['1', '2']
-    # require-opaque is an explicitly run dependency acceptance probe. The
-    # current public API cannot meet it; do not count baseline success as support.
-    test('terminal-background-opacity-' + backend + '-' + scale, find_program('xvfb-run'),
-      args: ['-a', '-s', '-screen 0 2560x2048x24', background_opacity_probe, backend, 'transparent'],
-      timeout: 60, env: ['G_DEBUG=fatal-criticals', 'NO_AT_BRIDGE=1', 'GDK_SCALE=' + scale,
-        'LIBGL_ALWAYS_SOFTWARE=1', 'GTK_IM_MODULE=gtk-im-context-simple'] +
-        (backend == 'cairo' ? ['GDK_GL=disable'] : []))
+    # Both policies must preserve default-background transparency.
+    foreach mode : ['transparent', 'require-opaque']
+      test('terminal-background-opacity-' + backend + '-' + scale + '-' + mode, find_program('xvfb-run'),
+        args: ['-a', '-s', '-screen 0 2560x2048x24', background_opacity_probe, backend, mode],
+        timeout: 60, env: ['G_DEBUG=fatal-criticals', 'NO_AT_BRIDGE=1', 'GDK_SCALE=' + scale,
+          'LIBGL_ALWAYS_SOFTWARE=1', 'GTK_IM_MODULE=gtk-im-context-simple'] +
+          (backend == 'cairo' ? ['GDK_GL=disable'] : []))
+    endforeach
   endforeach
 endforeach
 
