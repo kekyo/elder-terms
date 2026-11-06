@@ -2,7 +2,7 @@
 
 作成日：2026年11月2日
 
-状態：2026年11月6日に段階1の再現試験と公開API調査を実施しました。必要なAPIが未提供のため依存待ちです。段階1の完了条件は未達で、段階2～4は未着手です。
+状態：2026年11月6日にboxrigのdevelop更新を取り込み、段階1～3の実装と検証を完了しました。段階4の実環境検証も成功し、全体ビルド・テストを残しています。更新前の依存待ちの記録は経緯として保持します。
 
 ## 目的
 
@@ -10,7 +10,7 @@
 
 端末の通常の背景、背景画像、デスクトップ透過、ぼかしの設定は別の役割を持ちます。本planの対象は、端末が文字セルへ指定した背景色です。共通の実施条件は[plan15](plan15-transfer-jobs-and-tree-icons.md)に従います。
 
-## 現在のコードとAPIの制約
+## 計画時のコードとAPIの制約
 
 [terminal-background.cpp](../../../elder-terms-terminal/src/terminal-background.cpp)は、背景モードと背景画像の有無から透過要求を作り、`boxrig_ui_transparency_config.background_opacity`へ一つの値を渡しています。[terminal-background-editor.cpp](../../../shared/src/settings-widget/terminal-background-editor.cpp)には、その設定を編集する画面があります。
 
@@ -80,6 +80,8 @@ X11とWaylandの利用可能な透過環境、透過を使えない環境で確�
 5. 必要な公開APIを使用でき、外部コードを変更せず、目視確認と全体テストが完了している。
 
 ## 2026年11月6日の段階1の記録
+
+この節はboxrig更新前の記録です。更新後の結果は末尾に記載します。
 
 調査基準は`develop`の`6e8673a3`です。作業ブランチは`feature/explicit-background-opacity`、boxrigは`320b4734b4e446e91d93c395866932f03f718706`です。外部コードとサブモジュール参照は変更していません。
 
@@ -176,3 +178,29 @@ boxrigの標準GTK3描画に、表示先ごとのセル背景方針が必要で�
 環境条件による未実施は13件です。専用GTKやGNOME環境を使うアイコン試験10件、Debian Trixie i386のパッケージ試験1件、実サーバーを指定するvsftpdとApache WebDAVの試験2件でした。ファイル転送側の子テストで対象を絞った際のスキップと、再実行で対象外にしたケースは、この13件に含めていません。
 
 ローカルの証跡は`artifacts/plan22/`に保存しています。ビルドログは`build.log`、全体テストは`test.log`、版番号3件の再実行は`version-recheck.log`です。C++全体の詳細は`cpp-full/`にも保存しました。再現試験は`opacity-baseline.log`と`opacity-<描画方式>-<倍率>-red.log`、画像は`scale-1/`と`scale-2/`です。ビルド参照の修正前後は`sdk-red.log`・`sdk-green.log`と`configure-red.log`・`configure-green.log`で確認できます。
+
+## 2026年11月6日のboxrig更新とアプリ実装
+
+ユーザーの指示に従い、boxrigサブモジュールをdevelopの`8ae3e3f8caa5499b20eee7896eaa568bfdfdc9a9`へ更新しました。外部コードは変更していません。採用したAPIは`boxrig_ui_view_set_cell_background_mode()`です。[更新版の公式背景文書](https://github.com/kekyo/boxrig/blob/8ae3e3f8caa5499b20eee7896eaa568bfdfdc9a9/docs/ja/background.md)と[公開ヘッダーのコメント](https://github.com/kekyo/boxrig/blob/8ae3e3f8caa5499b20eee7896eaa568bfdfdc9a9/include/boxrig/ui/view.h)で、既定背景と明示背景の扱い、反転後の判定、色補正と装飾の契約を確認しました。
+
+### 段階1・2
+
+新APIを適用する前には、不透明を要求する描画試験が失敗することを確認しました。適用後はCairo/OpenGL・倍率1/2の8件が成功しています。新しいSDKと実行時の共有ライブラリをそろえるため、依存更新後は対象ドライバーだけでなくMeson全体をビルドしました。
+
+設定キー`terminal.cell_background_mode`を追加しました。値は`transparent`と`opaque`で、既定値は`transparent`です。全体設定・接続設定・実行中の設定に「文字背景の透過」を追加し、保存、継承、切り替えを確認しました。設定定義、実行中の表示、編集画面の各テストで変更前の失敗と変更後の成功を確認しています。保存値が不正な場合は継承値へ戻り、適用に失敗した場合は直前の表示設定を保ちます。
+
+### 段階3
+
+再現ドライバーをアプリの設定適用処理へ接続しました。12種類のセルを使い、背景の不透明度0・50・100%、背景画像、明暗差の補正、3種類の色覚補正、5種類の背景反転、履歴、alternate screen、元の履歴への復帰を検証します。各条件で透過と不透明を往復し、同じセルに赤と青の下地を重ねた結果を比較しました。論理セルの出自と元のRGBが維持されることも確認しています。
+
+不透明な画素はRGBの完全一致で検証します。Cairoの半透明合成には[公開Cairo描画経路](https://github.com/kekyo/boxrig/blob/8ae3e3f8caa5499b20eee7896eaa568bfdfdc9a9/src/pangocairo/renderer.c)の量子化による1階調の差があるため、半透明の比較だけに許容差1を設けました。背景画像の試験は、画像、混色、セル背景の順に重ねた画素を独立に計算します。
+
+実行中の切り替え、設定保存後の再起動、再接続と描画失敗後の再アタッチも成功しました。選択の描画と、色補正を使う選択・検索・IMEの描画を確認し、カーソルの3形状では色と点滅を動画で検証しています。倍率1/2の描画・再アタッチ12件、色補正と装飾4件、カーソルを含む外観11件が成功しました。
+
+### 段階4の個別検証
+
+X11ではKWin、WaylandではX11上で動くWestonを使い、実アプリの画素を検証しました。描画にはCairoとソフトウェアOpenGLを使用しています。X11の2件は設定の往復・保存・コンポジターなしでの再起動を含みます。Waylandの8件は単純透過とすりガラス要求の両方を確認し、後者は単純透過へのフォールバックを検証しました。
+
+通常背景と同じ黒を明示した領域でも、不透明モードでは黒を保ち、通常背景ではデスクトップが透ける結果になりました。設定画面、通常背景、画像、履歴、X11/Waylandの描画を目視確認しています。利用者向けのREADMEと設定リファレンスを日本語・英語で更新しました。
+
+今回の証跡は`artifacts/plan22-implementation/`に保存しています。`matrix.log`は描画・再アタッチ、`overlay.log`は装飾、`desktop-background.log`はX11/Wayland、`cursor.log`は外観の結果です。描画画像は`cairo-1/`と`opengl-2/`、設定画面は`settings-*.png`です。実アプリの画像と動画は`test-results/`に保存されます。全体ビルド・テストと最終完了条件の照合は、実行後に追記します。

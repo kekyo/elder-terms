@@ -106,6 +106,7 @@ cursor_shape=bar
 cursor_blink=false
 background_mode=blur
 background_opacity=40
+cell_background_mode=opaque
 background_tint_color=#203040
 background_tint_opacity=20
 background_image=/home/user/Pictures/terminal.png
@@ -118,6 +119,15 @@ color_filter=oklch
 画像ファイルと展開後のRGBA画像はそれぞれ64 MiB以内、各辺は16384画素以内です。
 画像を移動すると次回起動時に読み込めなくなるため、同じ場所に置いてください。
 透過・すりガラスの利用条件は[READMEの背景設定](../../README_ja.md#カーソルと背景の設定)を参照してください。
+
+`cell_background_mode`は、端末が文字ごとに指定した背景色の透過を切り替えます。
+既定値は`transparent`で、文字の背景にも`background_opacity`が適用されます。
+`opaque`では、16色・256色・RGBで指定した背景を不透明にします。通常背景と同じRGBの指定や、空白・文字消去後の背景も対象です。
+通常背景は従来の不透明度を保ち、背景色を既定値へ戻すエスケープシーケンスSGR 49でも通常の透過に戻ります。
+反転表示で不透明になるのは、反転後に背景へ移った色です。色補正を使う場合は補正後の色を表示します。
+
+この設定は背景モード・背景画像と併用できます。選択・カーソル・IMEの不透明度はそれぞれの設定を保ちます。
+未設定なら接続の既定値を継承し、実行中に適用すると表示済みの文字や履歴にも反映されます。
 
 `color_filter`には次の値を指定できます。各方式の見え方は[READMEの色フィルタ](../../README_ja.md#背景と文字の明暗を反転する)で説明しています。
 
