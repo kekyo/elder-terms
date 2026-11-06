@@ -398,6 +398,10 @@ elder_terms_shared_test = executable(
 
 test('elder-terms-shared-test', elder_terms_shared_test)
 
+named_settings_theme_test = executable('named-settings-theme-test',
+  'tests/named-settings-theme-test.cpp', dependencies: elder_terms_dep)
+test('named-settings-theme-test', named_settings_theme_test)
+
 connection_icon_test = executable('connection-icon-test',
   'tests/connection-icon-test.cpp', dependencies: elder_terms_dep)
 test('connection-icon-test', connection_icon_test)

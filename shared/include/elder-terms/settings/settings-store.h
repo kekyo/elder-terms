@@ -6,6 +6,7 @@
 #pragma once
 
 #include <optional>
+#include <memory>
 #include <string>
 #include <variant>
 #include <vector>
@@ -53,6 +54,8 @@ enum class SettingValueSource {
   built_in,
   /** Value comes from global.ini. */
   global,
+  /** Value comes from the explicitly selected named theme. */
+  theme,
   /** Value is an explicit connection, startup, or in-memory override. */
   override,
 };
@@ -100,6 +103,10 @@ struct SettingEntry {
   SettingValue fallback_value;
   /** Source of fallback_value. */
   SettingValueSource fallback_source = SettingValueSource::built_in;
+  /** Stable ID of the theme supplying the fallback, or empty. */
+  std::string fallback_theme_id{};
+  /** Display name of the theme supplying the fallback, or empty. */
+  std::string fallback_theme_name{};
   /** Current effective value, initialized from fallback_value. */
   SettingValue value;
   /** True when value is an explicit connection, startup, or in-memory
@@ -120,6 +127,9 @@ struct SettingEntry {
 /**
  * Owns all loaded settings for the application.
  */
+struct SettingsThemeContext;
+
+/** Registered values, explicit connection collections, and inheritance context. */
 struct SettingsStore {
   /** Registered setting entries. */
   std::vector<SettingEntry> entries;
@@ -135,6 +145,8 @@ struct SettingsStore {
   std::vector<MacroRule> macro_rules;
   /** True after the macro rule collection is changed in memory. */
   bool macro_rules_dirty = false;
+  /** Immutable global defaults and themes used to resolve this connection. */
+  std::shared_ptr<const SettingsThemeContext> theme_context{};
 };
 
 /**
@@ -232,7 +244,7 @@ ELDER_TERMS_API SettingValue setting_fallback_value(
  *
  * @param store Source settings store.
  * @param key Setting key.
- * @returns Override, global, or built-in source.
+ * @returns Override, theme, global, or built-in source.
  */
 ELDER_TERMS_API SettingValueSource
 setting_value_source(const SettingsStore &store, const SettingKey &key);
@@ -242,7 +254,7 @@ setting_value_source(const SettingsStore &store, const SettingKey &key);
  *
  * @param store Source settings store.
  * @param key Setting key.
- * @returns Global or built-in fallback source.
+ * @returns Theme, global, or built-in fallback source.
  */
 ELDER_TERMS_API SettingValueSource
 setting_fallback_source(const SettingsStore &store, const SettingKey &key);
@@ -347,7 +359,7 @@ setting_has_explicit_value(const SettingsStore &store,
  *
  * @param store Source settings store.
  * @param key Setting key.
- * @returns True for a global value or explicit override.
+ * @returns True for a theme or global value, or explicit override.
  */
 ELDER_TERMS_API bool
 setting_has_configured_value(const SettingsStore &store,
@@ -359,8 +371,9 @@ setting_has_configured_value(const SettingsStore &store,
  * @param store Draft settings store to update.
  * @param fallbacks Store whose effective values become the new fallbacks.
  *
- * @remarks Any configured value in fallbacks is treated as a global fallback.
- * The connection-specific [general] name setting is never rebased.
+ * @remarks Explicit values in fallbacks become global fallbacks; inherited
+ * values retain their source and theme identity. Connection-only keys are
+ * never rebased.
  */
 ELDER_TERMS_API void
 rebase_settings_store_fallbacks(SettingsStore *store,

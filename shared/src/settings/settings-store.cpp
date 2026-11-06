@@ -4,6 +4,7 @@
 // https://github.com/kekyo/elder-terms/
 
 #include <elder-terms/settings/settings-store.h>
+#include <elder-terms/settings.h>
 
 #include <algorithm>
 #include <utility>
@@ -366,8 +367,7 @@ bool setting_has_configured_value(const SettingsStore &store,
 void rebase_settings_store_fallbacks(SettingsStore *store,
                                      const SettingsStore &fallbacks) {
   for (SettingEntry &entry : store->entries) {
-    if (entry.definition.key.section == "general" &&
-        entry.definition.key.name == "name") {
+    if (!setting_is_inheritable(entry.definition.key)) {
       continue;
     }
 
@@ -384,10 +384,10 @@ void rebase_settings_store_fallbacks(SettingsStore *store,
     entry.fallback_value = fallback_entry->value;
     entry.fallback_validation_error = fallback_entry->validation_error;
     entry.fallback_invalid_raw_value = fallback_entry->invalid_raw_value;
-    entry.fallback_source =
-        setting_has_configured_value(fallbacks, entry.definition.key)
-            ? SettingValueSource::global
-            : SettingValueSource::built_in;
+    entry.fallback_source = fallback_entry->loaded
+        ? SettingValueSource::global : fallback_entry->fallback_source;
+    entry.fallback_theme_id = fallback_entry->fallback_theme_id;
+    entry.fallback_theme_name = fallback_entry->fallback_theme_name;
     if (!has_override) {
       entry.value = entry.fallback_value;
       entry.validation_error = entry.fallback_validation_error;

@@ -178,6 +178,9 @@ struct SettingsLoadOptions {
   std::optional<std::filesystem::path> startup_config_path;
   /** Optional global defaults INI path. Missing files are ignored. */
   std::optional<std::filesystem::path> global_config_path = std::nullopt;
+  /** Optional theme.ini path. Otherwise resolved beside global_config_path;
+   * without either path, no user theme file is read. */
+  std::optional<std::filesystem::path> theme_config_path = std::nullopt;
 };
 
 /**
@@ -202,6 +205,72 @@ struct SettingsSaveResult {
   /** Non-fatal warnings encountered while saving. */
   std::vector<std::string> warnings;
 };
+
+/** Named reusable overrides for settings inherited by connections. */
+struct SettingsTheme {
+  /** Stable reference ID, independent of the display name. */
+  std::string id;
+  /** Nonblank, unique display name. */
+  std::string name;
+  /** Only loaded entries are theme overrides; other entries are inherited. */
+  SettingsStore store;
+};
+
+/** Theme definitions and diagnostics from one theme.ini. */
+struct SettingsThemeCatalog {
+  /** Themes in file order. */
+  std::vector<SettingsTheme> themes;
+  /** False for read, syntax, schema, or name errors; saving is disallowed. */
+  bool loaded = true;
+  /** Diagnostics, including errors retained by individual theme entries. */
+  std::vector<std::string> warnings;
+};
+
+/** Immutable inheritance inputs shared by a connection and its editor drafts. */
+struct SettingsThemeContext {
+  /** Global settings, represented as explicit values over built-in defaults. */
+  SettingsStore global;
+  /** Available themes. */
+  SettingsThemeCatalog catalog;
+  /** Global path, empty for an isolated in-memory configuration. */
+  std::filesystem::path global_path;
+  /** Theme path, empty when theme files are disabled. */
+  std::filesystem::path theme_path;
+};
+
+/** @returns The connection-only [general] theme key. */
+ELDER_TERMS_API SettingKey general_theme_setting_key();
+
+/** @param store Connection settings. @returns Selected stable ID, or empty for none. */
+ELDER_TERMS_API std::string selected_settings_theme(const SettingsStore &store);
+
+/** @param key Registered setting key. @returns Whether global defaults and themes can supply it. */
+ELDER_TERMS_API bool setting_is_inheritable(const SettingKey &key);
+
+/**
+ * Creates a theme editor store with no explicit values.
+ * @param global Global defaults, including current unsaved edits for preview.
+ * @returns Only inheritable registered settings, rebased on global.
+ */
+ELDER_TERMS_API SettingsStore create_theme_settings(const SettingsStore &global);
+
+/**
+ * Loads a theme catalog using the registered setting types and validators.
+ * @param path Theme file path. A missing file produces an empty catalog.
+ * @param global Global defaults used for inherited theme values.
+ * @returns Themes and diagnostics; errors never become an editable empty catalog.
+ */
+ELDER_TERMS_API SettingsThemeCatalog load_settings_themes(
+    const std::filesystem::path &path, const SettingsStore &global);
+
+/**
+ * Refreshes a connection's inherited values for its own selected theme.
+ * @param store Connection draft; explicit values and dirty state are retained.
+ * @param context New global settings, catalog and file paths.
+ * @returns False if the selected ID cannot be resolved. The ID and error remain in store.
+ */
+ELDER_TERMS_API bool rebase_settings_theme(
+    SettingsStore *store, std::shared_ptr<const SettingsThemeContext> context);
 
 /**
  * Creates a settings store initialized with application defaults.
