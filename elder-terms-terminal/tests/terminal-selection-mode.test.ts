@@ -253,6 +253,11 @@ describe.concurrent('selection mode motion video', () => {
                   );
                 });
                 await app.input.pressKey('Escape');
+                // OpenGL may present the cleared selection after the key event
+                // returns. Observe that frame before checking it stays stable.
+                await waitForResult(async () => {
+                  expect(frames[frames.length - 1]).toBe(before.hash);
+                });
                 await observe('cleared', undefined, before.hash);
                 await writeFile(
                   join(evidence.directory, 'selection-mode-frames.json'),
