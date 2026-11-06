@@ -188,7 +188,7 @@ process.stdout.write('\\x1b[?25l\\x1b[48;2;0;0;0m\\x1b[38;2;255;255;255m\\x1b[2J
             };
             const selectMode = async (
               index: number,
-              id = 'settings_terminal_background_mode_combo'
+              id: string
             ): Promise<void> => {
               // Wait for the popup item before sending native selection input.
               // Key events sent while GTK creates the popup can be lost.
@@ -341,7 +341,7 @@ process.stdout.write('\\x1b[?25l\\x1b[48;2;0;0;0m\\x1b[38;2;255;255;255m\\x1b[2J
             ).click();
             await expectBackground([112, 24, 16]);
             await openSettings();
-            await selectMode(1);
+            await selectMode(1, 'settings_terminal_background_mode_combo');
             await setEntry('opacity', '0');
             await setEntry('tint_opacity', '100');
             await expectElementKind(
@@ -357,7 +357,7 @@ process.stdout.write('\\x1b[?25l\\x1b[48;2;0;0;0m\\x1b[38;2;255;255;255m\\x1b[2J
                 'label'
               ).text()
             ).toBe('Opaque background');
-            await selectMode(2);
+            await selectMode(2, 'settings_terminal_background_mode_combo');
             await expectElementKind(
               await app.getById('settings_save_button'),
               'button'
