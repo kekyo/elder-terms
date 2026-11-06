@@ -2,7 +2,7 @@
 
 作成日：2026年11月2日
 
-状態：計画作成。実装は未着手です。現在のboxrig公開APIではセルごとの背景不透明度を指定できないため、依存APIの検証を先行します。
+状態：2026年11月6日に段階1の再現試験と公開API調査を実施しました。必要なAPIが未提供のため依存待ちです。段階1の完了条件は未達で、段階2～4は未着手です。
 
 ## 目的
 
@@ -78,3 +78,79 @@ X11とWaylandの利用可能な透過環境、透過を使えない環境で確�
 3. 同じRGB、反転、空白、色補正、背景画像、選択、カーソルでも出自と合成規則が一貫する。
 4. 実行中の切替、履歴、再接続、再アタッチへ反映される。
 5. 必要な公開APIを使用でき、外部コードを変更せず、目視確認と全体テストが完了している。
+
+## 2026年11月6日の段階1の記録
+
+調査基準は`develop`の`6e8673a3`です。作業ブランチは`feature/explicit-background-opacity`、boxrigは`320b4734b4e446e91d93c395866932f03f718706`です。外部コードとサブモジュール参照は変更していません。
+
+### 検証に必要だったビルドの修正
+
+取り込み済みのboxrig更新により、Unicodeのライセンスは`resources/unicode/18.0.0/LICENSE.txt`へ移動していました。アプリ側の`scripts/prepare-boxrig.mts`とルートの`meson.build`には17.0.0の参照が残り、SDKの準備とアプリの構成が失敗しました。移動先は[採用版のライセンス配置規則](https://github.com/kekyo/boxrig/blob/320b4734b4e446e91d93c395866932f03f718706/packaging/licenses/licenses.mk)で確認しています。
+
+段階1のドライバーをビルドするため、両方の参照先を採用版に合わせました。既存のSDK検証へ準備スクリプトとMeson構成の実行を追加し、それぞれ変更前の失敗と変更後の成功を確認しました。
+
+### 再現ドライバーと結果
+
+[terminal-background-opacity-probe.cpp](../../../elder-terms-terminal/tests/cpp/terminal-background-opacity-probe.cpp)は、アプリの端末ランタイムへ固定のエスケープシーケンスを渡します。セル背景のalphaを128にし、その下の単色レイヤーを赤から青へ変更します。端末のセルは書き換えず、GTKが描画を終えた通知から画素を取得します。待機時間の長さで描画完了を推定する処理はありません。
+
+`transparent`は従来の透過動作を検証します。`require-opaque`は明示背景だけが不透明になることを要求する試験です。後者の引数は期待値を選ぶもので、boxrigに存在する設定名ではありません。公開APIが不足する現状をREDのまま再現できます。
+
+各試験は12種類のセルを赤・青の下地で確認し、さらに下地による色の変化を比較します。画素の期待値はレンダラーの計算関数を使わず求めます。描画方式も取得し、OpenGLの試験がCairoへフォールバックしていないことを確認します。
+
+| セルの条件 | 背景色の出自 | 透過可能の試験 | 不透明を要求する試験 |
+| --- | --- | --- | --- |
+| OSC 11で指定した既定背景、SGR 49、SGR 0後 | 既定背景 | 成功 | 成功。既定背景の透過は維持される |
+| SGR 42・102、256色の46番 | パレット | 成功 | RED。下地の色が混ざる |
+| true colorの緑 | 明示RGB | 成功 | RED。下地の色が混ざる |
+| 既定背景と同じ`#202020`の明示色 | 明示RGB | 成功 | RED。既定背景と同じ透過結果になる |
+| 明示背景の空白、ECHによる消去後 | パレット | 成功 | RED。文字の有無によらず透過する |
+| 既定前景色の反転、緑の前景色の反転 | 既定前景、パレット | 成功 | RED。反転後の背景も透過する |
+
+Cairo/OpenGLと表示倍率1/2の4条件で、`transparent`はすべて成功しました。`require-opaque`は4条件とも終了コード1です。各条件で、既定背景3種類は成功し、それ以外の9種類は両方の下地の画素と色の不変性が失敗しました。通常の全体テストには`transparent`の4件だけを登録しています。この成功は不透明表示の対応を意味しません。
+
+緑`#00ff00`の背景は、赤い下地で`#7f8000`、青い下地で`#00807f`になりました。不透明モードで必要なのは、どちらの下地でも`#00ff00`になることです。既定背景と同じRGBの明示色は、出自を区別できても描画alphaを変えられませんでした。
+
+リポジトリのルートで再現できます。
+
+```bash
+meson setup .build --reconfigure
+meson compile -C .build terminal-background-opacity-probe
+meson test -C .build --no-rebuild --print-errorlogs 'terminal-background-opacity-*'
+
+mkdir -p artifacts/plan22/scale-1
+env G_DEBUG=fatal-criticals GDK_GL=disable GDK_SCALE=1 \
+  LIBGL_ALWAYS_SOFTWARE=1 GTK_IM_MODULE=gtk-im-context-simple NO_AT_BRIDGE=1 \
+  xvfb-run -a -s '-screen 0 2560x2048x24' \
+  .build/elder-terms-terminal/terminal-background-opacity-probe \
+  cairo require-opaque artifacts/plan22/scale-1
+```
+
+最後のコマンドは現状では失敗します。OpenGLでは`GDK_GL`を未設定にして第1引数を`opengl`へ変えます。倍率2では`GDK_SCALE=2`にし、画像の保存先も分けます。画像保存は省略でき、その場合も画素を検証します。
+
+### 公開APIの適合表
+
+採用版の[公式背景文書](https://github.com/kekyo/boxrig/blob/320b4734b4e446e91d93c395866932f03f718706/docs/ja/background.md)と[公式色補正文書](https://github.com/kekyo/boxrig/blob/320b4734b4e446e91d93c395866932f03f718706/docs/ja/color-filters.md)を、同梱の公開ヘッダーのコメントと照合しました。
+
+| 公開契約 | 確認結果 | 適合性 |
+| --- | --- | --- |
+| [色解決と出自](https://github.com/kekyo/boxrig/blob/320b4734b4e446e91d93c395866932f03f718706/include/boxrig/ui/view.h#L449-L471) | `boxrig_ui_color_resolve_cell()`は反転後のRGBと出自を返す。同じRGBでも既定背景と明示色を区別できる | 判定に使える |
+| [色フィルター](https://github.com/kekyo/boxrig/blob/320b4734b4e446e91d93c395866932f03f718706/include/boxrig/ui/color.h#L80-L140) | 変更できるのはRGBと下線の追従規則。背景alphaは入力のみ | セル別のalphaを指定できない |
+| [透過設定](https://github.com/kekyo/boxrig/blob/320b4734b4e446e91d93c395866932f03f718706/include/boxrig/ui/view.h#L771-L780) | `background_opacity`は全体で一つ | 明示背景だけを不透明にできない |
+| [画素の役割](https://github.com/kekyo/boxrig/blob/320b4734b4e446e91d93c395866932f03f718706/include/boxrig/ui/pixel.h) | 既定・SGR・反転の背景は同じ背景役割。背景alphaを掛ける | 標準描画で出自による切替はできない |
+| [単色・画像レイヤー](https://github.com/kekyo/boxrig/blob/320b4734b4e446e91d93c395866932f03f718706/include/boxrig/ui/view.h#L782-L880) | 端末の下に配置し、全体の色や画像を変更できる | 論理セルの背景alphaを変更する契約ではない |
+| [注釈の背景色](https://github.com/kekyo/boxrig/blob/320b4734b4e446e91d93c395866932f03f718706/include/boxrig/ui/view.h#L401-L439) | 背景の論理色を上書きできるがalphaの項目はない | 代替できない |
+| [選択の不透明度](https://github.com/kekyo/boxrig/blob/320b4734b4e446e91d93c395866932f03f718706/include/boxrig/ui/decoration.h#L130-L149) | 選択の背景と輪郭に独立したalphaがある | セル背景に流用すると選択本来の意味と競合する |
+
+反転の判定は、反転後に背景へ移った色の出自を使う方針で確定します。既定前景色でも、反転後の背景なら不透明にする対象です。OSC 11でRGBを変えた既定背景は、既定背景のまま扱います。今回のドライバーで両方の出自を確認しました。
+
+### 依存先で必要な契約と再開条件
+
+boxrigの標準GTK3描画に、表示先ごとのセル背景方針が必要です。既定の方針は現在と同じ透過動作とし、もう一方では背景の出自が既定背景以外のセルをalpha 255で描画します。アプリは公開設定から方針を指定し、取得できる必要があります。ここでは具体的なAPI名を定義しません。
+
+判定はSGR反転を解決した後の出自を使います。RGB補正では出自を変更せず、補正後の色を選んだalphaで合成します。背景画像や単色レイヤー、デスクトップと合成する前にalphaを決め、Cairo/OpenGLで同じ結果にします。選択、カーソル、IMEの専用不透明度はそれぞれの公開契約を維持する必要があります。
+
+設定変更では既存セルと履歴も再描画し、論理セルを変更しないことを受け入れ条件にします。切替の往復、alpha 0・中間値・255、スクロール、alternate screen、再アタッチでも規則を保つ必要があります。
+
+この公開APIが別途提供・取り込みされた後、ドライバーへ実際の設定切替を接続します。`require-opaque`をCairo/OpenGL・倍率1/2でGREENにし、既定の透過試験も成功させた時点で段階1の完了条件を満たします。その後、段階2の設定・保存・継承・編集画面の実装へ進みます。
+
+現時点で最終完了条件1～4は未達です。条件5も公開APIの不足により未達であり、plan22全体の実装完了とは扱いません。新機能のX11/Wayland実環境検証と利用者向け説明は、段階4として残っています。
