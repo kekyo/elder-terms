@@ -165,6 +165,10 @@ foreach backend : ['cairo', 'opengl']
     args: ['-a', color_rendering_test, backend], timeout: 60,
     env: ['LIBGL_ALWAYS_SOFTWARE=1', 'GTK_IM_MODULE=gtk-im-context-simple', 'NO_AT_BRIDGE=1', 'GDK_SCALE=1'] +
       (backend == 'cairo' ? ['GDK_GL=disable'] : []))
+  test('terminal-color-rendering-' + backend + '-opaque-test', find_program('xvfb-run'),
+    args: ['-a', color_rendering_test, backend, '--opaque'], timeout: 60,
+    env: ['LIBGL_ALWAYS_SOFTWARE=1', 'GTK_IM_MODULE=gtk-im-context-simple', 'NO_AT_BRIDGE=1', 'GDK_SCALE=1'] +
+      (backend == 'cairo' ? ['GDK_GL=disable'] : []))
 endforeach
 
 executable('terminal-color-vision-demo',

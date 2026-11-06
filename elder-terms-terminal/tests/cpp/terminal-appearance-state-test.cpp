@@ -45,6 +45,8 @@ static void expect(bool condition, const char *message) {
 static void check_appearance(Fixture *fixture, boxrig_ui_cursor_shape_policy shape) {
   auto *widget = terminal_runtime_widget(fixture->window->runtime);
   auto *view = boxrig_gtk3_terminal_widget_view(widget);
+  expect(boxrig_ui_view_get_cell_background_mode(view) == BOXRIG_UI_CELL_BACKGROUND_OPAQUE_EXPLICIT,
+      "explicit cell background mode survives reattachment and renderer recovery");
   expect(fixture->window->terminal == GTK_WIDGET(widget), "host routes input to the replacement widget");
   boxrig_ui_cursor_style cursor{};
   expect(boxrig_ui_view_get_cursor_style(view, &cursor) == BOXRIG_UI_OK && cursor.shape == shape &&
@@ -147,6 +149,7 @@ static cardio::promise<void> scenarios(Fixture *fixture) {
   set_setting_value(&store, terminal_cursor_blink_setting_key(), false);
   set_setting_value(&store, terminal_background_mode_setting_key(), std::string("blur"));
   set_setting_value(&store, terminal_background_opacity_setting_key(), gint64{40});
+  set_setting_value(&store, terminal_cell_background_mode_setting_key(), std::string("opaque"));
   set_setting_value(&store, terminal_background_tint_color_setting_key(), std::string("#204060"));
   set_setting_value(&store, terminal_background_tint_opacity_setting_key(), gint64{50});
   set_setting_value(&store, terminal_background_image_setting_key(), std::string("/missing-cached-image.png"));
