@@ -103,6 +103,15 @@ static bool validate_font_size_dip(const SettingValue &value, std::string *reaso
   return true;
 }
 
+static bool validate_font_zoom_mode(const SettingValue &value, std::string *reason) {
+  const auto *mode = std::get_if<std::string>(&value);
+  if (mode == nullptr || (*mode != "preserve-grid" && *mode != "preserve-window")) {
+    *reason = "must be preserve-grid or preserve-window";
+    return false;
+  }
+  return true;
+}
+
 static bool validate_scrollback_lines(const SettingValue &value,
                                       std::string *reason) {
   const auto *integer = std::get_if<gint64>(&value);
@@ -336,6 +345,15 @@ SettingKey terminal_block_copy_trim_trailing_spaces_setting_key() {
 
 SettingKey terminal_font_size_dip_setting_key() {
   return terminal_key(terminal_font_size_dip_key);
+}
+
+SettingKey terminal_font_zoom_mode_setting_key() {
+  return terminal_key("font_zoom_mode");
+}
+
+TerminalFontZoomMode terminal_font_zoom_mode(const SettingsStore &store) {
+  return setting_string_value_or_default(store, terminal_font_zoom_mode_setting_key(), "preserve-grid") == "preserve-window" ?
+      TerminalFontZoomMode::preserve_window : TerminalFontZoomMode::preserve_grid;
 }
 
 SettingKey terminal_font_families_setting_key() {
@@ -578,6 +596,11 @@ terminal_setting_definitions(TerminalDisplaySettings terminal_defaults) {
           .default_value = SettingValue{std::vector<std::string>{}},
           .validate = validate_font_families,
           .normalize = normalize_font_families,
+      },
+      {
+          .key = terminal_font_zoom_mode_setting_key(),
+          .default_value = SettingValue{std::string("preserve-grid")},
+          .validate = validate_font_zoom_mode,
       },
       {
           .key = terminal_accessibility_enabled_setting_key(),

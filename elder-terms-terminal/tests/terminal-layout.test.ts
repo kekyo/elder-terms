@@ -41,6 +41,92 @@ const require = createRequire(import.meta.url);
 const { PNG } = require('pngjs') as typeof import('pngjs');
 
 describe.concurrent('elder-terms-terminal terminal layout', () => {
+  for (const backend of ['cairo', 'opengl']) {
+    for (const input of ['wheel', 'keys']) {
+      it(`preserves the configured window during font zoom (${backend}, ${input})`, async (context) => {
+        await withTemporaryDirectory(async (directory) => {
+          const configPath = join(directory, 'window-zoom.ini');
+          await writeFile(
+            configPath,
+            '[terminal]\nfont_zoom_mode=preserve-window\n'
+          );
+          await runGtkTest(
+            context,
+            ['--test-fixture', '-c', configPath],
+            async (app, evidence) => {
+              const initial = await waitForResult(() =>
+                readTerminalGridLayout(app)
+              );
+              // The window may contain a fractional cell after a manual resize.
+              await initial.mainWindow.resizeTo(
+                initial.mainBounds.width + 31,
+                initial.mainBounds.height + 17
+              );
+              const resized = await waitForResult(async () => {
+                const layout = await readTerminalGridLayout(app);
+                expect(layout.mainBounds.width).toBe(
+                  initial.mainBounds.width + 31
+                );
+                expect(layout.mainBounds.height).toBe(
+                  initial.mainBounds.height + 17
+                );
+                return layout;
+              });
+              await moveMouseToTerminalCenter(app, resized);
+              if (input === 'wheel') await scrollWheelWithControl(app, -1);
+              else await pressKeyWithModifiers(app, ['control'], 'equal');
+              const enlarged = await waitForResult(async () => {
+                const layout = await readTerminalGridLayout(app);
+                expect(layout.fontSizeDip).toBeGreaterThan(resized.fontSizeDip);
+                expect(layout.mainBounds).toEqual(resized.mainBounds);
+                expect(layout.rows).toBeLessThan(resized.rows);
+                expect(layout.columns).toBeLessThan(resized.columns);
+                expect(layout.rows).toBe(
+                  Math.floor(
+                    layout.terminalCapture.bounds.height / layout.cellHeight
+                  )
+                );
+                expect(layout.columns).toBe(
+                  Math.floor(
+                    layout.terminalCapture.bounds.width / layout.cellWidth
+                  )
+                );
+                await expectFixtureTerminalGridSize(
+                  app,
+                  layout.columns,
+                  layout.rows
+                );
+                return layout;
+              });
+              await saveTerminalGridLayoutEvidence(
+                evidence,
+                enlarged,
+                'preserve-window-enlarged'
+              );
+              if (input === 'wheel') await scrollWheelWithControl(app, 1);
+              else await pressKeyWithModifiers(app, ['control'], 'minus');
+              await waitForResult(async () => {
+                const restored = await readWindowCellLayout(app);
+                expect(restored.mainBounds).toEqual(resized.mainBounds);
+                expect(restored.fontSizeDip).toBe(resized.fontSizeDip);
+                expect([restored.columns, restored.rows]).toEqual([
+                  resized.columns,
+                  resized.rows,
+                ]);
+              });
+            },
+            {
+              env: {
+                LIBGL_ALWAYS_SOFTWARE: '1',
+                ...(backend === 'cairo' ? { GDK_GL: 'disable' } : {}),
+              },
+            }
+          );
+        });
+      });
+    }
+  }
+
   for (const { theme, scale } of [
     { theme: 'Adwaita', scale: 1 },
     { theme: 'Adwaita:dark', scale: 1 },
