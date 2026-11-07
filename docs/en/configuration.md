@@ -115,11 +115,25 @@ See [selection and copying](text-selection.md) for whitespace and clipboard beha
 ```ini
 [terminal]
 font_size_dip=14.5
+font_zoom_mode=preserve-window
 ambiguous_width=wide
 font_families=DejaVu Sans Mono;Noto Sans Mono CJK JP;Monospace;
 ```
 
 Text size uses DIPs, based on 1/96 inch. The built-in default is 12 DIP.
+
+`font_zoom_mode` selects what Ctrl+wheel and the zoom shortcuts preserve.
+
+| Value | Behavior during zoom |
+| --- | --- |
+| `preserve-grid` | Keeps the row and column counts and resizes the window to fit the text. Built-in default |
+| `preserve-window` | Keeps the window size and reports the new visible row and column counts to the connection |
+
+Omit the key to inherit from the connection's selected theme or the global settings. Invalid values produce a warning and use a valid inherited value or the built-in default.
+Applying the mode leaves the current text and window sizes unchanged; it takes effect on subsequent zoom input.
+You can still edit the text size, rows, or columns directly and resize the window manually in either mode.
+When the window size is constrained, such as when maximized or full screen, both modes fit the row and column counts to the actual display area.
+
 For `ambiguous_width`, `narrow` means one column, `wide` means two, and `font` means font dependent. The built-in default is `narrow`.
 Save and reopen the terminal after changing the width policy.
 Invalid width values produce a warning and use a valid inherited value or the built-in default.
