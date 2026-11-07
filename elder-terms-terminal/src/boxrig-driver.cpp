@@ -175,11 +175,13 @@ static void report_state(void *context) {
 static void zoom_in(GtkButton *, gpointer context) {
   auto *driver = static_cast<Driver *>(context);
   elder_terms::terminal_runtime_visual_zoom(driver->runtime, BOXRIG_FONT_ZOOM_INCREASE, driver->preserve_window);
+  gtk_widget_grab_focus(GTK_WIDGET(elder_terms::terminal_runtime_widget(driver->runtime)));
 }
 
 static void zoom_out(GtkButton *, gpointer context) {
   auto *driver = static_cast<Driver *>(context);
   elder_terms::terminal_runtime_visual_zoom(driver->runtime, BOXRIG_FONT_ZOOM_DECREASE, driver->preserve_window);
+  gtk_widget_grab_focus(GTK_WIDGET(elder_terms::terminal_runtime_widget(driver->runtime)));
 }
 
 static void copy_selection(GtkButton *, gpointer context) {

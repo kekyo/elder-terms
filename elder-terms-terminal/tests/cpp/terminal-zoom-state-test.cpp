@@ -96,6 +96,34 @@ static cardio::promise<void> scenarios(Fixture *fixture) {
   const auto final = snapshot();
   expect(final.rows == resized.rows && final.columns == resized.columns,
       "the next grid zoom must keep the externally resized effective grid");
+
+  for (const auto state : {GDK_WINDOW_STATE_MAXIMIZED, GDK_WINDOW_STATE_FULLSCREEN}) {
+    const auto before = snapshot();
+    expect(terminal_runtime_visual_zoom(runtime, BOXRIG_FONT_ZOOM_INCREASE, true) == BOXRIG_UI_OK,
+        "begin window zoom before a window state transition");
+    // Xvfb has no window manager. Deliver its state and actual allocation
+    // independently, matching the existing maximized-window fixture.
+    GdkEventWindowState event{};
+    event.new_window_state = state;
+    gboolean handled = FALSE;
+    g_signal_emit_by_name(fixture->window->window, "window-state-event", &event, &handled);
+    gtk_window_resize(GTK_WINDOW(fixture->window->window), before.width + 63, before.height + 37);
+    while (!terminal_runtime_is_settled(runtime) || snapshot().font == before.font)
+      co_await fixture->changed.wait();
+    const auto constrained = snapshot();
+    expect(constrained.width == before.width + 63 && constrained.height == before.height + 37,
+        "window state allocation must supersede a pending zoom");
+    expect(terminal_runtime_visual_zoom(runtime, BOXRIG_FONT_ZOOM_DECREASE, true) == BOXRIG_UI_OK,
+        "begin window zoom before restoring the normal window state");
+    event.new_window_state = static_cast<GdkWindowState>(0);
+    g_signal_emit_by_name(fixture->window->window, "window-state-event", &event, &handled);
+    gtk_window_resize(GTK_WINDOW(fixture->window->window), before.width, before.height);
+    while (!terminal_runtime_is_settled(runtime) || snapshot().font == constrained.font)
+      co_await fixture->changed.wait();
+    const auto restored = snapshot();
+    expect(restored.width == before.width && restored.height == before.height && restored.font == before.font,
+        "restoring the window must not revive a stale zoom allocation");
+  }
 }
 
 static cardio::promise<void> run(Fixture *fixture, std::exception_ptr *failure) {
@@ -145,6 +173,6 @@ extern "C" int __wrap_main(int argc, char **argv) {
     catch (const std::exception &error) { g_printerr("%s\n", error.what()); }
     return 1;
   }
-  std::puts("PASS queued zoom modes, direct edits and external resizes preserve their own sizing policies");
+  std::puts("PASS queued zoom modes, direct edits, external resizes and window states preserve their own sizing policies");
   return 0;
 }

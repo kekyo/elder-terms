@@ -143,6 +143,7 @@ printf 'SSH_EOF\\342\\202'
       launcher = createGtkAppLauncher({
         appPath: driverPath,
         args: [
+          ...(trust === 'known' ? ['--zoom-modes'] : []),
           ...(contextLoss ? ['--context-loss'] : []),
           '--ssh',
           '127.0.0.1',
@@ -302,6 +303,39 @@ printf 'SSH_EOF\\342\\202'
             `${grid?.[2]} ${grid?.[1]}`
           );
         });
+      }
+      if (trust === 'known') {
+        const mode = await app.getById('driver_preserve_window');
+        if (mode.kind !== 'checkbox')
+          throw new Error('Missing window zoom mode');
+        await mode.toggle();
+        const fixedBounds = await window.bounds();
+        for (const id of ['driver_zoom_in', 'driver_zoom_out']) {
+          const before = await status.text();
+          const zoom = await app.getById(id);
+          if (zoom.kind !== 'button') throw new Error('Missing zoom button');
+          await zoom.click();
+          await toPass(async () => {
+            expect(await status.text()).not.toBe(before);
+            expect(await window.bounds()).toEqual(fixedBounds);
+            expect(
+              (await app.output()).stdout
+                .trim()
+                .split('\n')
+                .filter((line) => line.startsWith('backend='))
+                .pop()
+            ).toContain('ready=1');
+          });
+          await app.input.pressKey('r');
+          await app.input.pressKey('Return');
+          await toPass(async () => {
+            const grid = /grid=(\d+)x(\d+)/.exec(await status.text());
+            expect((await readFile(size, 'utf8')).trim(), await visible()).toBe(
+              `${grid?.[2]} ${grid?.[1]}`
+            );
+            expect(await window.bounds()).toEqual(fixedBounds);
+          });
+        }
       }
       for (const key of ['q', 'u', 'i', 't', 'Return'])
         await app.input.pressKey(key);

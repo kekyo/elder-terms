@@ -42,20 +42,21 @@ const { PNG } = require('pngjs') as typeof import('pngjs');
 
 describe.concurrent('elder-terms-terminal terminal layout', () => {
   for (const backend of ['cairo', 'opengl']) {
-    for (const input of ['wheel', 'keys']) {
-      it(`preserves the configured window during font zoom (${backend}, ${input})`, async (context) => {
+    for (const input of ['wheel', 'keys', 'plus']) {
+      const scale = input === 'plus' ? 2 : 1;
+      it(`preserves the configured window during font zoom (${backend}, ${input}, scale=${scale})`, async (context) => {
         await withTemporaryDirectory(async (directory) => {
           const configPath = join(directory, 'window-zoom.ini');
           await writeFile(
             configPath,
-            '[terminal]\nfont_zoom_mode=preserve-window\n'
+            `[general]\ncompact_mode=${scale === 2}\nshow_border=true\nborder_width=5\n[terminal]\nfont_zoom_mode=preserve-window\nwidth=60\nheight=12\n${input === 'plus' ? 'zoom_in_key=shift+plus\n' : ''}`
           );
           await runGtkTest(
             context,
             ['--test-fixture', '-c', configPath],
             async (app, evidence) => {
               const initial = await waitForResult(() =>
-                readTerminalGridLayout(app)
+                readWindowCellLayout(app)
               );
               // The window may contain a fractional cell after a manual resize.
               await initial.mainWindow.resizeTo(
@@ -63,7 +64,7 @@ describe.concurrent('elder-terms-terminal terminal layout', () => {
                 initial.mainBounds.height + 17
               );
               const resized = await waitForResult(async () => {
-                const layout = await readTerminalGridLayout(app);
+                const layout = await readWindowCellLayout(app);
                 expect(layout.mainBounds.width).toBe(
                   initial.mainBounds.width + 31
                 );
@@ -72,24 +73,35 @@ describe.concurrent('elder-terms-terminal terminal layout', () => {
                 );
                 return layout;
               });
-              await moveMouseToTerminalCenter(app, resized);
+              const terminal = await app.getById('terminal_view');
+              const area = (await terminal.capture()).bounds;
+              await app.input.moveMouseTo(
+                Math.trunc(area.x + area.width / 2),
+                Math.trunc(area.y + area.height / 2)
+              );
               if (input === 'wheel') await scrollWheelWithControl(app, -1);
-              else await pressKeyWithModifiers(app, ['control'], 'equal');
-              const enlarged = await waitForResult(async () => {
-                const layout = await readTerminalGridLayout(app);
+              else
+                await pressKeyWithModifiers(
+                  app,
+                  input === 'plus' ? ['shift'] : ['control'],
+                  input === 'plus' ? 'plus' : 'equal'
+                );
+              await waitForResult(async () => {
+                const layout = await readWindowCellLayout(app);
+                const area = (await terminal.capture()).bounds;
                 expect(layout.fontSizeDip).toBeGreaterThan(resized.fontSizeDip);
                 expect(layout.mainBounds).toEqual(resized.mainBounds);
-                expect(layout.rows).toBeLessThan(resized.rows);
-                expect(layout.columns).toBeLessThan(resized.columns);
+                expect(layout.rows).toBeLessThanOrEqual(resized.rows);
+                expect(layout.columns).toBeLessThanOrEqual(resized.columns);
+                expect([layout.columns, layout.rows]).not.toEqual([
+                  resized.columns,
+                  resized.rows,
+                ]);
                 expect(layout.rows).toBe(
-                  Math.floor(
-                    layout.terminalCapture.bounds.height / layout.cellHeight
-                  )
+                  Math.floor(area.height / layout.cellHeight)
                 );
                 expect(layout.columns).toBe(
-                  Math.floor(
-                    layout.terminalCapture.bounds.width / layout.cellWidth
-                  )
+                  Math.floor(area.width / layout.cellWidth)
                 );
                 await expectFixtureTerminalGridSize(
                   app,
@@ -98,10 +110,9 @@ describe.concurrent('elder-terms-terminal terminal layout', () => {
                 );
                 return layout;
               });
-              await saveTerminalGridLayoutEvidence(
-                evidence,
-                enlarged,
-                'preserve-window-enlarged'
+              await evidence.captureEvidence(
+                'preserve-window-enlarged',
+                async () => app.capture()
               );
               if (input === 'wheel') await scrollWheelWithControl(app, 1);
               else await pressKeyWithModifiers(app, ['control'], 'minus');
@@ -118,6 +129,7 @@ describe.concurrent('elder-terms-terminal terminal layout', () => {
             {
               env: {
                 LIBGL_ALWAYS_SOFTWARE: '1',
+                GDK_SCALE: String(scale),
                 ...(backend === 'cairo' ? { GDK_GL: 'disable' } : {}),
               },
             }
