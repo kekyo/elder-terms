@@ -1419,6 +1419,15 @@ boxrig_ui_status terminal_runtime_set_preferred_grid(TerminalRuntime *runtime, s
   return status;
 }
 
+boxrig_ui_status terminal_runtime_set_font(TerminalRuntime *runtime, const boxrig_font_specification &specification) {
+  const auto status = boxrig_gtk3_terminal_widget_set_font_specification(runtime->widget, &specification);
+  if (status == BOXRIG_UI_OK) {
+    runtime->zoom_preserve_window.reset();
+    request_frame(runtime);
+  }
+  return status;
+}
+
 bool terminal_runtime_is_settled(const TerminalRuntime *runtime) {
   boxrig_ui_size_command_state state{};
   boxrig_gtk_render_state render{};

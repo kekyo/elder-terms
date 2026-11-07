@@ -282,7 +282,12 @@ bool apply_terminal_presentation(TerminalPresentation *presentation, const Setti
   boxrig_font_specification current_font{};
   auto font_status = boxrig_gtk3_terminal_widget_get_font_specification(widget, &current_font);
   if (font_status != BOXRIG_UI_OK) { g_printerr("Terminal font: %d\n", font_status); return false; }
-  bool same_font = current_font.family_count == font.family_count && current_font.size_dip == font.size_dip &&
+  // Visual zoom leaves the raw specification unchanged. A settings apply
+  // containing the last published size must not restart that zoom sequence,
+  // including when another queued step has not yet finished.
+  const bool same_size = presentation->published ?
+      display.font_size_dip == presentation->published->font_size_dip : current_font.size_dip == font.size_dip;
+  bool same_font = current_font.family_count == font.family_count && same_size &&
       current_font.line_height_adjustment_dip == font.line_height_adjustment_dip && current_font.weight == font.weight &&
       current_font.style == font.style && current_font.stretch == font.stretch && current_font.fallback == font.fallback &&
       current_font.monospace == font.monospace && current_font.feature_count == 0 && current_font.variation_count == 0;
@@ -295,7 +300,7 @@ bool apply_terminal_presentation(TerminalPresentation *presentation, const Setti
   // Reapplying an unchanged font invalidates text layout and the selection.
   // Copy policy edits must leave an existing rectangle available for copying.
   if (!same_font) {
-    font_status = boxrig_gtk3_terminal_widget_set_font_specification(widget, &font);
+    font_status = terminal_runtime_set_font(window->runtime, font);
     if (font_status != BOXRIG_UI_OK) { g_printerr("Terminal font: %d\n", font_status); return false; }
   }
   auto *core = boxrig_ui_model_terminal(boxrig_ui_view_model(boxrig_gtk3_terminal_widget_view(widget)));
@@ -322,6 +327,8 @@ bool apply_terminal_presentation(TerminalPresentation *presentation, const Setti
     presentation->pending_grid = display;
     return true;
   }
+  if (presentation->published && display.width == presentation->published->width &&
+      display.height == presentation->published->height) return true;
   return terminal_runtime_set_preferred_grid(window->runtime, display.height, display.width) == BOXRIG_UI_OK;
 }
 

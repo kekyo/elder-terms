@@ -162,6 +162,15 @@ boxrig_ui_status terminal_runtime_visual_zoom(TerminalRuntime *runtime, boxrig_f
     bool preserve_window);
 
 /**
+ * Applies a direct font edit independently of an unfinished visual zoom.
+ * @param runtime Active terminal runtime.
+ * @param specification Font preference copied by the widget on success.
+ * @returns The native font update status.
+ * @remarks A successful edit supersedes the earlier zoom's sizing policy.
+ */
+boxrig_ui_status terminal_runtime_set_font(TerminalRuntime *runtime, const boxrig_font_specification &specification);
+
+/**
  * Reports whether the last frame completed its layout and presentation work.
  * @param runtime Live runtime.
  * @return False while native allocation, grid completion, or another frame is pending.
