@@ -111,6 +111,8 @@ struct TerminalRuntime {
   int command_start_width = 0;
   int command_start_height = 0;
   boxrig_ui_window_state window_state = BOXRIG_UI_WINDOW_NORMAL;
+  std::optional<bool> zoom_preserve_window;
+  bool cell_geometry_hints = true;
   void (*changed)(void *) = nullptr;
   void *changed_context = nullptr;
   std::function<void()> prepare_frame;
@@ -128,6 +130,7 @@ static void reset_macros(TerminalRuntime *runtime) {
 
 static void notify_changed(TerminalRuntime *runtime) {
   runtime->notified_settled = terminal_runtime_is_settled(runtime);
+  if (runtime->notified_settled) runtime->zoom_preserve_window.reset();
   if (runtime->changed) runtime->changed(runtime->changed_context);
 }
 
@@ -865,6 +868,23 @@ static bool process_layout(TerminalRuntime *runtime) {
   if (runtime->window_state != BOXRIG_UI_WINDOW_NORMAL) {
     return complete_size(runtime, BOXRIG_UI_SIZE_CONSTRAINED);
   }
+  if (runtime->zoom_preserve_window == true && action.value.content_size.cause == BOXRIG_UI_LAYOUT_CHANGE_FONT_METRICS) {
+    if (!complete_size(runtime, BOXRIG_UI_SIZE_REJECTED)) return false;
+    // Rejection preserves the old normal-grid anchor. Adopt the fitted grid
+    // without asking the host to remove fractional-cell padding. Capability
+    // suppression is confined to this synchronous anchor update; settings and
+    // terminal-originated size requests retain the host's real capabilities.
+    auto *view = boxrig_gtk3_terminal_widget_view(runtime->widget);
+    boxrig_ui_layout_result layout{};
+    std::uint32_t capabilities = 0;
+    if (!ui_result(boxrig_gtk3_terminal_widget_get_layout(runtime->widget, &layout), "zoom layout") ||
+        !ui_result(boxrig_ui_view_get_geometry_capabilities(view, &capabilities), "zoom capabilities") ||
+        !ui_result(boxrig_ui_view_set_geometry_capabilities(view,
+            capabilities & ~BOXRIG_UI_GEOMETRY_SIZE_COMMAND), "zoom anchor capabilities")) return false;
+    const auto status = boxrig_gtk3_terminal_widget_set_preferred_grid(runtime->widget, layout.rows, layout.columns);
+    const auto restored = boxrig_ui_view_set_geometry_capabilities(view, capabilities);
+    return ui_result(status, "zoom anchor") && ui_result(restored, "restore zoom capabilities");
+  }
   const auto divisor = static_cast<boxrig_ui_fixed>(gtk_widget_get_scale_factor(widget)) * BOXRIG_UI_FIXED_ONE;
   const auto logical_width = (action.value.content_size.width + divisor - 1) / divisor;
   const auto logical_height = (action.value.content_size.height + divisor - 1) / divisor;
@@ -879,7 +899,7 @@ static bool process_layout(TerminalRuntime *runtime) {
   runtime->command_start_width = gtk_widget_get_allocated_width(widget);
   runtime->command_start_height = gtk_widget_get_allocated_height(widget);
   if (!ui_result(boxrig_gtk3_terminal_widget_set_geometry_hints(
-      runtime->widget, runtime->window, true), "geometry hints")) return false;
+      runtime->widget, runtime->window, runtime->cell_geometry_hints), "geometry hints")) return false;
   // GtkWindow accounts for CSD itself; only actual content siblings are added.
   gtk_window_resize(runtime->window, static_cast<int>(logical_width) + extra_width,
                     static_cast<int>(logical_height) + extra_height);
@@ -1111,7 +1131,7 @@ static void mapped(GtkWidget *, gpointer context) {
   auto *runtime = static_cast<TerminalRuntime *>(context);
   // An initial preferred grid can already fit its allocation and therefore
   // need no content-size action. Install native hints on that path as well.
-  ui_result(boxrig_gtk3_terminal_widget_set_geometry_hints(runtime->widget, runtime->window, true), "geometry hints");
+  ui_result(boxrig_gtk3_terminal_widget_set_geometry_hints(runtime->widget, runtime->window, runtime->cell_geometry_hints), "geometry hints");
   request_frame(runtime);
 }
 
@@ -1129,7 +1149,7 @@ static gboolean window_state_changed(GtkWidget *, GdkEventWindowState *event, gp
       (flags & GDK_WINDOW_STATE_TILED) ? BOXRIG_UI_WINDOW_TILED : BOXRIG_UI_WINDOW_NORMAL;
   if (!runtime->ui_failed) {
     ui_result(boxrig_gtk3_terminal_widget_set_window_state(runtime->widget, runtime->window_state), "window state");
-    ui_result(boxrig_gtk3_terminal_widget_set_geometry_hints(runtime->widget, runtime->window, true), "geometry hints");
+    ui_result(boxrig_gtk3_terminal_widget_set_geometry_hints(runtime->widget, runtime->window, runtime->cell_geometry_hints), "geometry hints");
   }
   request_frame(runtime);
   return FALSE;
@@ -1374,11 +1394,22 @@ void terminal_runtime_set_prepare_frame_callback(TerminalRuntime *runtime, std::
   runtime->prepare_frame = std::move(callback);
 }
 
-boxrig_ui_status terminal_runtime_visual_zoom(TerminalRuntime *runtime, boxrig_font_zoom_direction direction) {
+boxrig_ui_status terminal_runtime_visual_zoom(TerminalRuntime *runtime, boxrig_font_zoom_direction direction,
+    bool preserve_window) {
+  if (runtime->zoom_preserve_window && *runtime->zoom_preserve_window != preserve_window)
+    return BOXRIG_UI_BUSY;
+  if (runtime->cell_geometry_hints == preserve_window) {
+    const auto hints = boxrig_gtk3_terminal_widget_set_geometry_hints(runtime->widget, runtime->window, !preserve_window);
+    if (hints != BOXRIG_UI_OK) return hints;
+    runtime->cell_geometry_hints = !preserve_window;
+  }
   bool changed = false;
   const auto status = boxrig_gtk3_terminal_widget_visual_zoom(runtime->widget,
       direction, boxrig_font_visual_step_policy_default(), &changed);
-  if (status == BOXRIG_UI_OK && changed) request_frame(runtime);
+  if (status == BOXRIG_UI_OK && changed) {
+    runtime->zoom_preserve_window = preserve_window;
+    request_frame(runtime);
+  }
   return status;
 }
 

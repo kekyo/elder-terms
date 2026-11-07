@@ -933,7 +933,7 @@ static cardio::promise<void> autoscroll_scenarios(Fixture *fixture) {
       } else if (ending == 3) {
         expect(terminal_runtime_feed(runtime, "\033[3J\033[2J\033[Hinvalidated"), "evict autoscroll selection text");
       } else if (ending == 4) {
-        expect(terminal_runtime_visual_zoom(runtime, BOXRIG_FONT_ZOOM_INCREASE) == BOXRIG_UI_OK, "zoom invalidates an active gesture");
+        expect(terminal_runtime_visual_zoom(runtime, BOXRIG_FONT_ZOOM_INCREASE, false) == BOXRIG_UI_OK, "zoom invalidates an active gesture");
       } else if (ending == 5) {
         boxrig_ui_layout_result layout{};
         expect(boxrig_ui_view_get_layout(view(fixture), &layout) == BOXRIG_UI_OK, "grid before gesture invalidation");

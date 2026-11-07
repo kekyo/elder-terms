@@ -98,7 +98,7 @@ static gboolean dispatch_zoom(gpointer context) {
   auto *presentation = static_cast<TerminalPresentation *>(context);
   presentation->zoom_source = 0;
   while (!presentation->zoom_requests.empty()) {
-    const auto result = terminal_runtime_visual_zoom(presentation->window->runtime, presentation->zoom_requests.front());
+    const auto result = terminal_runtime_visual_zoom(presentation->window->runtime, presentation->zoom_requests.front(), false);
     if (result == BOXRIG_UI_BUSY) return G_SOURCE_REMOVE;
     presentation->zoom_requests.pop_front();
     if (result != BOXRIG_UI_OK) g_printerr("Terminal zoom: %d\n", result);
