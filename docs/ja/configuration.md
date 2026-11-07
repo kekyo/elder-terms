@@ -115,11 +115,25 @@ block_copy_trim_trailing_spaces=false
 ```ini
 [terminal]
 font_size_dip=14.5
+font_zoom_mode=preserve-window
 ambiguous_width=wide
 font_families=DejaVu Sans Mono;Noto Sans Mono CJK JP;Monospace;
 ```
 
 文字サイズの単位はDIPで、1/96インチを基準とします。組み込み既定値は12 DIPです。
+
+`font_zoom_mode`はCtrl+Wheelや拡大・縮小キーで維持する対象を指定します。
+
+| 値 | ズーム時の動作 |
+| --- | --- |
+| `preserve-grid` | 行・桁数を保ち、文字サイズに合わせてウインドウを変更。組み込み既定値 |
+| `preserve-window` | ウインドウサイズを保ち、表示できる行・桁数を接続先へ通知 |
+
+キーを省略すると、接続で選んだテーマまたはグローバル設定を継承します。不正な値は警告し、有効な継承値または組み込み既定値を使います。
+モードの適用だけでは現在の文字サイズやウインドウサイズは変わらず、適用後のズーム操作から有効になります。
+文字サイズ・行数・桁数の直接指定や手動リサイズは、この設定によらず使用できます。
+最大化や全画面などでウインドウサイズが制限される場合は、どちらのモードでも実際の表示領域に行・桁数を合わせます。
+
 `ambiguous_width`は`narrow`で1列、`wide`で2列、`font`でフォント依存になります。組み込み既定値は`narrow`です。
 幅の決め方を変更した後は、保存して端末を開き直してください。
 不正な幅の指定は警告し、有効な継承値または組み込み既定値を使います。

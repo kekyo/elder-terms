@@ -3377,3 +3377,15 @@ msgstr "未保存"
 
 msgid "Unchanged"
 msgstr "変更なし"
+
+msgid "Font zoom behavior"
+msgstr "フォントズーム時の動作"
+
+msgid "Keep rows and columns"
+msgstr "行・桁数を維持"
+
+msgid "Keep window size"
+msgstr "ウインドウサイズを維持"
+
+msgid "Choose whether font zoom keeps the rows and columns or the window size. Changes apply to the next zoom."
+msgstr "フォントズーム時に、行・桁数とウインドウサイズのどちらを維持するかを選びます。次のズームから適用します。"

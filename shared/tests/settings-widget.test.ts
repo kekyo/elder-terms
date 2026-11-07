@@ -2251,6 +2251,67 @@ describe.concurrent('shared settings widget', () => {
     }
   });
 
+  for (const mode of ['runtime', 'global']) {
+    it(`saves and inherits the font zoom mode in ${mode} settings`, async (context) => {
+      const directory = await mkdtemp(join(tmpdir(), 'elder-terms-zoom-mode-'));
+      const path = join(directory, 'settings.ini');
+      const prefix = mode === 'global' ? 'global_settings' : 'settings';
+      try {
+        await runSharedGtkTest(
+          context,
+          [
+            '--page=terminal_appearance',
+            `--save-file=${path}`,
+            ...(mode === 'global'
+              ? ['--global-mode']
+              : [
+                  '--runtime',
+                  '--global=terminal.font_zoom_mode=preserve-window',
+                ]),
+          ],
+          async ({ app }) => {
+            const id = `${prefix}_terminal_font_zoom_mode_combo`;
+            const combo = expectElementKind(await app.getById(id), 'comboBox');
+            const names = await comboOptionNames(app, id);
+            expect(names.slice(1)).toEqual([
+              'Keep rows and columns',
+              'Keep window size',
+            ]);
+            expect(names[0]).toContain(
+              mode === 'global' ? 'Keep rows and columns' : 'Keep window size'
+            );
+            expect(await combo.isChildSelected(0)).toBe(true);
+            const save = expectElementKind(
+              await app.getById(`${prefix}_save_button`),
+              'button'
+            );
+            for (const [index, value] of [
+              [2, 'preserve-window'],
+              [1, 'preserve-grid'],
+            ] as const) {
+              await combo.selectChildAt(index);
+              await save.click();
+              await waitForResult(async () =>
+                expect(await readFile(path, 'utf8')).toContain(
+                  `font_zoom_mode=${value}`
+                )
+              );
+            }
+            await combo.selectChildAt(0);
+            await save.click();
+            await waitForResult(async () =>
+              expect(await readFile(path, 'utf8')).not.toContain(
+                'font_zoom_mode='
+              )
+            );
+          }
+        );
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
+    });
+  }
+
   it('edits independent color vision settings and validates their strength', async (context) => {
     const directory = await mkdtemp(join(tmpdir(), 'elder-terms-vision-'));
     const path = join(directory, 'connection.ini');

@@ -737,8 +737,11 @@ See the [settings reference](./docs/en/configuration.md#windows-and-notification
 ![Text size settings](./images/text-size-settings.png)
 
 "Text size (DIP)" on the "Terminal appearance" tab sets the text size. A DIP is based on 1/96 inch; the default is 12 DIP.
-You can also use `Ctrl`+`=`, `Ctrl`+`-`, or the mouse wheel while holding `Ctrl`. The committed size is saved in the connection settings.
-Zooming preserves the row and column counts reported to the connection. Resizing the window manually reports the new counts.
+You can also use `Ctrl`+`=`, `Ctrl`+`-`, or the mouse wheel while holding `Ctrl`. Use "Save" in the settings dialog to save the resulting size in the connection settings.
+
+"Font zoom behavior" offers "Keep rows and columns" (the default) and "Keep window size".
+The first resizes the window to fit the text; the second changes the visible row and column counts within the same window and reports them to the connection.
+Applying a mode affects subsequent zoom input. See the [settings reference](./docs/en/configuration.md#fonts-and-character-width) for INI syntax.
 
 ## Configuring the Cursor and Background
 

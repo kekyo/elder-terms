@@ -248,6 +248,22 @@ ELDER_TERMS_API SettingKey terminal_block_copy_trim_trailing_spaces_setting_key(
  */
 ELDER_TERMS_API SettingKey terminal_font_size_dip_setting_key();
 
+/** Size retained by keyboard and Ctrl+wheel font zoom operations. */
+enum class TerminalFontZoomMode {
+  preserve_grid,   /**< Keep the current rows and columns, resizing the window when allowed. */
+  preserve_window, /**< Keep the current window extent and fit rows and columns to it. */
+};
+
+/** @returns Key for [terminal] font_zoom_mode. */
+ELDER_TERMS_API SettingKey terminal_font_zoom_mode_setting_key();
+
+/**
+ * Reads the policy for subsequent zoom input without changing display sizes.
+ * @param store Layered settings.
+ * @returns Effective zoom mode; the built-in default preserves the grid.
+ */
+ELDER_TERMS_API TerminalFontZoomMode terminal_font_zoom_mode(const SettingsStore &store);
+
 /**
  * Returns the setting key for [terminal] font_families.
  *

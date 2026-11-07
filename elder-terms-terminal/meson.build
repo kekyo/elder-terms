@@ -228,6 +228,18 @@ appearance_state_test = executable('terminal-appearance-state-test',
     liburing_dep, ssh_transport_dep, libudev_dep, boxrig_runtime_dep, boxrig_background_dep],
   link_with: libxyzm_async_static_library,
   link_args: ['-Wl,--wrap=main', '-Wl,--wrap=boxrig_gtk3_terminal_widget_frame'])
+zoom_state_test = executable('terminal-zoom-state-test',
+  'tests/cpp/terminal-zoom-state-test.cpp',
+  objects: elder_terms_terminal.extract_all_objects(recursive: false),
+  dependencies: [file_transfer_dep, cardio_dep, elder_terms_dep, canberra_dep, gio_dep, gtk_dep,
+    liburing_dep, ssh_transport_dep, libudev_dep, boxrig_runtime_dep, boxrig_background_dep],
+  link_with: libxyzm_async_static_library,
+  link_args: ['-Wl,--wrap=main'])
+foreach backend : ['cairo', 'opengl']
+  test('terminal-zoom-state-' + backend, find_program('xvfb-run'), args: ['-a', zoom_state_test],
+    timeout: 30, env: ['G_DEBUG=fatal-criticals', 'NO_AT_BRIDGE=1', 'LIBGL_ALWAYS_SOFTWARE=1'] +
+      (backend == 'cairo' ? ['GDK_GL=disable'] : []))
+endforeach
 terminal_titlebar_test = executable('terminal-titlebar-test',
   'tests/cpp/terminal-titlebar-test.cpp',
   objects: elder_terms_terminal.extract_all_objects(recursive: false),

@@ -17,6 +17,11 @@
 
 namespace elder_terms {
 
+struct FontZoomRequest {
+  boxrig_font_zoom_direction direction;
+  TerminalFontZoomMode mode;
+};
+
 struct TerminalPresentation {
   MainWindow *window;
   TestOptions options;
@@ -27,13 +32,14 @@ struct TerminalPresentation {
   std::size_t fixture_rows = 0;
   std::size_t fixture_columns = 0;
   bool maximize_pending = false;
-  std::deque<boxrig_font_zoom_direction> zoom_requests;
+  std::deque<FontZoomRequest> zoom_requests;
   guint zoom_source = 0;
   std::optional<TerminalDisplaySettings> pending_grid;
   TerminalCursorSettings cursor{TerminalCursorShape::block, true};
   TerminalBackground *background = nullptr;
   TerminalColorFilterContext colors{};
   bool block_copy_trim_trailing_spaces = true;
+  TerminalFontZoomMode font_zoom_mode = TerminalFontZoomMode::preserve_grid;
 };
 
 static bool apply_copy_policy(TerminalPresentation *presentation, bool trim) {
@@ -98,7 +104,9 @@ static gboolean dispatch_zoom(gpointer context) {
   auto *presentation = static_cast<TerminalPresentation *>(context);
   presentation->zoom_source = 0;
   while (!presentation->zoom_requests.empty()) {
-    const auto result = terminal_runtime_visual_zoom(presentation->window->runtime, presentation->zoom_requests.front());
+    const auto &request = presentation->zoom_requests.front();
+    const auto result = terminal_runtime_visual_zoom(presentation->window->runtime, request.direction,
+        request.mode == TerminalFontZoomMode::preserve_window);
     if (result == BOXRIG_UI_BUSY) return G_SOURCE_REMOVE;
     presentation->zoom_requests.pop_front();
     if (result != BOXRIG_UI_OK) g_printerr("Terminal zoom: %d\n", result);
@@ -173,9 +181,11 @@ static boxrig_input_key_route route_key(const boxrig_key_event *event, void *con
     // Native key delivery occurs inside frame(), where font mutation is BUSY.
     // Preserve event order and hand the steps to boxrig after dispatch. Its
     // visual sequence owns metric selection and pending resize generations.
+    // Capture the mode before a later settings apply can change it.
     if (presentation->zoom_requests.size() == BOXRIG_GTK3_NATIVE_INPUT_EVENTS_MAXIMUM)
       return BOXRIG_INPUT_KEY_ROUTE_ERROR;
-    presentation->zoom_requests.push_back(increase ? BOXRIG_FONT_ZOOM_INCREASE : BOXRIG_FONT_ZOOM_DECREASE);
+    presentation->zoom_requests.push_back({increase ? BOXRIG_FONT_ZOOM_INCREASE : BOXRIG_FONT_ZOOM_DECREASE,
+        presentation->font_zoom_mode});
     schedule_zoom(presentation);
   }
   return BOXRIG_INPUT_KEY_ROUTE_APPLICATION;
@@ -220,8 +230,8 @@ boxrig_input_mouse_route route_terminal_presentation_mouse(
     return BOXRIG_INPUT_MOUSE_ROUTE_TERMINAL;
   if (presentation->zoom_requests.size() == BOXRIG_GTK3_NATIVE_INPUT_EVENTS_MAXIMUM)
     return BOXRIG_INPUT_MOUSE_ROUTE_ERROR;
-  presentation->zoom_requests.push_back(event.button == BOXRIG_MOUSE_BUTTON_WHEEL_UP ?
-      BOXRIG_FONT_ZOOM_INCREASE : BOXRIG_FONT_ZOOM_DECREASE);
+  presentation->zoom_requests.push_back({event.button == BOXRIG_MOUSE_BUTTON_WHEEL_UP ?
+      BOXRIG_FONT_ZOOM_INCREASE : BOXRIG_FONT_ZOOM_DECREASE, presentation->font_zoom_mode});
   schedule_zoom(presentation);
   return BOXRIG_INPUT_MOUSE_ROUTE_APPLICATION;
 }
@@ -272,7 +282,12 @@ bool apply_terminal_presentation(TerminalPresentation *presentation, const Setti
   boxrig_font_specification current_font{};
   auto font_status = boxrig_gtk3_terminal_widget_get_font_specification(widget, &current_font);
   if (font_status != BOXRIG_UI_OK) { g_printerr("Terminal font: %d\n", font_status); return false; }
-  bool same_font = current_font.family_count == font.family_count && current_font.size_dip == font.size_dip &&
+  // Visual zoom leaves the raw specification unchanged. A settings apply
+  // containing the last published size must not restart that zoom sequence,
+  // including when another queued step has not yet finished.
+  const bool same_size = presentation->published ?
+      display.font_size_dip == presentation->published->font_size_dip : current_font.size_dip == font.size_dip;
+  bool same_font = current_font.family_count == font.family_count && same_size &&
       current_font.line_height_adjustment_dip == font.line_height_adjustment_dip && current_font.weight == font.weight &&
       current_font.style == font.style && current_font.stretch == font.stretch && current_font.fallback == font.fallback &&
       current_font.monospace == font.monospace && current_font.feature_count == 0 && current_font.variation_count == 0;
@@ -285,12 +300,13 @@ bool apply_terminal_presentation(TerminalPresentation *presentation, const Setti
   // Reapplying an unchanged font invalidates text layout and the selection.
   // Copy policy edits must leave an existing rectangle available for copying.
   if (!same_font) {
-    font_status = boxrig_gtk3_terminal_widget_set_font_specification(widget, &font);
+    font_status = terminal_runtime_set_font(window->runtime, font);
     if (font_status != BOXRIG_UI_OK) { g_printerr("Terminal font: %d\n", font_status); return false; }
   }
   auto *core = boxrig_ui_model_terminal(boxrig_ui_view_model(boxrig_gtk3_terminal_widget_view(widget)));
   if (boxrig_terminal_set_scrollback_capacity(core, display.scrollback_lines) != BOXRIG_STATUS_OK) return false;
   presentation->bindings = terminal_key_bindings(settings);
+  presentation->font_zoom_mode = terminal_font_zoom_mode(settings);
   const bool border = general_show_border(settings);
   const auto width = general_border_width(settings);
   const bool compact = general_compact_mode(settings);
@@ -311,6 +327,8 @@ bool apply_terminal_presentation(TerminalPresentation *presentation, const Setti
     presentation->pending_grid = display;
     return true;
   }
+  if (presentation->published && display.width == presentation->published->width &&
+      display.height == presentation->published->height) return true;
   return terminal_runtime_set_preferred_grid(window->runtime, display.height, display.width) == BOXRIG_UI_OK;
 }
 

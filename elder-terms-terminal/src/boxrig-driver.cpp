@@ -51,6 +51,8 @@ struct Driver {
   std::shared_ptr<cardio::primitives::manually_conditional> link_validation_ready =
       std::make_shared<cardio::primitives::manually_conditional>();
   bool context_loss_control = false;
+  bool zoom_controls = false;
+  bool preserve_window = false;
   gulong context_loss_hook = 0;
   std::vector<elder_terms::MacroRule> macros;
   bool closing = false;
@@ -172,7 +174,14 @@ static void report_state(void *context) {
 
 static void zoom_in(GtkButton *, gpointer context) {
   auto *driver = static_cast<Driver *>(context);
-  elder_terms::terminal_runtime_visual_zoom(driver->runtime, BOXRIG_FONT_ZOOM_INCREASE);
+  elder_terms::terminal_runtime_visual_zoom(driver->runtime, BOXRIG_FONT_ZOOM_INCREASE, driver->preserve_window);
+  gtk_widget_grab_focus(GTK_WIDGET(elder_terms::terminal_runtime_widget(driver->runtime)));
+}
+
+static void zoom_out(GtkButton *, gpointer context) {
+  auto *driver = static_cast<Driver *>(context);
+  elder_terms::terminal_runtime_visual_zoom(driver->runtime, BOXRIG_FONT_ZOOM_DECREASE, driver->preserve_window);
+  gtk_widget_grab_focus(GTK_WIDGET(elder_terms::terminal_runtime_widget(driver->runtime)));
 }
 
 static void copy_selection(GtkButton *, gpointer context) {
@@ -476,6 +485,7 @@ int main(int argc, char **argv) {
   elder_terms::AuthenticatedSshTransportOptions options;
   for (int index = 1; index < argc; ++index) {
     if (std::string_view(argv[index]) == "--local") driver.connection_mode = true;
+    else if (std::string_view(argv[index]) == "--zoom-modes") driver.zoom_controls = true;
     else if (std::string_view(argv[index]) == "--links") driver.links = true;
     else if (std::string_view(argv[index]).starts_with("--regex-link-decoration=") ||
         std::string_view(argv[index]).starts_with("--osc8-link-decoration=")) {
@@ -602,6 +612,12 @@ int main(int argc, char **argv) {
   auto *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
   gtk_window_set_title(GTK_WINDOW(window), "boxrig driver");
   gestament_gtk_assign_accessible_id(window, "driver_window");
+  if (driver.zoom_controls) {
+    g_signal_connect(window, "size-allocate", G_CALLBACK(+[](GtkWidget *, GtkAllocation *allocation, gpointer) {
+      std::printf("window_allocation=%dx%d\n", allocation->width, allocation->height);
+      std::fflush(stdout);
+    }), nullptr);
+  }
   auto *content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
   auto *overlay = gtk_overlay_new();
   gtk_container_add(GTK_CONTAINER(window), overlay);
@@ -629,6 +645,18 @@ int main(int argc, char **argv) {
   auto *copy = gtk_button_new_with_label("Copy selection");
   gestament_gtk_assign_accessible_id(copy, "driver_copy");
   gtk_box_pack_start(GTK_BOX(controls), copy, FALSE, FALSE, 0);
+  if (driver.zoom_controls) {
+    auto *out = gtk_button_new_with_label("Zoom out");
+    gestament_gtk_assign_accessible_id(out, "driver_zoom_out");
+    gtk_box_pack_start(GTK_BOX(controls), out, FALSE, FALSE, 0);
+    g_signal_connect(out, "clicked", G_CALLBACK(zoom_out), &driver);
+    auto *mode = gtk_check_button_new_with_label("Preserve window");
+    gestament_gtk_assign_accessible_id(mode, "driver_preserve_window");
+    gtk_box_pack_start(GTK_BOX(controls), mode, FALSE, FALSE, 0);
+    g_signal_connect(mode, "toggled", G_CALLBACK(+[](GtkToggleButton *button, gpointer context) {
+      static_cast<Driver *>(context)->preserve_window = gtk_toggle_button_get_active(button);
+    }), &driver);
+  }
   if (driver.context_loss_control) {
     auto *render_controls = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
     gtk_box_pack_start(GTK_BOX(content), render_controls, FALSE, FALSE, 0);

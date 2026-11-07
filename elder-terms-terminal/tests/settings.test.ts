@@ -753,6 +753,138 @@ const connectionStatusTextMask = async (
 };
 
 describe.concurrent('elder-terms-terminal settings', () => {
+  for (const backend of ['cairo', 'opengl']) {
+    it(`applies and clears the font zoom mode without changing current geometry (${backend})`, async (context) => {
+      await withTemporaryDirectory(async (directory) => {
+        const configPath = join(directory, 'zoom-mode.ini');
+        await writeFile(configPath, '[general]\nname=Zoom mode\n');
+        const options = {
+          globalSettings: '[terminal]\nfont_zoom_mode=preserve-window\n',
+          env: {
+            LIBGL_ALWAYS_SOFTWARE: '1',
+            ...(backend === 'cairo' ? { GDK_GL: 'disable' } : {}),
+          },
+        };
+        await runGtkTest(
+          context,
+          ['--test-fixture', '-c', configPath],
+          async (app, evidence) => {
+            const initial = await waitForResult(() =>
+              readWindowCellLayout(app)
+            );
+            await pressKeyWithModifiers(app, ['control'], 'equal');
+            const enlarged = await waitForResult(async () => {
+              const layout = await readWindowCellLayout(app);
+              expect(layout.fontSizeDip).toBeGreaterThan(initial.fontSizeDip);
+              expect(layout.mainBounds).toEqual(initial.mainBounds);
+              return layout;
+            });
+            await openSettingsDialog(app);
+            await showTerminalAppearanceSettingsPage(app);
+            const mode = expectElementKind(
+              await app.getById('settings_terminal_font_zoom_mode_combo'),
+              'comboBox'
+            );
+            await expectSelectedComboValue(
+              app,
+              'settings_terminal_font_zoom_mode_combo',
+              'Keep window size (global default)'
+            );
+            await mode.selectChildAt(1);
+            await expectElementKind(
+              await app.getById('settings_cancel_button'),
+              'button'
+            ).click();
+            await expectSettingsDialogClosed(app);
+            await openSettingsDialog(app);
+            await showTerminalAppearanceSettingsPage(app);
+            await expectSelectedComboValue(
+              app,
+              'settings_terminal_font_zoom_mode_combo',
+              'Keep window size (global default)'
+            );
+            await expectElementKind(
+              await app.getById('settings_terminal_font_zoom_mode_combo'),
+              'comboBox'
+            ).selectChildAt(1);
+            await evidence.captureEvidence(
+              'font-zoom-mode-settings',
+              async () => (await app.getById('settings_dialog')).capture()
+            );
+            await expectElementKind(
+              await app.getById('settings_apply_button'),
+              'button'
+            ).click();
+            await closeSettingsDialogAfterApply(app);
+            const applied = await waitForResult(() =>
+              readWindowCellLayout(app)
+            );
+            expect(applied.mainBounds).toEqual(enlarged.mainBounds);
+            expect(applied.fontSizeDip).toBe(enlarged.fontSizeDip);
+            expect([applied.columns, applied.rows]).toEqual([
+              enlarged.columns,
+              enlarged.rows,
+            ]);
+            expect(await readFile(configPath, 'utf8')).not.toContain(
+              'font_zoom_mode'
+            );
+            await pressKeyWithModifiers(app, ['control'], 'equal');
+            const gridZoom = await waitForResult(async () => {
+              const layout = await readWindowCellLayout(app);
+              expect(layout.fontSizeDip).toBeGreaterThan(applied.fontSizeDip);
+              expect([layout.columns, layout.rows]).toEqual([
+                applied.columns,
+                applied.rows,
+              ]);
+              expect(layout.mainBounds).not.toEqual(applied.mainBounds);
+              return layout;
+            });
+            await openSettingsDialog(app);
+            await showTerminalAppearanceSettingsPage(app);
+            await expectElementKind(
+              await app.getById('settings_terminal_font_zoom_mode_combo'),
+              'comboBox'
+            ).selectChildAt(0);
+            await expectElementKind(
+              await app.getById('settings_save_button'),
+              'button'
+            ).click();
+            await expectSettingsDialogClosed(app);
+            const saved = await waitForResult(() => readWindowCellLayout(app));
+            expect(saved.mainBounds).toEqual(gridZoom.mainBounds);
+            expect(saved.fontSizeDip).toBe(gridZoom.fontSizeDip);
+            expect(await readFile(configPath, 'utf8')).not.toContain(
+              'font_zoom_mode'
+            );
+          },
+          options
+        );
+        await runGtkTest(
+          context,
+          ['--test-fixture', '-c', configPath],
+          async (app) => {
+            const initial = await waitForResult(() =>
+              readWindowCellLayout(app)
+            );
+            await pressKeyWithModifiers(app, ['control'], 'minus');
+            await waitForResult(async () => {
+              const layout = await readWindowCellLayout(app);
+              expect(layout.fontSizeDip).toBeLessThan(initial.fontSizeDip);
+              expect(layout.mainBounds).toEqual(initial.mainBounds);
+              expect(layout.rows).toBeGreaterThanOrEqual(initial.rows);
+              expect(layout.columns).toBeGreaterThanOrEqual(initial.columns);
+              expect([layout.columns, layout.rows]).not.toEqual([
+                initial.columns,
+                initial.rows,
+              ]);
+            });
+          },
+          options
+        );
+      });
+    });
+  }
+
   it('applies and cancels independent link displays on the Links page', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const peer = join(directory, 'links.mjs');

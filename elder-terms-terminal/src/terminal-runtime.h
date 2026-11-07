@@ -153,9 +153,22 @@ bool terminal_runtime_feed(TerminalRuntime *runtime, std::string_view text);
  * Requests a visual zoom step and schedules its layout transaction.
  * @param runtime Live runtime.
  * @param direction Requested visual step direction.
+ * @param preserve_window Keep the current allocation instead of the grid.
  * @return The widget's status; BUSY leaves the request unaccepted.
+ * @remarks Window preservation is a driver probe until the plan25 OpenGL
+ * presentation regression is resolved. Product input currently passes false.
  */
-boxrig_ui_status terminal_runtime_visual_zoom(TerminalRuntime *runtime, boxrig_font_zoom_direction direction);
+boxrig_ui_status terminal_runtime_visual_zoom(TerminalRuntime *runtime, boxrig_font_zoom_direction direction,
+    bool preserve_window);
+
+/**
+ * Applies a direct font edit independently of an unfinished visual zoom.
+ * @param runtime Active terminal runtime.
+ * @param specification Font preference copied by the widget on success.
+ * @returns The native font update status.
+ * @remarks A successful edit supersedes the earlier zoom's sizing policy.
+ */
+boxrig_ui_status terminal_runtime_set_font(TerminalRuntime *runtime, const boxrig_font_specification &specification);
 
 /**
  * Reports whether the last frame completed its layout and presentation work.

@@ -1180,6 +1180,60 @@ static void test_terminal_block_copy_trailing_spaces_setting() {
   remove_config(global);
 }
 
+static void test_terminal_font_zoom_mode() {
+  const auto global = temporary_config_path("zoom-mode-global");
+  const auto path = temporary_config_path("zoom-mode-connection");
+  const auto theme = temporary_config_path("zoom-mode-theme");
+  const auto key = elder_terms::make_setting_key("terminal", "font_zoom_mode");
+  const auto mode = [&key](const SettingsStore &store) {
+    return elder_terms::setting_string_value_or_default(store, key, "");
+  };
+  auto store = create_default_settings(default_terminal_display_settings(12), "Zoom");
+  expect_true(mode(store) == "preserve-grid", "font zoom must preserve the grid by default");
+  write_config(global, "[terminal]\nfont_zoom_mode=preserve-window\n");
+  write_config(path, "");
+  write_config(theme, "[theme.grid]\nname=Grid\n[theme.grid.terminal]\nfont_zoom_mode=preserve-grid\n");
+  const SettingsLoadOptions options{.config_path = path, .startup_config_path = std::nullopt,
+      .global_config_path = global, .theme_config_path = theme};
+  auto loaded = load_settings(options, 12);
+  expect_true(mode(loaded.store) == "preserve-window" &&
+                  setting_value_source(loaded.store, key) == SettingValueSource::global,
+              "the connection must inherit its global zoom mode");
+  expect_true(save_settings(loaded.store, path).saved && read_config(path).empty(),
+              "inherited zoom modes must not be written into connection files");
+  expect_true(set_explicit_setting_value(&loaded.store, key, std::string("preserve-grid")) &&
+                  save_settings(loaded.store, path).saved,
+              "explicit zoom modes must save");
+  loaded = load_settings(options, 12);
+  expect_true(mode(loaded.store) == "preserve-grid" && setting_has_explicit_value(loaded.store, key),
+              "the explicit default must survive reload above a different global mode");
+  clear_explicit_setting_value(&loaded.store, key);
+  expect_true(mode(loaded.store) == "preserve-window" && save_settings(loaded.store, path).saved &&
+                  read_config(path).empty(), "clearing the zoom mode must restore inheritance");
+  for (const auto *invalid : {"", "window", "preserve-both"}) {
+    expect_true(!set_explicit_setting_value(&loaded.store, key, std::string(invalid)) &&
+                    mode(loaded.store) == "preserve-window", "unknown zoom modes must be rejected");
+  }
+  write_config(path, "[terminal]\nfont_zoom_mode=unknown\n");
+  loaded = load_settings(options, 12);
+  expect_true(warnings_contain(loaded.warnings, "font_zoom_mode") &&
+                  mode(loaded.store) == "preserve-window", "invalid file modes must report a validation error");
+  write_config(path, "[general]\ntheme=grid\n");
+  loaded = load_settings(options, 12);
+  expect_true(loaded.loaded && mode(loaded.store) == "preserve-grid" &&
+                  setting_value_source(loaded.store, key) == SettingValueSource::theme,
+              "the selected theme must supply its zoom mode");
+  expect_true(set_explicit_setting_value(&loaded.store, key, std::string("preserve-window")) &&
+                  save_settings(loaded.store, path).saved, "a connection must override its theme's zoom mode");
+  loaded = load_settings(options, 12);
+  expect_true(mode(loaded.store) == "preserve-window", "the theme override must survive restart");
+  clear_explicit_setting_value(&loaded.store, key);
+  expect_true(mode(loaded.store) == "preserve-grid", "clearing a theme override must inherit the theme again");
+  remove_config(path);
+  remove_config(global);
+  remove_config(theme);
+}
+
 static void test_terminal_font_list_round_trip_and_validation() {
   const auto global = temporary_config_path("font-list-global");
   const auto path = temporary_config_path("font-list-connection");
@@ -5045,6 +5099,7 @@ int main() {
     elder_terms_settings_test::test_terminal_color_filter_settings();
     elder_terms_settings_test::test_terminal_color_vision_settings();
     elder_terms_settings_test::test_terminal_background_image_settings();
+    elder_terms_settings_test::test_terminal_font_zoom_mode();
     elder_terms_settings_test::test_terminal_font_list_round_trip_and_validation();
     elder_terms_settings_test::test_default_settings();
     elder_terms_settings_test::test_general_indicator_color_round_trip_and_layering();
