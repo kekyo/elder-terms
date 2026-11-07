@@ -25,6 +25,11 @@ describe('boxrig GTK3 driver', () => {
       const launcher = createGtkAppLauncher({
         appPath: driverPath,
         args: ['--zoom-modes'],
+        // An explicit display lets this same video assertion exercise a real
+        // window manager on a disposable X server.
+        display:
+          process.env.ELDER_TERMS_TEST_HOST_DISPLAY === '1' ? 'host' : 'xvfb',
+        accessibilitySession: 'minimal',
         env: {
           LIBGL_ALWAYS_SOFTWARE: '1',
           GTK_IM_MODULE: 'gtk-im-context-simple',
