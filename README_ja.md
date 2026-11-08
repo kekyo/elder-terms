@@ -1,6 +1,7 @@
 # elder-terms
 
-ローカルシェル・SSH・TELNET・シリアル・FTP・FTPS・SFTP・HTTP/HTTPS・WebDAV・SMB・NFSで接続できるターミナルエミュレータ。
+ローカルシェル・SSH・TELNET・シリアルで接続できるターミナルエミュレータ。
+FTP・FTPS・SFTP・WebDAV・HTTPサイト・SMB・NFSと送受信できるファイル転送。
 '90s、あの頃のパラダイス。こういうのでいいんだよ。
 
 ![elder-terms](./images/elder-terms-128.png)
@@ -31,7 +32,7 @@
 - TELNET/SSHで、ターミナル種別 (`xterm`や`xterm-256color`など) を明示的に指定できます。
 - TELNET、シリアル、SSHの各ターミナル接続で、X/Y/ZMODEMファイル送受信をサポートしています。
   ZMODEMなら、自動送受信を有効化出来ます。
-- SFTP/FTP/FTPS/WebDAV/SMB/NFSで、ホストとファイルの送受信を実行出来ます。
+- SFTP/FTP/FTPS/WebDAV/HTTPサイト/SMB/NFSで、ホストとファイルの送受信を実行出来ます。
 - PassiveまたはActiveのデータ接続を使用して、FTP/FTPSでファイルを送受信出来ます。
 - テキストのペーストやテキストファイルの送信を実行出来ます。
   その際に、送信速度と改行コードの扱いを指定して、ホスト側のバッファオーバーフローや改行コードの不一致を回避出来ます。
@@ -62,7 +63,7 @@
 
 ![Colored terminal](./images/colored-terminal.png)
 
-### SFTP/FTP/FTPS/WebDAV/SMB/NFS
+### SFTP/FTP/FTPS/WebDAV/HTTPサイト/SMB/NFS によるファイル転送
 
 ![ファイル転送ウインドウ](./images/sftp.png)
 
@@ -910,6 +911,8 @@ Ctrlキーを押しながらリンクをクリックすると、設定したア�
 
 接続を指定せず起動した端末のデスクトップアイコンで「New Window」を選んだ時の接続は、
 ランチャーの「アプリケーション設定」で指定できます。
+
+![New window](./images/new-window.png)
 
 「\"New Window\"で使用」から保存済みの接続名を選んで保存して下さい。
 「なし」を選ぶと既定の端末設定で起動します。

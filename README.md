@@ -1,6 +1,7 @@
 # elder-terms
 
-A Terminal emulator for local shell, SSH, TELNET, serial, FTP, FTPS, SFTP, HTTP/HTTPS, WebDAV, SMB, and NFS connections.
+A Terminal emulator for local shell, SSH, TELNET, serial connections.
+And FTP, FTPS, SFTP, WebDAV, HTTP sites, SMB, and NFS file transfer.
 '90s, come back in this time. This is all we need.
 
 ![elder-terms](./images/elder-terms-128.png)
@@ -36,7 +37,7 @@ A terminal application, inspired by personal computing in the 1990s.
   `xterm-256color`, for TELNET and SSH.
 - Supports X/Y/ZMODEM file transfers for TELNET, serial, and SSH terminal
   connections. Automatic transfers can be enabled for ZMODEM.
-- Transfers files to and from the host over SFTP/FTP/FTPS, WebDAV, SMB, and NFS.
+- Transfers files to and from the host over SFTP/FTP/FTPS, WebDAV, HTTP sites, SMB, and NFS.
 - Transfers files over FTP and FTPS using passive or active data connections.
 - Supports pasting text and sending text files. You can specify the send rate
   and newline handling to avoid overflowing the host's buffer or using
@@ -73,7 +74,7 @@ A terminal application, inspired by personal computing in the 1990s.
 
 ![Colored terminal](./images/colored-terminal.png)
 
-### SFTP/FTP/FTPS/WebDAV/SMB and NFS
+### SFTP/FTP/FTPS/WebDAV/HTTP sites/SMB and NFS file transfer
 
 ![File transfer window](./images/sftp.png)
 
@@ -1012,6 +1013,8 @@ shown; the desktop environment controls whether it comes to the foreground.
 
 To choose the connection opened by "New Window" on the desktop icon of a terminal started without a connection,
 open "Application settings" in the launcher and select its name from "Use for \"New Window\"".
+
+![New window](./images/new-window.png)
 
 Select "None" to use the default terminal settings.
 
