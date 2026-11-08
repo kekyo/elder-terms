@@ -15,6 +15,7 @@
 #include <elder-terms/key-binding.h>
 
 #include "settings-widget/settings-presentation.h"
+#include "settings-widget/settings-validation.h"
 
 namespace elder_terms {
 
@@ -65,22 +66,11 @@ static std::string validation_error(KeyBindingInputWidgetState *state) {
 static void update_validation_presentation(
     KeyBindingInputWidgetState *state) {
   const std::string error = validation_error(state);
-  const std::string message = settings_validation_message(error);
-  GtkStyleContext *context = gtk_widget_get_style_context(state->entry);
+  set_settings_input_error(state->entry, error);
   if (!error.empty()) {
-    gtk_style_context_add_class(context, GTK_STYLE_CLASS_ERROR);
-    gtk_entry_set_icon_from_icon_name(GTK_ENTRY(state->entry),
-                                      GTK_ENTRY_ICON_SECONDARY,
-                                      "dialog-error-symbolic");
-    gtk_entry_set_icon_activatable(GTK_ENTRY(state->entry),
-                                   GTK_ENTRY_ICON_SECONDARY, FALSE);
-    gtk_entry_set_icon_tooltip_text(GTK_ENTRY(state->entry),
-                                    GTK_ENTRY_ICON_SECONDARY,
-                                    message.c_str());
     return;
   }
 
-  gtk_style_context_remove_class(context, GTK_STYLE_CLASS_ERROR);
   const bool show_clear =
       state->focused &&
       (!state->confirmed_text.empty() || state->empty_clear_enabled);

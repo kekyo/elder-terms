@@ -103,6 +103,15 @@ static bool validate_font_size_dip(const SettingValue &value, std::string *reaso
   return true;
 }
 
+static bool validate_font_zoom_mode(const SettingValue &value, std::string *reason) {
+  const auto *mode = std::get_if<std::string>(&value);
+  if (mode == nullptr || (*mode != "preserve-grid" && *mode != "preserve-window")) {
+    *reason = "must be preserve-grid or preserve-window";
+    return false;
+  }
+  return true;
+}
+
 static bool validate_scrollback_lines(const SettingValue &value,
                                       std::string *reason) {
   const auto *integer = std::get_if<gint64>(&value);
@@ -217,8 +226,8 @@ static bool validate_color_filter(const SettingValue &value, std::string *reason
 
 static bool validate_link_decoration(const SettingValue &value, std::string *reason) {
   const auto *text = std::get_if<std::string>(&value);
-  if (text && (*text == "none" || *text == "underline" || *text == "validated")) return true;
-  *reason = "must be none, underline, or validated";
+  if (text && (*text == "none" || *text == "underline" || *text == "hover" || *text == "validated")) return true;
+  *reason = "must be none, underline, hover, or validated";
   return false;
 }
 
@@ -240,6 +249,13 @@ static bool validate_background_percent(const SettingValue &value, std::string *
   const auto *number = std::get_if<gint64>(&value);
   if (number && *number >= 0 && *number <= 100) return true;
   *reason = "must be an integer from 0 to 100";
+  return false;
+}
+
+static bool validate_cell_background_mode(const SettingValue &value, std::string *reason) {
+  const auto *text = std::get_if<std::string>(&value);
+  if (text && (*text == "transparent" || *text == "opaque")) return true;
+  *reason = "must be transparent or opaque";
   return false;
 }
 
@@ -331,6 +347,15 @@ SettingKey terminal_font_size_dip_setting_key() {
   return terminal_key(terminal_font_size_dip_key);
 }
 
+SettingKey terminal_font_zoom_mode_setting_key() {
+  return terminal_key("font_zoom_mode");
+}
+
+TerminalFontZoomMode terminal_font_zoom_mode(const SettingsStore &store) {
+  return setting_string_value_or_default(store, terminal_font_zoom_mode_setting_key(), "preserve-grid") == "preserve-window" ?
+      TerminalFontZoomMode::preserve_window : TerminalFontZoomMode::preserve_grid;
+}
+
 SettingKey terminal_font_families_setting_key() {
   return terminal_key(terminal_font_families_key);
 }
@@ -338,11 +363,15 @@ SettingKey terminal_font_families_setting_key() {
 SettingKey terminal_cursor_shape_setting_key() { return terminal_key("cursor_shape"); }
 SettingKey terminal_cursor_blink_setting_key() { return terminal_key("cursor_blink"); }
 SettingKey terminal_color_filter_setting_key() { return terminal_key("color_filter"); }
-SettingKey terminal_link_decoration_setting_key() { return terminal_key("link_decoration"); }
-TerminalLinkDecoration terminal_link_decoration(const SettingsStore &store) {
-  const auto value = setting_string_value_or_default(store, terminal_link_decoration_setting_key(), "underline");
-  return value == "none" ? TerminalLinkDecoration::none :
-      value == "validated" ? TerminalLinkDecoration::validated : TerminalLinkDecoration::underline;
+SettingKey terminal_regex_link_decoration_setting_key() { return terminal_key("regex_link_decoration"); }
+SettingKey terminal_osc8_link_decoration_setting_key() { return terminal_key("osc8_link_decoration"); }
+TerminalLinkDecorations terminal_link_decorations(const SettingsStore &store) {
+  const auto read = [&](const SettingKey &key, const char *fallback) {
+    const auto value = setting_string_value_or_default(store, key, fallback);
+    return value == "none" ? TerminalLinkDecoration::none : value == "hover" ? TerminalLinkDecoration::hover :
+        value == "validated" ? TerminalLinkDecoration::validated : TerminalLinkDecoration::underline;
+  };
+  return {read(terminal_regex_link_decoration_setting_key(), "hover"), read(terminal_osc8_link_decoration_setting_key(), "underline")};
 }
 TerminalColorFilter terminal_color_filter(const SettingsStore &store) {
   const auto value = setting_string_value_or_default(store, terminal_color_filter_setting_key(), "none");
@@ -371,6 +400,7 @@ TerminalCursorSettings terminal_cursor_settings(const SettingsStore &store) {
 }
 
 SettingKey terminal_background_mode_setting_key() { return terminal_key("background_mode"); }
+SettingKey terminal_cell_background_mode_setting_key() { return terminal_key("cell_background_mode"); }
 SettingKey terminal_background_opacity_setting_key() { return terminal_key("background_opacity"); }
 SettingKey terminal_background_tint_color_setting_key() { return terminal_key("background_tint_color"); }
 SettingKey terminal_background_tint_opacity_setting_key() { return terminal_key("background_tint_opacity"); }
@@ -393,7 +423,9 @@ TerminalBackgroundSettings terminal_background_settings(const SettingsStore &sto
       static_cast<int>(setting_integer_value_or_default(store, terminal_background_opacity_setting_key(), 80)),
       parse_rgb_color(setting_string_value_or_default(store, terminal_background_tint_color_setting_key(), "#000000"))
           .value_or(RgbColor{0, 0, 0}),
-      static_cast<int>(setting_integer_value_or_default(store, terminal_background_tint_opacity_setting_key(), 0))};
+      static_cast<int>(setting_integer_value_or_default(store, terminal_background_tint_opacity_setting_key(), 0)),
+      setting_string_value_or_default(store, terminal_cell_background_mode_setting_key(), "transparent") == "opaque"
+          ? TerminalCellBackgroundMode::opaque : TerminalCellBackgroundMode::transparent};
 }
 
 SettingKey terminal_accessibility_enabled_setting_key() {
@@ -402,6 +434,15 @@ SettingKey terminal_accessibility_enabled_setting_key() {
 
 SettingKey terminal_bell_sound_setting_key() {
   return terminal_key(terminal_bell_sound_key);
+}
+
+SettingKey terminal_visual_bell_setting_key() {
+  return terminal_key("visual_bell");
+}
+
+TerminalTitlebarEffectsSettings terminal_titlebar_effects_settings(const SettingsStore &store) {
+  return {titlebar_effect_strength(store, terminal_visual_bell_setting_key()),
+      general_receive_effect_strength(store)};
 }
 
 SettingKey terminal_zoom_in_key_setting_key() {
@@ -509,10 +550,12 @@ terminal_setting_definitions(TerminalDisplaySettings terminal_defaults) {
        .validate = validate_terminal_cursor_shape},
       {.key = terminal_cursor_blink_setting_key(), .default_value = SettingValue{true}, .validate = nullptr},
       {.key = terminal_color_filter_setting_key(), .default_value = SettingValue{std::string("none")}, .validate = validate_color_filter},
-      {.key = terminal_link_decoration_setting_key(), .default_value = SettingValue{std::string("underline")}, .validate = validate_link_decoration},
+      {.key = terminal_regex_link_decoration_setting_key(), .default_value = SettingValue{std::string("hover")}, .validate = validate_link_decoration},
+      {.key = terminal_osc8_link_decoration_setting_key(), .default_value = SettingValue{std::string("underline")}, .validate = validate_link_decoration},
       {.key = terminal_color_vision_setting_key(), .default_value = SettingValue{std::string("none")}, .validate = validate_color_vision},
       {.key = terminal_color_vision_strength_setting_key(), .default_value = SettingValue{gint64{100}}, .validate = validate_background_percent},
       {.key = terminal_background_mode_setting_key(), .default_value = SettingValue{std::string("opaque")}, .validate = validate_background_mode},
+      {.key = terminal_cell_background_mode_setting_key(), .default_value = SettingValue{std::string("transparent")}, .validate = validate_cell_background_mode},
       {.key = terminal_background_opacity_setting_key(), .default_value = SettingValue{gint64{80}}, .validate = validate_background_percent},
       {.key = terminal_background_tint_color_setting_key(), .default_value = SettingValue{std::string("#000000")}, .validate = validate_background_tint},
       {.key = terminal_background_tint_opacity_setting_key(), .default_value = SettingValue{gint64{0}}, .validate = validate_background_percent},
@@ -555,6 +598,11 @@ terminal_setting_definitions(TerminalDisplaySettings terminal_defaults) {
           .normalize = normalize_font_families,
       },
       {
+          .key = terminal_font_zoom_mode_setting_key(),
+          .default_value = SettingValue{std::string("preserve-grid")},
+          .validate = validate_font_zoom_mode,
+      },
+      {
           .key = terminal_accessibility_enabled_setting_key(),
           .default_value = SettingValue{false},
           .validate = nullptr,
@@ -565,6 +613,7 @@ terminal_setting_definitions(TerminalDisplaySettings terminal_defaults) {
               SettingValue{std::string(default_terminal_bell_sound)},
           .validate = validate_terminal_bell_sound,
       },
+      titlebar_effect_setting_definition(terminal_visual_bell_setting_key()),
       {
           .key = terminal_zoom_in_key_setting_key(),
           .default_value = SettingValue{std::string(default_terminal_zoom_in_key)},

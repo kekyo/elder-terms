@@ -5,6 +5,7 @@
 
 #include "webdav-settings-editor.h"
 #include "settings-presentation.h"
+#include "settings-validation.h"
 #include <elder-terms/modal-dialog.h>
 
 #include <algorithm>
@@ -100,8 +101,8 @@ static void update_validation(WebdavSettingsEditor *editor) {
         gtk_widget_set_sensitive(editor->browse, enabled && custom);
       }
       gtk_widget_set_sensitive(field.entry, enabled && custom);
-      gtk_entry_set_icon_from_icon_name(GTK_ENTRY(field.entry), GTK_ENTRY_ICON_SECONDARY,
-                                        field.valid ? nullptr : "dialog-error-symbolic");
+      set_settings_input_error(field.entry, field.valid ? "" :
+          settings_rejected_input_reason(*editor->store, webdav_setting_key(field.name), field.entry));
     }
     if (!field.valid) errors.push_back(setting_label(webdav_setting_key(field.name)) + ": " + _("Enter a valid value"));
   }
@@ -126,8 +127,7 @@ void sync_webdav_settings_editor(WebdavSettingsEditor *editor, bool preserve_inv
     const bool explicit_value = setting_has_explicit_value(*editor->store, key);
     if (field.combo) {
       gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(field.combo));
-      const auto inherited_label = inherited_setting_label(
-          setting_choice_label(key, inherited), setting_fallback_source(*editor->store, key));
+      const auto inherited_label = setting_fallback_label(*editor->store, key, setting_choice_label(key, inherited));
       gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(field.combo), "inherit", inherited_label.c_str());
       for (const auto *choice : field.choices)
         gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(field.combo), choice, setting_choice_label(key, choice).c_str());
@@ -138,7 +138,7 @@ void sync_webdav_settings_editor(WebdavSettingsEditor *editor, bool preserve_inv
     }
     if (field.entry) {
       gtk_entry_set_text(GTK_ENTRY(field.entry), explicit_value ? effective.c_str() : "");
-      gtk_entry_set_placeholder_text(GTK_ENTRY(field.entry), inherited_setting_label(inherited, setting_fallback_source(*editor->store, key)).c_str());
+      gtk_entry_set_placeholder_text(GTK_ENTRY(field.entry), setting_fallback_label(*editor->store, key, inherited).c_str());
     }
     field.valid = !unfinished;
     if (unfinished) {
@@ -204,7 +204,7 @@ static void combo_changed(GtkComboBox *widget, gpointer data) {
         SettingsStore fallback;
         fallback = *editor->store;
         clear_explicit_setting_value(&fallback, webdav_setting_key("port"));
-        gtk_entry_set_placeholder_text(GTK_ENTRY(port.entry), inherited_setting_label(effective_text(fallback, "port"), setting_fallback_source(fallback, webdav_setting_key("port"))).c_str());
+        gtk_entry_set_placeholder_text(GTK_ENTRY(port.entry), setting_fallback_label(fallback, webdav_setting_key("port"), effective_text(fallback, "port")).c_str());
       }
     }
   }
@@ -273,6 +273,8 @@ WebdavSettingsEditor *create_webdav_settings_editor(SettingsStore *store,
       gtk_box_pack_start(GTK_BOX(box), editor->browse, FALSE, FALSE, 0);
       g_signal_connect(editor->browse, "clicked", G_CALLBACK(browse_clicked), editor);
     }
+    bind_settings_field(box, webdav_setting_key(field.name));
+    box = decorate_settings_control(box);
     gtk_widget_set_hexpand(box, TRUE);
     gtk_grid_attach(GTK_GRID(editor->root), label, 0, row, 1, 1);
     gtk_grid_attach(GTK_GRID(editor->root), box, 1, row++, 1, 1);

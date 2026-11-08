@@ -4,6 +4,7 @@
 // https://github.com/kekyo/elder-terms/
 
 #include <elder-terms/settings/ftp-settings.h>
+#include "validation-issues.h"
 
 #include <algorithm>
 #include <cctype>
@@ -251,9 +252,11 @@ FtpConnectionSettings ftp_connection_settings(const SettingsStore &store) {
       passive_data_connection_mode);
 
   const auto tls = setting_string_value_or_default(store, ftp_tls_mode_setting_key(), "none");
-  std::vector<std::string> errors;
+  FtpConnectionSettings validation;
+  auto &errors = validation.validation_errors;
   for (const auto &entry : store.entries) {
     if (entry.definition.key.section == "ftp" && !entry.validation_error.empty()) {
+      validation.validation_issues.push_back({{entry.definition.key}, entry.validation_error});
       const auto source = setting_value_source(store, entry.definition.key);
       errors.push_back("[ftp] " + entry.definition.key.name + " (" +
           (source == SettingValueSource::global ? "global" : "connection") + "): " + entry.validation_error);
@@ -262,7 +265,8 @@ FtpConnectionSettings ftp_connection_settings(const SettingsStore &store) {
   const auto minimum = parse_tls_version(setting_string_value_or_default(store, ftp_tls_min_version_setting_key(), "1.2"));
   const auto maximum = parse_tls_version(setting_string_value_or_default(store, ftp_tls_max_version_setting_key(), "default"));
   if (minimum && maximum && *minimum > *maximum)
-    errors.push_back("[ftp] tls_min_version must not exceed tls_max_version");
+    add_validation_issue(validation, {ftp_tls_min_version_setting_key(), ftp_tls_max_version_setting_key()},
+        "[ftp] tls_min_version must not exceed tls_max_version");
   const auto auth = setting_string_value_or_default(store, ftp_tls_auth_order_setting_key(), "tls");
   const auto compatibility = setting_string_value_or_default(store, ftp_tls_compatibility_setting_key(), "standard");
   return {
@@ -291,6 +295,7 @@ FtpConnectionSettings ftp_connection_settings(const SettingsStore &store) {
       .certificate_error_action = setting_string_value_or_default(store, ftp_certificate_error_action_setting_key(), "reject") == "prompt"
           ? FtpCertificateErrorAction::prompt : FtpCertificateErrorAction::reject,
       .validation_errors = std::move(errors),
+      .validation_issues = std::move(validation.validation_issues),
   };
 }
 

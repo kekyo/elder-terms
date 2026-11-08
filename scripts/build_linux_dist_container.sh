@@ -90,9 +90,11 @@ calculate_shlibdeps() {
 			"$private_dir/libboxrig-gtk3.so.0" \
 			"$private_dir/libjemalloc.so.2" \
 			"$private_dir/libsmb2.so.7" \
+			"$private_dir/libdsm.so.3" \
+			"$private_dir/elder-terms-file-transfer/elder-terms-smb1-worker" \
 			"$private_dir/launcher/elder-terms" \
 			"$private_dir/elder-terms-terminal/elder-terms-terminal" \
-			"$private_dir/elder-terms-terminal/elder-terms-file-transfer" |
+			"$private_dir/elder-terms-file-transfer/elder-terms-file-transfer" |
 			sed -n 's/^shlibs:Depends=//p'
 	)
 	rm -rf "$tmp_dir"
@@ -103,9 +105,10 @@ calculate_shlibdeps() {
 
 validate_dynamic_links() {
 	for executable_path in \
+		/usr/lib/elder-terms/elder-terms-file-transfer/elder-terms-smb1-worker \
 		/usr/lib/elder-terms/launcher/elder-terms \
 		/usr/lib/elder-terms/elder-terms-terminal/elder-terms-terminal \
-		/usr/lib/elder-terms/elder-terms-terminal/elder-terms-file-transfer; do
+		/usr/lib/elder-terms/elder-terms-file-transfer/elder-terms-file-transfer; do
 		link_report=$(ldd "$executable_path")
 		case $link_report in
 		*'not found'*)
@@ -147,13 +150,17 @@ validate_installed_package() {
 		/usr/lib/elder-terms/libboxrig-gtk3.so.0 \
 		/usr/lib/elder-terms/libjemalloc.so.2 \
 		/usr/lib/elder-terms/libsmb2.so.7 \
+		/usr/lib/elder-terms/libdsm.so.3 \
+		/usr/lib/elder-terms/elder-terms-file-transfer/elder-terms-smb1-worker \
 		/usr/lib/elder-terms/launcher/elder-terms \
 		/usr/lib/elder-terms/launcher/main-window.ui \
 		/usr/lib/elder-terms/elder-terms-terminal/elder-terms-terminal \
-		/usr/lib/elder-terms/elder-terms-terminal/elder-terms-file-transfer \
+		/usr/lib/elder-terms/elder-terms-file-transfer/elder-terms-file-transfer \
 		/usr/lib/elder-terms/elder-terms-terminal/main-window.ui \
 		/usr/lib/elder-terms/elder-terms-terminal/green-on.png \
 		/usr/lib/elder-terms/elder-terms-terminal/green-off.png \
+		/usr/lib/elder-terms/elder-terms-file-transfer/green-on.png \
+		/usr/lib/elder-terms/elder-terms-file-transfer/green-off.png \
 		/usr/share/applications/net.kekyo.elder-terms.desktop \
 		/usr/share/applications/net.kekyo.elder-terms-terminal.desktop \
 		/etc/xdg/autostart/net.kekyo.elder-terms.desktop \
@@ -164,6 +171,8 @@ validate_installed_package() {
 		/usr/share/doc/elder-terms/docs/en/webdav.md \
 		/usr/share/doc/elder-terms/docs/ja/smb.md \
 		/usr/share/doc/elder-terms/docs/en/smb.md \
+		/usr/share/doc/elder-terms/docs/ja/http.md \
+		/usr/share/doc/elder-terms/docs/en/http.md \
 		/usr/share/doc/elder-terms/docs/en/webdav-validation.md \
 		/usr/share/doc/elder-terms/licenses/boxrig/LICENSE \
 		/usr/share/doc/elder-terms/licenses/boxrig/README.md \
@@ -176,9 +185,12 @@ validate_installed_package() {
 		/usr/share/doc/elder-terms/licenses/boxrig/WHATWG-Encoding-LICENSE \
 		/usr/share/doc/elder-terms/licenses/boxrig/Wayland-protocols-NOTICES.md \
 		/usr/share/doc/elder-terms/licenses/jemalloc/COPYING \
+		/usr/share/doc/elder-terms/licenses/libdsm/COPYING \
+		/usr/share/doc/elder-terms/licenses/libdsm/libdsm-source.tar.xz \
+		/usr/share/doc/elder-terms/licenses/libdsm/libdsm-correctness.patch \
 		/usr/share/doc/elder-terms/licenses/libsmb2/COPYING \
 		/usr/share/doc/elder-terms/licenses/libsmb2/LICENCE-LGPL-2.1.txt \
-		/usr/share/doc/elder-terms/licenses/libsmb2/libsmb2-source.tar.gz \
+		/usr/share/doc/elder-terms/licenses/libsmb2/libsmb2-source.tar.xz \
 		/usr/share/doc/elder-terms/copyright; do
 		assert_file "$installed_file"
 	done
@@ -187,7 +199,7 @@ validate_installed_package() {
 	assert_symlink /usr/bin/elder-terms-terminal \
 		'../lib/elder-terms/elder-terms-terminal/elder-terms-terminal'
 	assert_symlink /usr/bin/elder-terms-file-transfer \
-		'../lib/elder-terms/elder-terms-terminal/elder-terms-file-transfer'
+		'../lib/elder-terms/elder-terms-file-transfer/elder-terms-file-transfer'
 	validate_dynamic_links
 	printf '%s\n' "Installed package validated: $package_path"
 }
@@ -227,6 +239,8 @@ require_command cmake
 require_command autoconf
 require_command meson
 require_command pkg-config
+require_command tar
+require_command xz
 
 for pkg_config_module in \
 	gio-2.0 \
@@ -245,6 +259,7 @@ for pkg_config_module in \
 	libxml-2.0 \
 	openssl \
 	libssh \
+	'libnfs >= 5.0.2' \
 	libudev \
 	liburing \
 	x11 \
@@ -295,13 +310,17 @@ for staged_file in \
 	usr/lib/elder-terms/libboxrig-gtk3.so.0 \
 	usr/lib/elder-terms/libjemalloc.so.2 \
 	usr/lib/elder-terms/libsmb2.so.7 \
+	usr/lib/elder-terms/libdsm.so.3 \
+	usr/lib/elder-terms/elder-terms-file-transfer/elder-terms-smb1-worker \
 	usr/lib/elder-terms/launcher/elder-terms \
 	usr/lib/elder-terms/launcher/main-window.ui \
 	usr/lib/elder-terms/elder-terms-terminal/elder-terms-terminal \
-	usr/lib/elder-terms/elder-terms-terminal/elder-terms-file-transfer \
+	usr/lib/elder-terms/elder-terms-file-transfer/elder-terms-file-transfer \
 	usr/lib/elder-terms/elder-terms-terminal/main-window.ui \
 	usr/lib/elder-terms/elder-terms-terminal/green-on.png \
 	usr/lib/elder-terms/elder-terms-terminal/green-off.png \
+	usr/lib/elder-terms/elder-terms-file-transfer/green-on.png \
+	usr/lib/elder-terms/elder-terms-file-transfer/green-off.png \
 	usr/share/applications/net.kekyo.elder-terms.desktop \
 	usr/share/applications/net.kekyo.elder-terms-terminal.desktop \
 	etc/xdg/autostart/net.kekyo.elder-terms.desktop \
@@ -312,6 +331,8 @@ for staged_file in \
 	usr/share/doc/elder-terms/docs/en/webdav.md \
 	usr/share/doc/elder-terms/docs/ja/smb.md \
 	usr/share/doc/elder-terms/docs/en/smb.md \
+	usr/share/doc/elder-terms/docs/ja/http.md \
+	usr/share/doc/elder-terms/docs/en/http.md \
 	usr/share/doc/elder-terms/docs/en/webdav-validation.md \
 	usr/share/doc/elder-terms/licenses/boxrig/LICENSE \
 	usr/share/doc/elder-terms/licenses/boxrig/README.md \
@@ -324,9 +345,12 @@ for staged_file in \
 	usr/share/doc/elder-terms/licenses/boxrig/WHATWG-Encoding-LICENSE \
 	usr/share/doc/elder-terms/licenses/boxrig/Wayland-protocols-NOTICES.md \
 	usr/share/doc/elder-terms/licenses/jemalloc/COPYING \
+	usr/share/doc/elder-terms/licenses/libdsm/COPYING \
+	usr/share/doc/elder-terms/licenses/libdsm/libdsm-source.tar.xz \
+	usr/share/doc/elder-terms/licenses/libdsm/libdsm-correctness.patch \
 	usr/share/doc/elder-terms/licenses/libsmb2/COPYING \
 	usr/share/doc/elder-terms/licenses/libsmb2/LICENCE-LGPL-2.1.txt \
-	usr/share/doc/elder-terms/licenses/libsmb2/libsmb2-source.tar.gz \
+	usr/share/doc/elder-terms/licenses/libsmb2/libsmb2-source.tar.xz \
 	usr/share/doc/elder-terms/copyright; do
 	assert_file "$stage_dir/$staged_file"
 done
@@ -335,4 +359,4 @@ assert_symlink "$stage_dir/usr/bin/elder-terms" \
 assert_symlink "$stage_dir/usr/bin/elder-terms-terminal" \
 	'../lib/elder-terms/elder-terms-terminal/elder-terms-terminal'
 assert_symlink "$stage_dir/usr/bin/elder-terms-file-transfer" \
-	'../lib/elder-terms/elder-terms-terminal/elder-terms-file-transfer'
+	'../lib/elder-terms/elder-terms-file-transfer/elder-terms-file-transfer'

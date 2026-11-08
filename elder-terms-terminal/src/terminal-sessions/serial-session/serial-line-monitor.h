@@ -9,7 +9,7 @@
 
 #include <elder-terms/settings/serial-settings.h>
 
-#include "../../activity-indicator-id.h"
+#include "../../../../shared/src/connection-runtime/activity-indicator-id.h"
 
 namespace elder_terms {
 

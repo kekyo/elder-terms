@@ -37,16 +37,17 @@
 #include <elder-terms/settings.h>
 #include <elder-terms/settings-widget.h>
 
-#include "launch-options.h"
+#include "../../shared/src/connection-runtime/launch-options.h"
 #include "gtk-initialization.h"
 #include "main-window.h"
-#include "file-transfer/file-hash.h"
-#include "file-transfer/file-transfer-paths.h"
-#include "file-transfer/file-transfer-window.h"
-#include "sftp/sftp-client.h"
-#include "sftp/sftp-fixture-client.h"
+#include "../../elder-terms-file-transfer/src/file-transfer/file-hash.h"
+#include "../../elder-terms-file-transfer/src/file-transfer/file-transfer-paths.h"
+#include "../../elder-terms-file-transfer/src/file-transfer/file-transfer-window.h"
+#include "../../elder-terms-file-transfer/src/sftp/sftp-client.h"
+#include "../../elder-terms-file-transfer/src/sftp/sftp-fixture-client.h"
 #include "terminal-bell-player.h"
 #include "terminal-bell.h"
+#include "../../shared/src/connection-runtime/titlebar-effects.h"
 #include "terminal-hyperlink-action.h"
 #include "terminal-presentation.h"
 #include "terminal-renderer-status.h"
@@ -55,7 +56,7 @@
 #include "terminal-log.h"
 #include "terminal-text-send.h"
 #include "terminal-transfer-runner.h"
-#include "terminal-sessions/ssh-session/authenticated-ssh-transport.h"
+#include "../../shared/src/connection-runtime/ssh/authenticated-ssh-transport.h"
 
 static constexpr char terminal_application_id[] =
     "net.kekyo.elder-terms-terminal";
@@ -247,9 +248,9 @@ static void spawn_macro_command(ApplicationState *state, std::string command,
 }
 
 static void apply_terminal_hyperlink_settings(ApplicationState *state) {
-  elder_terms::terminal_runtime_set_link_decoration(state->runtime,
-      elder_terms::terminal_link_decoration(state->settings_store));
-  elder_terms::terminal_runtime_set_hyperlink_rules(state->runtime,
+  elder_terms::terminal_runtime_set_link_decorations(state->runtime,
+      elder_terms::terminal_link_decorations(state->settings_store));
+  elder_terms::terminal_runtime_set_hyperlink_rules(state->runtime, state->settings_store.hyperlink_actions_enabled,
       elder_terms::effective_hyperlink_action_rules(state->settings_store),
       [state](elder_terms::TerminalHyperlinkResolution resolution) {
         if (!resolution.action) {
@@ -422,6 +423,7 @@ static cardio::promise<void> check_shared_sftp_connection_async(
     std::shared_ptr<elder_terms::AuthenticatedSshTransport> transport,
     cardio::cancellation cancellation) {
   bool available = false;
+  std::string reason = _("The shared SSH connection was lost.");
   try {
     available =
         co_await transport->is_connected_async(std::move(cancellation));
@@ -429,6 +431,8 @@ static cardio::promise<void> check_shared_sftp_connection_async(
     state->sftp_connection_check_active = false;
     co_return;
   } catch (const std::exception &error) {
+    reason += "\n";
+    reason += error.what();
     std::cerr << "Warning: failed to check shared SFTP connection: "
               << error.what() << '\n';
   }
@@ -436,7 +440,7 @@ static cardio::promise<void> check_shared_sftp_connection_async(
   if (state->sftp_transport == transport &&
       state->sftp_window != nullptr) {
     elder_terms::set_file_transfer_window_connection_available(
-        state->sftp_window, available);
+        state->sftp_window, available, std::move(reason));
   }
   state->sftp_connection_check_active = false;
 }
@@ -456,7 +460,7 @@ static void start_shared_sftp_connection_check(
   if (state->sftp_transport == nullptr ||
       !state->sftp_cancel_source.has_value()) {
     elder_terms::set_file_transfer_window_connection_available(
-        state->sftp_window, false);
+        state->sftp_window, false, _("The shared SSH connection was lost."));
     return;
   }
 
@@ -468,6 +472,13 @@ static void start_shared_sftp_connection_check(
           state->sftp_cancel_source->get_cancellation()));
 }
 
+static bool should_auto_close_terminal(const ApplicationState *state) {
+  // Failed connections remain open for retry; serial sessions also wait for
+  // their device or carrier to return, regardless of the auto-close setting.
+  return state->auto_close && !state->connection_failed &&
+      state->active_profile.kind != elder_terms::TerminalConnectionKind::serial;
+}
+
 static void update_application_reconnect_presentation(ApplicationState *state) {
   if (state == nullptr || state->window == nullptr) {
     return;
@@ -475,14 +486,14 @@ static void update_application_reconnect_presentation(ApplicationState *state) {
   elder_terms::set_main_window_reconnect_presentation(
       state->main_window,
       elder_terms::terminal_reconnect_presentation(
-          state->auto_close, state->connection_phase,
+          should_auto_close_terminal(state), state->connection_phase,
           elder_terms::terminal_runtime_can_connect(state->runtime),
           state->closing));
 }
 
 static void on_reconnect_clicked(GtkButton *, gpointer user_data) {
   auto *state = static_cast<ApplicationState *>(user_data);
-  if (state == nullptr || state->window == nullptr || state->auto_close || state->closing ||
+  if (state == nullptr || state->window == nullptr || should_auto_close_terminal(state) || state->closing ||
       state->connection_phase != elder_terms::TerminalSessionConnectionPhase::disconnected ||
       !elder_terms::terminal_runtime_can_connect(state->runtime)) {
     return;
@@ -731,23 +742,45 @@ static void application_terminal_changed(void *context) {
     const auto phase = connection.carrier_connected ? elder_terms::TerminalSessionConnectionPhase::connected :
         elder_terms::TerminalSessionConnectionPhase::disconnected;
     if (phase != state->connection_phase) set_application_connection_phase(state, phase);
+    if (!connection.carrier_connected)
+      elder_terms::set_main_window_disconnected_message(state->main_window,
+          _("Waiting for the serial carrier signal. The connection will resume automatically."));
   } else if (connection.phase == elder_terms::TerminalConnectionPhase::starting) {
     if (state->connection_phase == elder_terms::TerminalSessionConnectionPhase::disconnected)
       set_application_connection_phase(state, elder_terms::TerminalSessionConnectionPhase::connecting);
   } else if (connection.phase == elder_terms::TerminalConnectionPhase::closed && connection.generation != state->closed_generation) {
     state->closed_generation = connection.generation;
     if (connection.operation_error || connection.spawn.state == BOXRIG_POSIX_PTY_SPAWN_FAILED) {
-      state->connection_failed = state->active_profile.kind == elder_terms::TerminalConnectionKind::ssh;
+      state->connection_failed = true;
       const auto message = connection.operation_error_message.empty() ?
           std::string(g_strerror(connection.operation_error ? connection.operation_error : connection.spawn.error_number)) :
           connection.operation_error_message;
       std::cerr << "Error: " << message << '\n';
-      if (state->active_profile.kind == elder_terms::TerminalConnectionKind::ssh ||
-          state->active_profile.kind == elder_terms::TerminalConnectionKind::telnet)
-        elder_terms::set_main_window_connection_failure(state->main_window, message, state->active_profile.kind);
+      elder_terms::set_main_window_connection_failure(state->main_window, message, state->active_profile.kind);
+    } else {
+      std::string message;
+      switch (state->active_profile.kind) {
+      case elder_terms::TerminalConnectionKind::local_shell:
+        message = connection.signal_number != 0
+            ? format_translated_string(_("Local command terminated by signal %d."), connection.signal_number)
+            : connection.exit_code >= 0
+                ? format_translated_string(_("Local command exited with status %d."), connection.exit_code)
+                : _("Local command ended.");
+        break;
+      case elder_terms::TerminalConnectionKind::ssh:
+        message = _("SSH session ended.");
+        break;
+      case elder_terms::TerminalConnectionKind::telnet:
+        message = _("TELNET session ended.");
+        break;
+      case elder_terms::TerminalConnectionKind::serial:
+        message = _("Serial connection closed. Waiting for the device to become available.");
+        break;
+      }
+      elder_terms::set_main_window_disconnected_message(state->main_window, message);
     }
     set_application_connection_phase(state, elder_terms::TerminalSessionConnectionPhase::disconnected);
-    if (state->auto_close && !state->connection_failed && state->active_profile.kind != elder_terms::TerminalConnectionKind::serial)
+    if (should_auto_close_terminal(state))
       gtk_window_close(GTK_WINDOW(state->window));
   }
   update_application_reconnect_presentation(state);
@@ -1523,7 +1556,7 @@ static cardio::promise<void> reconnect_shared_sftp_window_async(
     elder_terms::attach_file_transfer_window_client(state->sftp_window, state->sftp_client);
   } catch (const cardio::canceled_exception &) {
   } catch (const std::exception &error) { failure = error.what(); }
-  if (!failure.empty()) co_await elder_terms::show_file_transfer_window_connection_error_async(
+  if (!failure.empty()) elder_terms::show_file_transfer_window_connection_error(
       state->sftp_window, _("Failed to start SFTP"), std::move(failure), cancellation);
   state->sftp_opening = false;
 }
@@ -1606,7 +1639,7 @@ static cardio::promise<void> open_shared_sftp_window_async(
   state->sftp_opening = false;
   state->sftp_client.reset();
   if (!failure.empty() && state->sftp_window != nullptr) {
-    co_await elder_terms::show_file_transfer_window_connection_error_async(
+    elder_terms::show_file_transfer_window_connection_error(
         state->sftp_window, _("Failed to start SFTP"), std::move(failure),
         std::move(cancellation));
   }
@@ -1854,6 +1887,7 @@ int main(int argc, char **argv) {
     std::cerr << "Error: failed to load the New Window connection\n";
     return 1;
   }
+  if (!elder_terms::settings_theme_is_resolved(settings_result.store)) return 1;
 
   const std::optional<elder_terms::TerminalConnectionProfile>
       connection_profile =
@@ -1950,6 +1984,7 @@ int main(int argc, char **argv) {
         update_application_session_identity(&app_state);
       },
       [&app_state] {
+        elder_terms::notify_titlebar_bell(app_state.main_window->header_bar);
         if (app_state.audible_bell) gdk_display_beep(gtk_widget_get_display(app_state.main_window->terminal));
         else elder_terms::ring_terminal_bell(app_state.bell_state);
       },
@@ -1961,6 +1996,7 @@ int main(int argc, char **argv) {
   elder_terms::terminal_runtime_set_changed_callback(app_state.runtime, application_terminal_changed, &app_state);
   elder_terms::terminal_runtime_set_output_callback(app_state.runtime,
       [&app_state](std::span<const unsigned char> raw, std::span<const unsigned char> cooked) {
+        elder_terms::note_main_window_output(app_state.main_window, cooked);
         // Ready I/O can arrive before the next frame observes the connection.
         // Start logging before accepting its first received chunk.
         if (!app_state.closing && app_state.connection_phase !=

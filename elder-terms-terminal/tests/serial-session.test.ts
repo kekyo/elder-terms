@@ -37,9 +37,11 @@ import {
   expectWindowCellSize,
   readWindowCellLayout,
   runGtkTest,
-  withTemporaryDirectory,
 } from './gtk-test-helpers';
-import { expectElementKind } from './test-helpers';
+import {
+  withTemporaryDirectory,
+  expectElementKind,
+} from '../../shared/tests/connection-test-helpers.ts';
 import {
   activateTextSend,
   expectTextSendActive,
@@ -677,100 +679,114 @@ describe.concurrent('elder-terms-terminal serial session', () => {
         await waitForActivityIndicatorImageState(app, 'conn', 'off');
         await expectDisconnectedNoticeRenderedUndimmedAtTerminalTopRight(
           app,
-          evidence
+          evidence,
+          /Serial connection failed:[\s\S]*serial device not found/
         );
       });
     });
   });
 
-  it('reconnects after a serial device is lost and restored with auto_close disabled', async (context) => {
-    await withTemporaryDirectory(async (directory) => {
-      const configPath = join(directory, 'serial.ini');
-      const serialDevicePath = join(directory, 'ttyELDERTERMS0');
-      let firstHelper: SerialPtyHelper | undefined;
-      let secondHelper: SerialPtyHelper | undefined;
+  it.for([false, true])(
+    'reconnects after a serial device is lost and restored with auto_close=%s',
+    async (autoClose, context) => {
+      await withTemporaryDirectory(async (directory) => {
+        const configPath = join(directory, 'serial.ini');
+        const serialDevicePath = join(directory, 'ttyELDERTERMS0');
+        let firstHelper: SerialPtyHelper | undefined;
+        let secondHelper: SerialPtyHelper | undefined;
 
-      try {
-        firstHelper = await startSerialPtyHelper();
-        await symlink(firstHelper.slavePath, serialDevicePath);
-        await writeFile(
-          configPath,
-          `[general]\nauto_close=false\ntype=serial\n\n[terminal]\n\n[serial]\ndevice=${serialDevicePath}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=cd\n`,
-          'utf8'
-        );
+        try {
+          firstHelper = await startSerialPtyHelper();
+          await symlink(firstHelper.slavePath, serialDevicePath);
+          await writeFile(
+            configPath,
+            `[general]\nauto_close=${autoClose}\ntype=serial\n\n[terminal]\n\n[serial]\ndevice=${serialDevicePath}\nbaudrate=9600\nbits=8\nparity=n\nstop_bit=1\nflow_control=none\ncarrier_detect=cd\n`,
+            'utf8'
+          );
 
-        await runGtkTest(context, ['-c', configPath], async (app, evidence) => {
-          const activeFirstHelper = firstHelper;
-          if (activeFirstHelper === undefined) {
-            throw new Error('first serial PTY helper is not running');
-          }
+          await runGtkTest(
+            context,
+            ['-c', configPath],
+            async (app, evidence) => {
+              const activeFirstHelper = firstHelper;
+              if (activeFirstHelper === undefined) {
+                throw new Error('first serial PTY helper is not running');
+              }
 
-          const connectedTitle = 'elder-terms | serial';
-          const connectionStatus = `serial: ${serialDevicePath}:9600:n81n`;
-          await pressKeyUntilReceived(app, activeFirstHelper, 'a', '61');
-          await waitForActivityIndicatorImageState(app, 'conn', 'on');
-          await expectMainWindowTitle(app, connectedTitle);
-          await expectMainWindowStatus(app, connectionStatus);
-          await expectDisconnectedNoticeHidden(app);
+              const connectedTitle = 'elder-terms | serial';
+              const connectionStatus = `serial: ${serialDevicePath}:9600:n81n`;
+              await pressKeyUntilReceived(app, activeFirstHelper, 'a', '61');
+              await waitForActivityIndicatorImageState(app, 'conn', 'on');
+              await expectMainWindowTitle(app, connectedTitle);
+              await expectMainWindowStatus(app, connectionStatus);
+              await expectDisconnectedNoticeHidden(app);
 
-          await firstHelper?.close();
-          await rm(serialDevicePath, { force: true });
+              await firstHelper?.close();
+              await rm(serialDevicePath, { force: true });
 
-          await toPass(
-            async () => {
-              await app.input.pressKey('x');
-              expect((await app.output()).stderr).toMatch(
-                /serial (device not found|open failed|read failed|write failed|carrier detection failed)/
+              await toPass(
+                async () => {
+                  await app.input.pressKey('x');
+                  expect((await app.output()).stderr).toMatch(
+                    /serial (device not found|open failed|read failed|write failed|carrier detection failed)/
+                  );
+                },
+                {
+                  message: 'serial session should notice the lost device',
+                  timeoutMs: 7_000,
+                }
               );
-            },
-            {
-              message: 'serial session should notice the lost device',
-              timeoutMs: 7_000,
+              await waitForActivityIndicatorImageState(app, 'conn', 'off');
+              await expectMainWindowTitle(
+                app,
+                `${connectedTitle} (Disconnected)`
+              );
+              await expectMainWindowStatus(app, connectionStatus);
+              await expectDisconnectedNoticeVisibleAtTerminalTopRight(
+                app,
+                /Serial connection failed:/
+              );
+
+              const reconnect = expectElementKind(
+                await app.getById('reconnect_button'),
+                'button'
+              );
+              await toPass(async () => {
+                expect((await reconnect.info()).states).toContain('showing');
+                expect((await reconnect.info()).states).toContain('sensitive');
+              });
+              const failures =
+                (await app.output()).stderr.match(/serial device not found/g)
+                  ?.length ?? 0;
+              await reconnect.click();
+              await toPass(async () => {
+                expect(
+                  (await app.output()).stderr.match(/serial device not found/g)
+                    ?.length ?? 0
+                ).toBeGreaterThan(failures);
+                expect((await reconnect.info()).states).toContain('showing');
+                expect((await reconnect.info()).states).toContain('sensitive');
+              });
+
+              secondHelper = await startSerialPtyHelper();
+              await symlink(secondHelper.slavePath, serialDevicePath);
+              await pressKeyUntilReceived(app, secondHelper, 'b', '62');
+              await waitForActivityIndicatorImageState(app, 'conn', 'on');
+              await expectMainWindowTitle(app, connectedTitle);
+              await expectMainWindowStatus(app, connectionStatus);
+              await expectDisconnectedNoticeHidden(app);
+              await evidence.log('serial CONN tracked device lifetime', {
+                title: connectedTitle,
+              });
             }
           );
-          await waitForActivityIndicatorImageState(app, 'conn', 'off');
-          await expectMainWindowTitle(app, `${connectedTitle} (Disconnected)`);
-          await expectMainWindowStatus(app, connectionStatus);
-          await expectDisconnectedNoticeVisibleAtTerminalTopRight(app);
-
-          const reconnect = expectElementKind(
-            await app.getById('reconnect_button'),
-            'button'
-          );
-          await toPass(async () => {
-            expect((await reconnect.info()).states).toContain('showing');
-            expect((await reconnect.info()).states).toContain('sensitive');
-          });
-          const failures =
-            (await app.output()).stderr.match(/serial device not found/g)
-              ?.length ?? 0;
-          await reconnect.click();
-          await toPass(async () => {
-            expect(
-              (await app.output()).stderr.match(/serial device not found/g)
-                ?.length ?? 0
-            ).toBeGreaterThan(failures);
-            expect((await reconnect.info()).states).toContain('showing');
-            expect((await reconnect.info()).states).toContain('sensitive');
-          });
-
-          secondHelper = await startSerialPtyHelper();
-          await symlink(secondHelper.slavePath, serialDevicePath);
-          await pressKeyUntilReceived(app, secondHelper, 'b', '62');
-          await waitForActivityIndicatorImageState(app, 'conn', 'on');
-          await expectMainWindowTitle(app, connectedTitle);
-          await expectMainWindowStatus(app, connectionStatus);
-          await expectDisconnectedNoticeHidden(app);
-          await evidence.log('serial CONN tracked device lifetime', {
-            title: connectedTitle,
-          });
-        });
-      } finally {
-        await firstHelper?.close();
-        await secondHelper?.close();
-      }
-    });
-  });
+        } finally {
+          await firstHelper?.close();
+          await secondHelper?.close();
+        }
+      });
+    }
+  );
 
   it('reconnects through a renamed stable ID by its USB serial identity', async (context) => {
     await withTemporaryDirectory(async (directory) => {

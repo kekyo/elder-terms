@@ -14,8 +14,26 @@
 #include <elder-terms/key-binding.h>
 #include <elder-terms/settings/settings-store.h>
 #include <elder-terms/settings/general-settings.h>
+#include <elder-terms/settings/titlebar-effects.h>
 
 namespace elder_terms {
+
+/** Independent titlebar notifications, with medium default strength. */
+struct TerminalTitlebarEffectsSettings {
+  /** Flash the titlebar background on BEL, independently of audio playback. */
+  TitlebarEffectStrength bell;
+  /** Animate the titlebar background on received data, using the General preference. */
+  TitlebarEffectStrength receive;
+};
+/** @returns Key for selecting the visual BEL intensity. */
+ELDER_TERMS_API SettingKey terminal_visual_bell_setting_key();
+/**
+ * Reads effective titlebar preferences after global and connection inheritance.
+ * @param store Layered terminal settings.
+ * @returns Independent visual BEL and receive preferences.
+ * @remarks GTK's animation preference can suppress both effects at runtime.
+ */
+ELDER_TERMS_API TerminalTitlebarEffectsSettings terminal_titlebar_effects_settings(const SettingsStore &store);
 
 /** Terminal columns assigned to Unicode East Asian Ambiguous characters. */
 enum class TerminalAmbiguousWidth {
@@ -72,15 +90,23 @@ enum class TerminalBackgroundMode {
   transparent, /**< Prefer desktop alpha composition when supported. */
   blur,        /**< Prefer compositor blur behind the transparent terminal region. */
 };
+/** Opacity policy for backgrounds explicitly assigned to terminal cells. */
+enum class TerminalCellBackgroundMode {
+  transparent, /**< Follow the terminal background opacity. */
+  opaque,      /**< Keep explicit cell backgrounds opaque; preserve default-background opacity. */
+};
 /** Independent cell-background and tint-layer preferences. */
 struct TerminalBackgroundSettings {
   TerminalBackgroundMode mode; /**< Requested desktop transparency. */
   int opacity;                /**< Cell background opacity, zero through one hundred. */
   RgbColor tint;              /**< Unassociated sRGB tint color. */
   int tint_opacity;           /**< Tint-layer opacity, zero through one hundred. */
+  TerminalCellBackgroundMode cell_mode; /**< Opacity policy for explicit cell backgrounds. */
 };
 /** @returns Key for the requested background mode. */
 ELDER_TERMS_API SettingKey terminal_background_mode_setting_key();
+/** @returns Key for explicit cell background transparency. */
+ELDER_TERMS_API SettingKey terminal_cell_background_mode_setting_key();
 /** @returns Key for terminal cell background opacity. */
 ELDER_TERMS_API SettingKey terminal_background_opacity_setting_key();
 /** @returns Key for the independent RGB tint. */
@@ -222,6 +248,22 @@ ELDER_TERMS_API SettingKey terminal_block_copy_trim_trailing_spaces_setting_key(
  */
 ELDER_TERMS_API SettingKey terminal_font_size_dip_setting_key();
 
+/** Size retained by keyboard and Ctrl+wheel font zoom operations. */
+enum class TerminalFontZoomMode {
+  preserve_grid,   /**< Keep the current rows and columns, resizing the window when allowed. */
+  preserve_window, /**< Keep the current window extent and fit rows and columns to it. */
+};
+
+/** @returns Key for [terminal] font_zoom_mode. */
+ELDER_TERMS_API SettingKey terminal_font_zoom_mode_setting_key();
+
+/**
+ * Reads the policy for subsequent zoom input without changing display sizes.
+ * @param store Layered settings.
+ * @returns Effective zoom mode; the built-in default preserves the grid.
+ */
+ELDER_TERMS_API TerminalFontZoomMode terminal_font_zoom_mode(const SettingsStore &store);
+
 /**
  * Returns the setting key for [terminal] font_families.
  *
@@ -235,19 +277,34 @@ enum class TerminalLinkDecoration {
   none,
   /** Adds an underline without changing brightness. */
   underline,
+  /** Adds an underline only to the link under the pointer. */
+  hover,
   /** Underlines links and dims unconfirmed or invalid local paths. */
   validated,
 };
 
-/** Returns the ordinary, inheritable [terminal] link_decoration key. */
-ELDER_TERMS_API SettingKey terminal_link_decoration_setting_key();
+/** Independent presentation preferences for the two recognition sources. */
+struct TerminalLinkDecorations {
+  /** Presentation of links recognized from terminal text. */
+  TerminalLinkDecoration regex = TerminalLinkDecoration::hover;
+  /** Presentation of explicit OSC 8 ranges, including unsupported actions. */
+  TerminalLinkDecoration osc8 = TerminalLinkDecoration::underline;
+
+  /** @return Whether both recognition sources use the same preferences. */
+  bool operator==(const TerminalLinkDecorations &) const = default;
+};
+
+/** @return The inheritable [terminal] regex_link_decoration key. */
+ELDER_TERMS_API SettingKey terminal_regex_link_decoration_setting_key();
+/** @return The inheritable [terminal] osc8_link_decoration key. */
+ELDER_TERMS_API SettingKey terminal_osc8_link_decoration_setting_key();
 
 /**
- * Reads link presentation for both text and OSC 8 targets.
+ * Reads independent text and OSC 8 presentation preferences.
  * @param store Effective settings.
- * @return Selected mode, defaulting to always underline.
+ * @return Selected modes, defaulting to regex hover and OSC 8 underline.
  */
-ELDER_TERMS_API TerminalLinkDecoration terminal_link_decoration(const SettingsStore &store);
+ELDER_TERMS_API TerminalLinkDecorations terminal_link_decorations(const SettingsStore &store);
 
 /**
  * Validates ordered terminal font family names without requiring installed fonts.

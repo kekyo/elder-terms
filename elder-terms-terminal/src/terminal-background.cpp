@@ -18,7 +18,8 @@ struct TerminalBackground {
   GtkCssProvider *provider;
   GdkScreen *screen;
   std::vector<GtkWidget *> paths;
-  TerminalBackgroundSettings settings{TerminalBackgroundMode::opaque, 80, {0, 0, 0}, 0};
+  TerminalBackgroundSettings settings{TerminalBackgroundMode::opaque, 80, {0, 0, 0}, 0,
+      TerminalCellBackgroundMode::transparent};
   RgbColor backing{0, 0, 0};
   bool desktop_transparent = false;
   TerminalBackgroundImagePtr image;
@@ -119,8 +120,17 @@ static bool apply_native(TerminalBackground *background, const TerminalBackgroun
   }
   const boxrig_ui_rgba tint{settings.tint.red, settings.tint.green, settings.tint.blue,
       static_cast<uint8_t>((settings.tint_opacity * 255 + 50) / 100)};
+  const auto previous_cell_mode = boxrig_ui_view_get_cell_background_mode(view);
+  const auto cell_mode = settings.cell_mode == TerminalCellBackgroundMode::opaque
+      ? BOXRIG_UI_CELL_BACKGROUND_OPAQUE_EXPLICIT : BOXRIG_UI_CELL_BACKGROUND_TRANSPARENT;
+  if (boxrig_ui_view_set_cell_background_mode(view, cell_mode) != BOXRIG_UI_OK) {
+    boxrig_gtk3_terminal_widget_set_transparency(widget, &previous.config);
+    update_effect(background, background->settings.mode);
+    return false;
+  }
   const auto previous_tint = boxrig_ui_view_get_background_color(view);
   if (boxrig_ui_view_set_background_color(view, tint) != BOXRIG_UI_OK) {
+    boxrig_ui_view_set_cell_background_mode(view, previous_cell_mode);
     boxrig_gtk3_terminal_widget_set_transparency(widget, &previous.config);
     update_effect(background, background->settings.mode);
     return false;
@@ -135,6 +145,7 @@ static bool apply_native(TerminalBackground *background, const TerminalBackgroun
           image_settings.fit == TerminalBackgroundImageFit::stretch ? BOXRIG_UI_BACKGROUND_STRETCH : BOXRIG_UI_BACKGROUND_COVER};
     }
     if (boxrig_ui_view_set_background_image(view, image ? &native : nullptr) != BOXRIG_UI_OK) {
+      boxrig_ui_view_set_cell_background_mode(view, previous_cell_mode);
       boxrig_ui_view_set_background_color(view, previous_tint);
       boxrig_gtk3_terminal_widget_set_transparency(widget, &previous.config);
       update_effect(background, background->settings.mode);

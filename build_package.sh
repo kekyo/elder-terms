@@ -10,6 +10,7 @@ PACKAGE_NAME=elder-terms
 PACKAGE_DESCRIPTION="GTK terminal for serial, TELNET, local shell, SSH, SFTP, and FTP connections."
 DEFAULT_MAINTAINER="elder-terms packager <packager@localhost>"
 DEFAULT_PARALLEL_JOB_CAP=14
+PREREQ_IMAGE_FINGERPRINT_LABEL=net.kekyo.elder-terms.prereq-fingerprint
 
 LINUX_MATRIX='debian trixie x86_64 linux/amd64
 debian trixie i686 linux/386
@@ -302,10 +303,37 @@ prereq_image_for_target() {
 	printf 'localhost/elder-terms-pack-deb-%s-%s-%s:latest\n' "$1" "$2" "$3"
 }
 
+prereq_image_fingerprint() {
+	# The prerequisite recipe owns the package list and image build options.
+	cksum <"$PROJECT_ROOT/prereq.sh"
+}
+
+prereq_image_is_current() {
+	expected_fingerprint=$(prereq_image_fingerprint) || return 1
+	image_fingerprint=$("$CONTAINER_ENGINE_BIN" image inspect \
+		--format "{{ index .Labels \"$PREREQ_IMAGE_FINGERPRINT_LABEL\" }}" \
+		"$1" 2>/dev/null) || return 1
+	[ "$image_fingerprint" = "$expected_fingerprint" ]
+}
+
 assert_prereq_image() {
 	if ! "$CONTAINER_ENGINE_BIN" image exists "$1" >/dev/null 2>&1; then
 		fail "Missing prerequisite image: $1. Run ./prereq.sh first."
 	fi
+	prereq_image_is_current "$1" ||
+		fail "Outdated prerequisite image: $1. Run ./prereq.sh to rebuild it."
+}
+
+assert_prereq_images() {
+	while IFS=' ' read -r distro release arch platform; do
+		[ -n "$distro" ] || continue
+		matches_filter "$DISTRO_FILTER" "$distro" || continue
+		matches_filter "$RELEASE_FILTER" "$release" || continue
+		matches_filter "$ARCH_FILTER" "$arch" || continue
+		assert_prereq_image "$(prereq_image_for_target "$distro" "$release" "$arch")"
+	done <<EOF
+$LINUX_MATRIX
+EOF
 }
 
 build_deb_package() {
@@ -406,13 +434,17 @@ validate_deb_package() {
 		usr/lib/elder-terms/libboxrig-gtk3.so.0 \
 		usr/lib/elder-terms/libjemalloc.so.2 \
 		usr/lib/elder-terms/libsmb2.so.7 \
+		usr/lib/elder-terms/libdsm.so.3 \
+		usr/lib/elder-terms/elder-terms-file-transfer/elder-terms-smb1-worker \
 		usr/lib/elder-terms/launcher/elder-terms \
 		usr/lib/elder-terms/launcher/main-window.ui \
 		usr/lib/elder-terms/elder-terms-terminal/elder-terms-terminal \
-		usr/lib/elder-terms/elder-terms-terminal/elder-terms-file-transfer \
+		usr/lib/elder-terms/elder-terms-file-transfer/elder-terms-file-transfer \
 		usr/lib/elder-terms/elder-terms-terminal/main-window.ui \
 		usr/lib/elder-terms/elder-terms-terminal/green-on.png \
 		usr/lib/elder-terms/elder-terms-terminal/green-off.png \
+		usr/lib/elder-terms/elder-terms-file-transfer/green-on.png \
+		usr/lib/elder-terms/elder-terms-file-transfer/green-off.png \
 		usr/share/applications/net.kekyo.elder-terms.desktop \
 		usr/share/applications/net.kekyo.elder-terms-terminal.desktop \
 		etc/xdg/autostart/net.kekyo.elder-terms.desktop \
@@ -425,6 +457,8 @@ validate_deb_package() {
 		usr/share/doc/elder-terms/docs/en/webdav.md \
 		usr/share/doc/elder-terms/docs/ja/smb.md \
 		usr/share/doc/elder-terms/docs/en/smb.md \
+		usr/share/doc/elder-terms/docs/ja/http.md \
+		usr/share/doc/elder-terms/docs/en/http.md \
 		usr/share/doc/elder-terms/docs/en/webdav-validation.md \
 		usr/share/doc/elder-terms/licenses/boxrig/LICENSE \
 		usr/share/doc/elder-terms/licenses/boxrig/README.md \
@@ -438,8 +472,11 @@ validate_deb_package() {
 		usr/share/doc/elder-terms/licenses/boxrig/Wayland-protocols-NOTICES.md \
 		usr/share/doc/elder-terms/licenses/jemalloc/COPYING \
 		usr/share/doc/elder-terms/licenses/libsmb2/COPYING \
+		usr/share/doc/elder-terms/licenses/libdsm/COPYING \
+		usr/share/doc/elder-terms/licenses/libdsm/libdsm-source.tar.xz \
+		usr/share/doc/elder-terms/licenses/libdsm/libdsm-correctness.patch \
 		usr/share/doc/elder-terms/licenses/libsmb2/LICENCE-LGPL-2.1.txt \
-		usr/share/doc/elder-terms/licenses/libsmb2/libsmb2-source.tar.gz \
+		usr/share/doc/elder-terms/licenses/libsmb2/libsmb2-source.tar.xz \
 		usr/share/doc/elder-terms/licenses/connection-icons/NOTO-LICENSE \
 		usr/share/doc/elder-terms/licenses/connection-icons/NOTO-FLAGS-NOTICE \
 		usr/share/doc/elder-terms/licenses/connection-icons/MATERIAL-LICENSE \
@@ -452,7 +489,7 @@ validate_deb_package() {
 	assert_symlink "$tmp_dir/usr/bin/elder-terms-terminal" \
 		'../lib/elder-terms/elder-terms-terminal/elder-terms-terminal'
 	assert_symlink "$tmp_dir/usr/bin/elder-terms-file-transfer" \
-		'../lib/elder-terms/elder-terms-terminal/elder-terms-file-transfer'
+		'../lib/elder-terms/elder-terms-file-transfer/elder-terms-file-transfer'
 
 	for elf_path in \
 		usr/bin/etctl \
@@ -465,9 +502,11 @@ validate_deb_package() {
 		usr/lib/elder-terms/libboxrig-gtk3.so.0 \
 		usr/lib/elder-terms/libjemalloc.so.2 \
 		usr/lib/elder-terms/libsmb2.so.7 \
+		usr/lib/elder-terms/libdsm.so.3 \
+		usr/lib/elder-terms/elder-terms-file-transfer/elder-terms-smb1-worker \
 		usr/lib/elder-terms/launcher/elder-terms \
 		usr/lib/elder-terms/elder-terms-terminal/elder-terms-terminal \
-		usr/lib/elder-terms/elder-terms-terminal/elder-terms-file-transfer; do
+		usr/lib/elder-terms/elder-terms-file-transfer/elder-terms-file-transfer; do
 		elf_name=$(printf '%s' "$elf_path" | tr '/' '-')
 		assert_elf_architecture \
 			"$tmp_dir/$elf_path" "$expected_arch" "$tmp_dir/readelf-$elf_name.txt"
@@ -611,6 +650,12 @@ main() {
 	MAKE_JOBS=$((CPU_COUNT / EFFECTIVE_BUILD_JOBS))
 	[ "$MAKE_JOBS" -ge 1 ] || MAKE_JOBS=1
 
+	require_command dpkg-deb
+	require_command readelf
+	require_command node
+	CONTAINER_ENGINE_BIN=$(choose_container_engine)
+	assert_prereq_images
+
 	RUN_ID="run-$(date +%Y%m%d%H%M%S)-$$"
 	TMP_ROOT="$ARTIFACT_ROOT/.tmp/$RUN_ID"
 	ACTIVE_JOB_PIDS=''
@@ -621,10 +666,6 @@ main() {
 	mkdir -p "$TMP_ROOT"
 
 	printf '%s\n' "Using up to $PARALLEL_JOBS package jobs with meson compile -j $MAKE_JOBS"
-	require_command dpkg-deb
-	require_command readelf
-	require_command node
-	CONTAINER_ENGINE_BIN=$(choose_container_engine)
 	node "$PROJECT_ROOT/scripts/prepare-package-tools.mts" "$TMP_ROOT/tools" "$VERSION"
 	schedule_deb_builds
 	wait_for_all_jobs

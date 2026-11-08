@@ -4,7 +4,7 @@
 // https://github.com/kekyo/elder-terms/
 
 #include "terminal-transports.h"
-#include "terminal-sessions/ssh-session/ssh-channel-connection.h"
+#include "../../shared/src/connection-runtime/ssh/ssh-channel-connection.h"
 
 namespace elder_terms {
 

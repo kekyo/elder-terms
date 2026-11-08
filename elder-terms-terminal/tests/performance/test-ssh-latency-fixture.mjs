@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import { setTimeout as delay } from 'node:timers/promises';
-import { startSshLatencyFixture } from './ssh-latency-fixture.mts';
+import { startSshLatencyFixture } from '../../../shared/tests/ssh-latency-fixture.mts';
 
 const exec = promisify(execFile);
 const directory = await mkdtemp(join(tmpdir(), 'elder-ssh-cleanup-'));

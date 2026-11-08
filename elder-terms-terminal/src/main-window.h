@@ -9,6 +9,7 @@
 #include <functional>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <vector>
 
@@ -19,10 +20,10 @@
 
 #include <elder-terms/settings.h>
 
-#include "activity-indicator.h"
-#include "activity-indicator-id.h"
-#include "terminal-connection-phase.h"
-#include "terminal-sessions/ssh-session/ssh-user-prompt.h"
+#include "../../shared/src/connection-runtime/activity-indicator.h"
+#include "../../shared/src/connection-runtime/activity-indicator-id.h"
+#include "../../shared/src/connection-runtime/terminal-connection-phase.h"
+#include "../../shared/src/connection-runtime/ssh/ssh-user-prompt.h"
 #include "terminal-transfer.h"
 
 namespace elder_terms {
@@ -306,6 +307,15 @@ void note_main_window_activity(MainWindow *main_window,
                                ActivityIndicatorId indicator);
 
 /**
+ * Records decoded terminal output for the titlebar receive effect.
+ * @param main_window Window receiving normal terminal output.
+ * @param bytes Borrowed UTF-8 bytes, including terminal controls.
+ * @remarks Empty or BEL-only input leaves the current cycle and its remembered
+ * reception untouched. Binary transfers use their separate activity route.
+ */
+void note_main_window_output(MainWindow *main_window, std::span<const unsigned char> bytes);
+
+/**
  * Sets one status-bar activity indicator to an explicit state.
  *
  * @param main_window Main window containing the indicator widgets.
@@ -335,6 +345,14 @@ void set_main_window_connection_phase(MainWindow *main_window,
 void set_main_window_connection_failure(MainWindow *main_window,
                                         const std::string &message,
                                         TerminalConnectionKind kind);
+
+/**
+ * Sets the reason for a completed session or a temporary carrier loss.
+ * @param main_window Main window containing the disconnected notice.
+ * @param message User-facing explanation retained until the next connection.
+ */
+void set_main_window_disconnected_message(MainWindow *main_window,
+                                         const std::string &message);
 
 /**
  * Updates the reconnect button and the overlay's native input handling.

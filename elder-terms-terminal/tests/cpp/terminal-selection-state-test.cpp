@@ -16,8 +16,30 @@ using namespace elder_terms;
 static bool reject_frame = false;
 static bool rejected_frame = false;
 static std::string selection_limit;
+static std::string selection_mode_probe;
 static bool reject_selection_update = false;
+static bool reject_selection_mode = false;
+static std::vector<boxrig_ui_selection_options> selection_starts;
 static std::string selection_warnings;
+
+extern "C" boxrig_ui_status __real_boxrig_ui_view_begin_selection_with_options(
+    boxrig_ui_view *, const boxrig_ui_selection_options *, const boxrig_ui_hit_test_result *);
+extern "C" boxrig_ui_status __wrap_boxrig_ui_view_begin_selection_with_options(
+    boxrig_ui_view *view, const boxrig_ui_selection_options *options, const boxrig_ui_hit_test_result *hit) {
+  selection_starts.push_back(*options);
+  return __real_boxrig_ui_view_begin_selection_with_options(view, options, hit);
+}
+
+extern "C" boxrig_ui_status __real_boxrig_ui_view_update_selection_with_options(
+    boxrig_ui_view *, const boxrig_ui_selection_options *, const boxrig_ui_hit_test_result *);
+extern "C" boxrig_ui_status __wrap_boxrig_ui_view_update_selection_with_options(
+    boxrig_ui_view *view, const boxrig_ui_selection_options *options, const boxrig_ui_hit_test_result *hit) {
+  if (reject_selection_mode) {
+    reject_selection_mode = false;
+    return BOXRIG_UI_OUT_OF_MEMORY;
+  }
+  return __real_boxrig_ui_view_update_selection_with_options(view, options, hit);
+}
 
 extern "C" boxrig_ui_status __real_boxrig_gtk3_terminal_widget_create(
     boxrig_ui_model *, const boxrig_gtk3_terminal_widget_config *, BoxrigGtk3TerminalWidget **);
@@ -77,7 +99,8 @@ static void key(Fixture *fixture, guint symbol, GdkEventType type, guint modifie
   event.send_event = TRUE;
   event.time = GDK_CURRENT_TIME;
   event.keyval = symbol;
-  event.hardware_keycode = symbol == GDK_KEY_Escape ? 9 : symbol == GDK_KEY_Return ? 36 : symbol == GDK_KEY_c ? 54 : 38;
+  event.hardware_keycode = symbol == GDK_KEY_Escape ? 9 : symbol == GDK_KEY_Return ? 36 :
+      symbol == GDK_KEY_Control_L ? 37 : symbol == GDK_KEY_c ? 54 : 38;
   event.state = modifiers;
   gboolean handled = FALSE;
   g_signal_emit_by_name(widget, type == GDK_KEY_PRESS ? "key-press-event" : "key-release-event", &event, &handled);
@@ -198,6 +221,219 @@ static cardio::promise<void> barrier(Fixture *fixture, bool kitty) {
   }
 }
 
+// Exercise initial policy and motion-triggered transitions through native input.
+static cardio::promise<void> selection_mode_scenarios(Fixture *fixture) {
+  auto *runtime = fixture->window->runtime;
+  const bool baseline = selection_mode_probe == "mode-baseline";
+  const bool pending = selection_mode_probe.starts_with("mode-pending-");
+  const bool history = selection_mode_probe.starts_with("mode-history-");
+  const bool roundtrip = selection_mode_probe.starts_with("mode-roundtrip-");
+  expect(baseline || ((pending || history || roundtrip) &&
+      (selection_mode_probe.ends_with("-linear") || selection_mode_probe.ends_with("-rectangular"))),
+      "known selection mode scenario");
+  for (const bool rectangular : {false, true}) {
+    if (!baseline && rectangular != selection_mode_probe.ends_with("rectangular")) continue;
+    const guint initial_modifier = rectangular ? GDK_CONTROL_MASK : 0;
+    const guint changed_modifier = rectangular ? 0 : GDK_CONTROL_MASK;
+    const auto initial_shape = rectangular ? BOXRIG_UI_SELECTION_RECTANGULAR : BOXRIG_UI_SELECTION_LINEAR;
+    const auto changed_shape = rectangular ? BOXRIG_UI_SELECTION_LINEAR : BOXRIG_UI_SELECTION_RECTANGULAR;
+    std::string content = "abcdefgh\r\nijklmnop\r\nqrstuvwx";
+    if (history) {
+      content.clear();
+      for (int row = 0; row != 100; ++row)
+        content += std::to_string(1000 + row) + " alpha beta" + (row == 99 ? "" : "\r\n");
+    }
+    expect(terminal_runtime_feed(runtime, "\033[=0u\033[?1002l\033[?1006l\033[3J\033[2J\033[H" + content),
+        "prepare mode-switch text");
+    while (!terminal_runtime_is_settled(runtime)) co_await fixture->changed.wait();
+    gtk_clipboard_set_text(gtk_clipboard_get(GDK_SELECTION_PRIMARY), "mode primary", -1);
+    gtk_clipboard_set_text(gtk_clipboard_get(GDK_SELECTION_CLIPBOARD), "mode clipboard", -1);
+    boxrig_ui_layout_result layout{};
+    expect(boxrig_ui_view_get_layout(view(fixture), &layout) == BOXRIG_UI_OK, "mode-switch layout");
+    const auto start_row = history ? layout.rows - 1.5 : 0.5;
+    const auto end_row = history ? 0.5 : 2.5;
+    selection_starts.clear();
+    mouse(fixture, GDK_BUTTON_PRESS, 0.1, start_row, initial_modifier);
+    co_await barrier(fixture, false);
+    expect(!selected(fixture), "press remains pending without selecting a character");
+    if (pending) {
+      key(fixture, GDK_KEY_Control_L, rectangular ? GDK_KEY_RELEASE : GDK_KEY_PRESS,
+          GDK_BUTTON1_MASK | initial_modifier);
+      mouse(fixture, GDK_MOTION_NOTIFY, 0.2, start_row, GDK_BUTTON1_MASK | changed_modifier);
+      co_await barrier(fixture, false);
+      expect(!selected(fixture), "Ctrl and sub-threshold motion keep the press pending");
+      mouse(fixture, GDK_MOTION_NOTIFY, 3.9, end_row, GDK_BUTTON1_MASK | changed_modifier);
+      co_await barrier(fixture, false);
+      boxrig_ui_selection selection{};
+      expect(boxrig_ui_view_get_selection(view(fixture), &selection) && selection.shape == changed_shape,
+          "motion starting the drag applies the changed Ctrl state after the initial mode");
+      expect(selection_starts.size() == 1 && selection_starts.front().shape == initial_shape,
+          "threshold crossing starts with the press policy before applying the motion policy");
+      expect(selected_text(fixture) == (rectangular ? "abcdefgh\nijklmnop\nqrst" : "abcd\nijkl\nqrst"),
+          "a Ctrl change before the threshold produces the requested copy text");
+      mouse(fixture, GDK_BUTTON_RELEASE, 3.9, end_row, GDK_BUTTON1_MASK | changed_modifier);
+      co_await barrier(fixture, false);
+      continue;
+    }
+    mouse(fixture, GDK_MOTION_NOTIFY, 3.9, end_row, GDK_BUTTON1_MASK | initial_modifier);
+    co_await barrier(fixture, false);
+    boxrig_ui_selection initial{};
+    expect(boxrig_ui_view_get_selection(view(fixture), &initial) && initial.shape == initial_shape &&
+        initial.kind == BOXRIG_UI_SELECTION_CHARACTER, "press modifier selects the initial mode without another Ctrl event");
+    if (!history)
+      expect(selected_text(fixture) == (rectangular ? "abcd\nijkl\nqrst" : "abcdefgh\nijklmnop\nqrst"),
+          "initial mode selects the expected complete text");
+
+    const auto before_key = selected_text(fixture);
+    key(fixture, GDK_KEY_Control_L, rectangular ? GDK_KEY_RELEASE : GDK_KEY_PRESS,
+        GDK_BUTTON1_MASK | initial_modifier);
+    co_await barrier(fixture, false);
+    boxrig_ui_selection selection{};
+    expect(boxrig_ui_view_get_selection(view(fixture), &selection) && selection.shape == initial_shape &&
+        selected_text(fixture) == before_key, "Ctrl alone retains shape and copy text");
+    if (history) {
+      for (std::size_t step = 0; step != layout.rows / 3 + 4; ++step) {
+        wheel(fixture, GDK_SCROLL_UP, 3.9, end_row, GDK_BUTTON1_MASK | changed_modifier);
+        co_await barrier(fixture, false);
+      }
+      expect(boxrig_ui_view_get_selection(view(fixture), &selection) && selection.shape == initial_shape &&
+          selection.anchor.line_id.serial == initial.anchor.line_id.serial,
+          "wheel with changed Ctrl keeps the applied mode and original anchor");
+      auto *terminal = boxrig_ui_model_terminal(boxrig_ui_view_model(view(fixture)));
+      boxrig_scrollbar_model scroll{};
+      expect(boxrig_scrollbar_model_read(terminal, &scroll) == 0 && scroll.position + layout.rows < 99,
+          "the original anchor is below the viewport");
+    }
+    const auto before_motion = selected_text(fixture);
+    mouse(fixture, GDK_MOTION_NOTIFY, 3.9, end_row, GDK_BUTTON1_MASK | changed_modifier);
+    co_await barrier(fixture, false);
+    expect(boxrig_ui_view_get_selection(view(fixture), &selection) && selection.shape == initial_shape &&
+        selected_text(fixture) == before_motion, "same-coordinate motion does not apply changed Ctrl");
+    expect(co_await clipboard(GDK_SELECTION_PRIMARY) == "mode primary" &&
+        co_await clipboard(GDK_SELECTION_CLIPBOARD) == "mode clipboard", "mode input does not publish a clipboard");
+    if (!baseline) {
+      // Both endpoints stay in the trailing half of the same cell. The
+      // changed physical coordinate, rather than a new cell, triggers a switch.
+      mouse(fixture, GDK_MOTION_NOTIFY, 3.8, end_row, GDK_BUTTON1_MASK | changed_modifier);
+      co_await barrier(fixture, false);
+      expect(boxrig_ui_view_get_selection(view(fixture), &selection) && selection.shape == changed_shape,
+          "real motion with changed Ctrl switches selection shape");
+      expect(selection.anchor.line_id.serial == initial.anchor.line_id.serial,
+          "mode switching retains the original logical anchor");
+      std::string expected;
+      if (history) {
+        boxrig_scrollbar_model scroll{};
+        auto *terminal = boxrig_ui_model_terminal(boxrig_ui_view_model(view(fixture)));
+        expect(boxrig_scrollbar_model_read(terminal, &scroll) == 0, "switched history position");
+        for (std::size_t row = scroll.position; row <= 98; ++row) {
+          auto line = std::to_string(1000 + row);
+          if (rectangular) {
+            line += " alpha beta";
+            if (row == scroll.position) line.erase(0, 3);
+            if (row == 98) line.resize(1);
+          }
+          if (!expected.empty()) expected += '\n';
+          expected += line;
+        }
+      } else {
+        expected = rectangular ? "abcdefgh\nijklmnop\nqrst" : "abcd\nijkl\nqrst";
+      }
+      expect(selected_text(fixture) == expected, "switched selection copies every row from the original anchor");
+      expect(co_await clipboard(GDK_SELECTION_PRIMARY) == "mode primary" &&
+          co_await clipboard(GDK_SELECTION_CLIPBOARD) == "mode clipboard", "switching does not publish a clipboard");
+      if (roundtrip) {
+        key(fixture, GDK_KEY_Control_L, rectangular ? GDK_KEY_PRESS : GDK_KEY_RELEASE,
+            GDK_BUTTON1_MASK | changed_modifier);
+        co_await barrier(fixture, false);
+        expect(selected_text(fixture) == expected, "Ctrl alone also preserves the switched shape");
+        mouse(fixture, GDK_MOTION_NOTIFY, 3.9, end_row, GDK_BUTTON1_MASK | initial_modifier);
+        co_await barrier(fixture, false);
+        expect(boxrig_ui_view_get_selection(view(fixture), &selection) && selection.shape == initial_shape &&
+            selected_text(fixture) == before_motion, "reverse motion switch restores the original shape and text");
+      }
+    }
+    const auto final_text = selected_text(fixture);
+    mouse(fixture, GDK_BUTTON_RELEASE, baseline || roundtrip ? 3.9 : 3.8, end_row,
+        GDK_BUTTON1_MASK | changed_modifier);
+    co_await barrier(fixture, false);
+    expect(selected_text(fixture) == final_text && co_await clipboard(GDK_SELECTION_PRIMARY) == final_text &&
+        co_await clipboard(GDK_SELECTION_CLIPBOARD) == "mode clipboard",
+        "release uses the last applied mode and only publishes PRIMARY");
+  }
+}
+
+static cardio::promise<void> selection_mode_integration_scenarios(Fixture *fixture) {
+  auto *runtime = fixture->window->runtime;
+  for (const auto type : {GDK_BUTTON_PRESS, GDK_2BUTTON_PRESS, GDK_3BUTTON_PRESS}) {
+    for (const bool rectangular : {false, true}) {
+      expect(terminal_runtime_feed(runtime, "\033[3J\033[2J\033[Halpha beta gamma\r\nsecond row text\r\nthird line end"),
+          "prepare selection units");
+      while (!terminal_runtime_is_settled(runtime)) co_await fixture->changed.wait();
+      const guint initial_modifier = rectangular ? GDK_CONTROL_MASK : 0;
+      const guint changed_modifier = rectangular ? 0 : GDK_CONTROL_MASK;
+      mouse(fixture, type, 2.1, 0.5, initial_modifier);
+      mouse(fixture, GDK_MOTION_NOTIFY, 8.9, 1.5, GDK_BUTTON1_MASK | initial_modifier);
+      co_await barrier(fixture, false);
+      const auto original = selected_text(fixture);
+      // Releasing and pressing Ctrl without motion must leave the original
+      // policy intact. The next event's modifier, not key history, is decisive.
+      key(fixture, GDK_KEY_Control_L, GDK_KEY_PRESS, 0);
+      key(fixture, GDK_KEY_Control_L, GDK_KEY_RELEASE, GDK_CONTROL_MASK);
+      mouse(fixture, GDK_MOTION_NOTIFY, 8.8, 1.5, GDK_BUTTON1_MASK | initial_modifier);
+      co_await barrier(fixture, false);
+      expect(selected_text(fixture) == original, "Ctrl roundtrip without motion preserves the selected unit");
+      for (int repeat = 0; repeat != 3; ++repeat) {
+        mouse(fixture, GDK_MOTION_NOTIFY, 8.9, 1.5, GDK_BUTTON1_MASK | changed_modifier);
+        co_await barrier(fixture, false);
+        boxrig_ui_selection selection{};
+        expect(boxrig_ui_view_get_selection(view(fixture), &selection) && selection.kind == BOXRIG_UI_SELECTION_CHARACTER &&
+            selection.shape == (rectangular ? BOXRIG_UI_SELECTION_LINEAR : BOXRIG_UI_SELECTION_RECTANGULAR),
+            "changed modifier switches even without a preceding Ctrl key event");
+        expect(selected_text(fixture) == (rectangular ? "pha beta gamma\nsecond ro" : "pha bet\ncond ro"),
+            "unit expansion does not replace the pointer anchor or focus");
+        mouse(fixture, GDK_MOTION_NOTIFY, 8.8, 1.5, GDK_BUTTON1_MASK | initial_modifier);
+        co_await barrier(fixture, false);
+        const auto kind = rectangular || type == GDK_BUTTON_PRESS ? BOXRIG_UI_SELECTION_CHARACTER :
+            type == GDK_2BUTTON_PRESS ? BOXRIG_UI_SELECTION_WORD : BOXRIG_UI_SELECTION_LINE;
+        expect(boxrig_ui_view_get_selection(view(fixture), &selection) && selection.kind == kind &&
+            selected_text(fixture) == original, "roundtrip restores the original character, word or line unit");
+      }
+      mouse(fixture, GDK_BUTTON_RELEASE, 8.8, 1.5, GDK_BUTTON1_MASK | changed_modifier);
+      co_await barrier(fixture, false);
+      expect(co_await clipboard(GDK_SELECTION_PRIMARY) == original, "release preserves the restored selection unit");
+    }
+  }
+  for (const bool rectangular : {false, true}) {
+    const guint initial_modifier = rectangular ? GDK_CONTROL_MASK : 0;
+    const guint changed_modifier = rectangular ? 0 : GDK_CONTROL_MASK;
+    mouse(fixture, GDK_BUTTON_PRESS, 8.9, 1.5, initial_modifier);
+    mouse(fixture, GDK_MOTION_NOTIFY, 2.1, 0.5, GDK_BUTTON1_MASK | initial_modifier);
+    co_await barrier(fixture, false);
+    const auto original = selected_text(fixture);
+    mouse(fixture, GDK_MOTION_NOTIFY, 2.2, 0.5, GDK_BUTTON1_MASK | changed_modifier);
+    co_await barrier(fixture, false);
+    expect(selected_text(fixture) == (rectangular ? "pha beta gamma\nsecond ro" : "pha bet\ncond ro"),
+        "reverse drag changes shape around the same original pointer");
+    mouse(fixture, GDK_MOTION_NOTIFY, 2.1, 0.5, GDK_BUTTON1_MASK | initial_modifier);
+    co_await barrier(fixture, false);
+    expect(selected_text(fixture) == original, "reverse drag restores its original selection");
+    gtk_clipboard_set_text(gtk_clipboard_get(GDK_SELECTION_PRIMARY), "failure primary", -1);
+    gtk_clipboard_set_text(gtk_clipboard_get(GDK_SELECTION_CLIPBOARD), "failure clipboard", -1);
+    selection_warnings.clear();
+    reject_selection_mode = true;
+    mouse(fixture, GDK_MOTION_NOTIFY, 2.2, 0.5, GDK_BUTTON1_MASK | changed_modifier);
+    co_await barrier(fixture, false);
+    expect(!reject_selection_mode && !selection_warnings.empty() && selected_text(fixture) == original,
+        "failed mode transaction keeps the previous complete selection and reports failure");
+    mouse(fixture, GDK_MOTION_NOTIFY, 12.9, 2.5, GDK_BUTTON1_MASK | changed_modifier);
+    mouse(fixture, GDK_BUTTON_RELEASE, 12.9, 2.5, GDK_BUTTON1_MASK | changed_modifier);
+    co_await barrier(fixture, false);
+    expect(selected_text(fixture) == original && co_await clipboard(GDK_SELECTION_PRIMARY) == "failure primary" &&
+        co_await clipboard(GDK_SELECTION_CLIPBOARD) == "failure clipboard",
+        "failed mode transaction cancels the held gesture without publishing a clipboard");
+  }
+}
+
 static cardio::promise<void> click_scenarios(Fixture *fixture) {
   auto *runtime = fixture->window->runtime;
   expect(terminal_runtime_feed(runtime, "\033[=0u\033[2J\033[Halpha beta gamma\r\nsecond row"), "prepare click text");
@@ -243,12 +479,12 @@ static cardio::promise<void> click_scenarios(Fixture *fixture) {
     expect(type == GDK_2BUTTON_PRESS ? copied == "alpha" : copied.starts_with("alpha beta gamma"),
         "word and line selection copy their text");
     mouse(fixture, type, 1.1, 0.5, GDK_CONTROL_MASK);
-    mouse(fixture, GDK_MOTION_NOTIFY, 8.9, 1.5, GDK_BUTTON1_MASK);
+    mouse(fixture, GDK_MOTION_NOTIFY, 8.9, 1.5, GDK_BUTTON1_MASK | GDK_CONTROL_MASK);
     mouse(fixture, GDK_BUTTON_RELEASE, 8.9, 1.5, GDK_BUTTON1_MASK);
     co_await barrier(fixture, false);
     expect(boxrig_ui_view_get_selection(view(fixture), &selection) &&
         selection.kind == BOXRIG_UI_SELECTION_CHARACTER && selection.shape == BOXRIG_UI_SELECTION_RECTANGULAR,
-        "Ctrl multiple clicks use character rectangles even after Ctrl is released");
+        "Ctrl multiple clicks keep character rectangles when Ctrl is released without motion");
   }
 
   for (const auto modifier : {GDK_SHIFT_MASK, GDK_CONTROL_MASK}) {
@@ -318,7 +554,7 @@ static cardio::promise<void> click_scenarios(Fixture *fixture) {
       "a stale pending press aborts without selecting replacement text");
 
   std::vector<TerminalHyperlinkResolution> actions;
-  terminal_runtime_set_hyperlink_rules(runtime, default_hyperlink_action_rules(),
+  terminal_runtime_set_hyperlink_rules(runtime, true, default_hyperlink_action_rules(),
       [&actions](TerminalHyperlinkResolution action) { actions.push_back(std::move(action)); });
   for (const bool osc8 : {false, true}) {
     const std::string text = osc8 ? "\033]8;;https://link.test/\033\\Open link\033]8;;\033\\" : "https://link.test/";
@@ -330,7 +566,7 @@ static cardio::promise<void> click_scenarios(Fixture *fixture) {
       mouse(fixture, GDK_BUTTON_PRESS, 2.1, 0.5, modifier);
       co_await barrier(fixture, false);
       expect(actions.size() == previous && !selected(fixture), "link activation waits for release");
-      mouse(fixture, GDK_MOTION_NOTIFY, 8.9, 1.5, GDK_BUTTON1_MASK);
+      mouse(fixture, GDK_MOTION_NOTIFY, 8.9, 1.5, GDK_BUTTON1_MASK | modifier);
       mouse(fixture, GDK_BUTTON_RELEASE, 8.9, 1.5, GDK_BUTTON1_MASK);
       fixture->outgoing.clear();
       co_await barrier(fixture, false);
@@ -338,9 +574,24 @@ static cardio::promise<void> click_scenarios(Fixture *fixture) {
       expect(actions.size() == previous && boxrig_ui_view_get_selection(view(fixture), &selection) &&
           selection.shape == BOXRIG_UI_SELECTION_RECTANGULAR && fixture->outgoing == "\r",
           "Ctrl drag over regex and OSC 8 links selects a rectangle without launching or terminal mouse reports");
+      fixture->outgoing.clear();
+      mouse(fixture, GDK_BUTTON_PRESS, 2.1, 0.5, modifier);
+      mouse(fixture, GDK_MOTION_NOTIFY, 8.9, 1.5, GDK_BUTTON1_MASK | modifier);
+      mouse(fixture, GDK_MOTION_NOTIFY, 8.8, 1.5, GDK_BUTTON1_MASK);
+      mouse(fixture, GDK_BUTTON_RELEASE, 8.8, 1.5, GDK_BUTTON1_MASK);
+      co_await barrier(fixture, false);
+      expect(actions.size() == previous && fixture->outgoing == "\r" &&
+          boxrig_ui_view_get_selection(view(fixture), &selection) && selection.shape == BOXRIG_UI_SELECTION_LINEAR,
+          "releasing Ctrl during link drag switches to linear without launching or leaking mouse reports");
     }
     const auto previous = actions.size();
+    mouse(fixture, GDK_MOTION_NOTIFY, 30.1, 1.5, 0);
+    co_await barrier(fixture, false);
+    mouse(fixture, GDK_MOTION_NOTIFY, 2.1, 0.5, 0);
     mouse(fixture, GDK_BUTTON_PRESS, 2.1, 0.5, GDK_CONTROL_MASK);
+    // Hover can publish new annotations while the native press/release is
+    // queued. A presentation-only revision must not discard this click.
+    co_await barrier(fixture, false);
     mouse(fixture, GDK_BUTTON_RELEASE, 2.1, 0.5, GDK_BUTTON1_MASK | GDK_CONTROL_MASK);
     co_await barrier(fixture, false);
     expect(actions.size() == previous + 1 && actions.back().action &&
@@ -369,7 +620,7 @@ static cardio::promise<void> click_scenarios(Fixture *fixture) {
     co_await barrier(fixture, false);
     expect(actions.size() == previous + 1, "release on a different link with the same URL does not activate it");
   }
-  terminal_runtime_set_hyperlink_rules(runtime, {}, {});
+  terminal_runtime_set_hyperlink_rules(runtime, false, {}, {});
   fixture->outgoing.clear();
   mouse(fixture, GDK_BUTTON_PRESS, 0.1, 0.5, 0);
   mouse(fixture, GDK_MOTION_NOTIFY, 8.9, 0.5, GDK_BUTTON1_MASK);
@@ -387,7 +638,7 @@ static cardio::promise<void> scroll_scenarios(Fixture *fixture) {
     while (!terminal_runtime_is_settled(runtime)) co_await fixture->changed.wait();
     for (const bool bottom : {false, true}) {
       mouse(fixture, GDK_BUTTON_PRESS, 3.1, 1.5, modifier);
-      mouse(fixture, GDK_MOTION_NOTIFY, bottom ? 1000 : -3, bottom ? 1000 : -3, GDK_BUTTON1_MASK);
+      mouse(fixture, GDK_MOTION_NOTIFY, bottom ? 1000 : -3, bottom ? 1000 : -3, GDK_BUTTON1_MASK | modifier);
       mouse(fixture, GDK_BUTTON_RELEASE, bottom ? 1000 : -3, bottom ? 1000 : -3, GDK_BUTTON1_MASK);
       co_await barrier(fixture, false);
       boxrig_ui_layout_result layout{};
@@ -419,7 +670,7 @@ static cardio::promise<void> scroll_scenarios(Fixture *fixture) {
     expect(boxrig_gtk3_terminal_widget_get_effective_metrics(terminal_runtime_widget(runtime), &font) == BOXRIG_FONT_CATALOG_OK,
         "history font before selection");
     mouse(fixture, GDK_BUTTON_PRESS, 0.1, layout.rows - 1.5, modifier);
-    mouse(fixture, GDK_MOTION_NOTIFY, 3.9, layout.rows - 0.5, GDK_BUTTON1_MASK);
+    mouse(fixture, GDK_MOTION_NOTIFY, 3.9, layout.rows - 0.5, GDK_BUTTON1_MASK | modifier);
     co_await barrier(fixture, false);
     boxrig_ui_selection anchor{};
     expect(boxrig_ui_view_get_selection(view(fixture), &anchor), "capture history anchor");
@@ -458,11 +709,11 @@ static cardio::promise<void> scroll_scenarios(Fixture *fixture) {
       expect(!selection.anchor_visual_row_valid && selection.row_count > layout.rows,
           "rectangle query marks the offscreen anchor invalid instead of claiming viewport row zero");
       expect(selected_text(fixture) == expected, "rectangle includes every row between the offscreen anchor and fresh wheel endpoint");
-      mouse(fixture, GDK_MOTION_NOTIFY, 0.1, 0.5, GDK_BUTTON1_MASK);
+      mouse(fixture, GDK_MOTION_NOTIFY, 0.1, 0.5, GDK_BUTTON1_MASK | modifier);
       co_await barrier(fixture, false);
       expect(boxrig_ui_view_get_selection(view(fixture), &selection) && selection.row_count == 0,
           "scrolling rectangle can cross zero width without losing its anchor");
-      mouse(fixture, GDK_MOTION_NOTIFY, 3.9, 0.5, GDK_BUTTON1_MASK);
+      mouse(fixture, GDK_MOTION_NOTIFY, 3.9, 0.5, GDK_BUTTON1_MASK | modifier);
       co_await barrier(fixture, false);
       expect(selected_text(fixture) == expected, "empty scrolling rectangle expands back from its original anchor");
     } else {
@@ -474,16 +725,20 @@ static cardio::promise<void> scroll_scenarios(Fixture *fixture) {
     co_await barrier(fixture, false);
     expect(co_await clipboard(GDK_SELECTION_PRIMARY) == copy, "release copies the full selection spanning more than a viewport");
     mouse(fixture, GDK_BUTTON_PRESS, 0.1, 1.5, modifier);
-    mouse(fixture, GDK_MOTION_NOTIFY, 3.9, 2.5, GDK_BUTTON1_MASK);
+    mouse(fixture, GDK_MOTION_NOTIFY, 3.9, 2.5, GDK_BUTTON1_MASK | modifier);
     co_await barrier(fixture, false);
     wheel(fixture, GDK_SCROLL_UP, 3.9, 0.5, modifier | GDK_BUTTON1_MASK);
-    mouse(fixture, GDK_BUTTON_RELEASE, 3.9, 0.5, GDK_BUTTON1_MASK);
+    mouse(fixture, GDK_MOTION_NOTIFY, 3.8, 0.5,
+        GDK_BUTTON1_MASK | (modifier == GDK_SHIFT_MASK ? GDK_CONTROL_MASK : 0));
+    mouse(fixture, GDK_BUTTON_RELEASE, 3.8, 0.5, GDK_BUTTON1_MASK | modifier);
     mouse(fixture, GDK_MOTION_NOTIFY, 20.9, 8.5, 0);
     co_await barrier(fixture, false);
-    expect(co_await clipboard(GDK_SELECTION_PRIMARY) == selected_text(fixture),
-        "release queued with a wheel copies after layout and ignores later hover motion");
+    expect(co_await clipboard(GDK_SELECTION_PRIMARY) == selected_text(fixture) &&
+        boxrig_ui_view_get_selection(view(fixture), &selection) && selection.shape ==
+            (modifier == GDK_SHIFT_MASK ? BOXRIG_UI_SELECTION_RECTANGULAR : BOXRIG_UI_SELECTION_LINEAR),
+        "queued wheel and mode motion apply before release without using its modifier or later hover");
     mouse(fixture, GDK_BUTTON_PRESS, 0.1, 1.5, modifier);
-    mouse(fixture, GDK_MOTION_NOTIFY, 3.9, 2.5, GDK_BUTTON1_MASK);
+    mouse(fixture, GDK_MOTION_NOTIFY, 3.9, 2.5, GDK_BUTTON1_MASK | modifier);
     co_await barrier(fixture, false);
     for (int step = 0; step != 40; ++step) wheel(fixture, GDK_SCROLL_UP, 3.9, 0.5, modifier | GDK_BUTTON1_MASK);
     co_await barrier(fixture, false);
@@ -496,7 +751,7 @@ static cardio::promise<void> scroll_scenarios(Fixture *fixture) {
     mouse(fixture, GDK_BUTTON_RELEASE, 3.9, 0.5, GDK_BUTTON1_MASK);
     co_await barrier(fixture, false);
     mouse(fixture, GDK_BUTTON_PRESS, 0.1, 1.5, modifier);
-    mouse(fixture, GDK_MOTION_NOTIFY, 3.9, 2.5, GDK_BUTTON1_MASK);
+    mouse(fixture, GDK_MOTION_NOTIFY, 3.9, 2.5, GDK_BUTTON1_MASK | modifier);
     co_await barrier(fixture, false);
     const auto retained_copy = co_await clipboard(GDK_SELECTION_PRIMARY);
     wheel(fixture, GDK_SCROLL_UP, 3.9, 0.5, modifier | GDK_BUTTON1_MASK);
@@ -507,7 +762,7 @@ static cardio::promise<void> scroll_scenarios(Fixture *fixture) {
     expect(!selected(fixture) && co_await clipboard(GDK_SELECTION_PRIMARY) == retained_copy,
         "Escape cancels a queued release without copying an unfinished endpoint");
     mouse(fixture, GDK_BUTTON_PRESS, 0.1, 1.5, modifier);
-    mouse(fixture, GDK_MOTION_NOTIFY, 3.9, 2.5, GDK_BUTTON1_MASK);
+    mouse(fixture, GDK_MOTION_NOTIFY, 3.9, 2.5, GDK_BUTTON1_MASK | modifier);
     mouse(fixture, GDK_BUTTON_RELEASE, 3.9, 2.5, GDK_BUTTON1_MASK);
     co_await barrier(fixture, false);
     expect(selected(fixture), "a cancelled release does not capture the next drag");
@@ -557,7 +812,7 @@ static cardio::promise<void> link_copy_scenarios(Fixture *fixture) {
   auto *runtime = fixture->window->runtime;
   std::size_t activations = 0;
   GtkWidget *copy_link = nullptr;
-  terminal_runtime_set_hyperlink_rules(runtime, default_hyperlink_action_rules(),
+  terminal_runtime_set_hyperlink_rules(runtime, true, default_hyperlink_action_rules(),
       [&activations](TerminalHyperlinkResolution) { ++activations; });
   for (const bool osc8 : {false, true}) {
     const std::string target = osc8 ? "vscode://file/tmp/source%20file.cpp:12:3" : "https://example.みんな/docs?q=1&v=2";
@@ -604,7 +859,7 @@ static cardio::promise<void> link_copy_scenarios(Fixture *fixture) {
     gtk_menu_popdown(GTK_MENU(menu));
     co_await barrier(fixture, false);
   }
-  terminal_runtime_set_hyperlink_rules(runtime, {}, {});
+  terminal_runtime_set_hyperlink_rules(runtime, false, {}, {});
   expect(terminal_runtime_feed(runtime, "\033[2J\033[Hhttps://disabled.test/"), "show a URL with recognition disabled");
   while (!terminal_runtime_is_settled(runtime)) co_await fixture->changed.wait();
   mouse(fixture, GDK_BUTTON_PRESS, 2.1, 0.5, 0, GDK_BUTTON_SECONDARY);
@@ -629,13 +884,13 @@ static cardio::promise<void> autoscroll_scenarios(Fixture *fixture) {
       boxrig_scrollbar_model initial{};
       expect(boxrig_scrollbar_model_read(terminal, &initial) == 0, "initial autoscroll position");
       mouse(fixture, GDK_BUTTON_PRESS, 0.1, 1.5, modifier);
-      mouse(fixture, GDK_MOTION_NOTIFY, 3.9, -3.5, GDK_BUTTON1_MASK);
+      mouse(fixture, GDK_MOTION_NOTIFY, 3.9, -3.5, GDK_BUTTON1_MASK | modifier);
       co_await observe_main_loop(fixture);
       boxrig_scrollbar_model moving{};
       expect(boxrig_scrollbar_model_read(terminal, &moving) == 0 && moving.position < initial.position,
           "a held pointer above the grid continuously scrolls history");
       if (modifier == GDK_CONTROL_MASK) {
-        mouse(fixture, GDK_MOTION_NOTIFY, 0.1, -3.5, GDK_BUTTON1_MASK);
+        mouse(fixture, GDK_MOTION_NOTIFY, 0.1, -3.5, GDK_BUTTON1_MASK | modifier);
         boxrig_ui_selection empty{};
         while (!boxrig_ui_view_get_selection(view(fixture), &empty) || empty.row_count != 0)
           co_await fixture->changed.wait();
@@ -645,11 +900,24 @@ static cardio::promise<void> autoscroll_scenarios(Fixture *fixture) {
         boxrig_scrollbar_model empty_moving{};
         expect(boxrig_scrollbar_model_read(terminal, &empty_moving) == 0 && empty_moving.position < moving.position,
             "autoscroll continues while rectangle width is zero");
-        mouse(fixture, GDK_MOTION_NOTIFY, 3.9, -3.5, GDK_BUTTON1_MASK);
+        mouse(fixture, GDK_MOTION_NOTIFY, 3.9, -3.5, GDK_BUTTON1_MASK | modifier);
         while (!boxrig_ui_view_get_selection(view(fixture), &empty) || empty.row_count == 0)
           co_await fixture->changed.wait();
         expect(selected_text(fixture).find('\n') != std::string::npos, "empty autoscroll rectangle grows again");
       }
+      const auto original_shape = modifier == GDK_CONTROL_MASK ? BOXRIG_UI_SELECTION_RECTANGULAR : BOXRIG_UI_SELECTION_LINEAR;
+      key(fixture, GDK_KEY_Control_L, modifier == GDK_CONTROL_MASK ? GDK_KEY_RELEASE : GDK_KEY_PRESS, modifier);
+      co_await observe_main_loop(fixture);
+      boxrig_ui_selection mode{};
+      expect(boxrig_ui_view_get_selection(view(fixture), &mode) && mode.shape == original_shape,
+          "autoscroll after Ctrl alone keeps the applied shape");
+      mouse(fixture, GDK_MOTION_NOTIFY, 3.8, -3.5,
+          GDK_BUTTON1_MASK | (modifier == GDK_CONTROL_MASK ? 0 : GDK_CONTROL_MASK));
+      while (!boxrig_ui_view_get_selection(view(fixture), &mode) || mode.shape == original_shape)
+        co_await fixture->changed.wait();
+      mouse(fixture, GDK_MOTION_NOTIFY, 3.9, -3.5, GDK_BUTTON1_MASK | modifier);
+      while (!boxrig_ui_view_get_selection(view(fixture), &mode) || mode.shape != original_shape)
+        co_await fixture->changed.wait();
       gtk_clipboard_set_text(gtk_clipboard_get(GDK_SELECTION_PRIMARY), "autoscroll primary", -1);
       if (ending == 0) mouse(fixture, GDK_BUTTON_RELEASE, 3.9, -3.5, GDK_BUTTON1_MASK);
       else if (ending == 1) {
@@ -665,7 +933,7 @@ static cardio::promise<void> autoscroll_scenarios(Fixture *fixture) {
       } else if (ending == 3) {
         expect(terminal_runtime_feed(runtime, "\033[3J\033[2J\033[Hinvalidated"), "evict autoscroll selection text");
       } else if (ending == 4) {
-        expect(terminal_runtime_visual_zoom(runtime, BOXRIG_FONT_ZOOM_INCREASE) == BOXRIG_UI_OK, "zoom invalidates an active gesture");
+        expect(terminal_runtime_visual_zoom(runtime, BOXRIG_FONT_ZOOM_INCREASE, false) == BOXRIG_UI_OK, "zoom invalidates an active gesture");
       } else if (ending == 5) {
         boxrig_ui_layout_result layout{};
         expect(boxrig_ui_view_get_layout(view(fixture), &layout) == BOXRIG_UI_OK, "grid before gesture invalidation");
@@ -698,7 +966,7 @@ static cardio::promise<void> autoscroll_scenarios(Fixture *fixture) {
       expect(boxrig_scrollbar_model_read(terminal, &after) == 0 && after.position == stopped.position,
           "gesture endings, focus, text, font, grid, mapping and input inhibition stop autoscroll");
       if (ending != 0) {
-        mouse(fixture, GDK_MOTION_NOTIFY, 8.9, -3.5, GDK_BUTTON1_MASK);
+        mouse(fixture, GDK_MOTION_NOTIFY, 8.9, -3.5, GDK_BUTTON1_MASK | modifier);
         mouse(fixture, GDK_BUTTON_RELEASE, 8.9, -3.5, GDK_BUTTON1_MASK);
         co_await observe_main_loop(fixture);
         while (!terminal_runtime_is_settled(runtime)) co_await fixture->changed.wait();
@@ -744,7 +1012,7 @@ static cardio::promise<void> copy_policy_scenarios(Fixture *fixture) {
       "prepare trailing whitespace, unselected text, indentation and empty rows");
   while (!terminal_runtime_is_settled(runtime)) co_await fixture->changed.wait();
   mouse(fixture, GDK_BUTTON_PRESS, 0.1, 0.5, GDK_CONTROL_MASK);
-  mouse(fixture, GDK_MOTION_NOTIFY, 4.9, 5.5, GDK_BUTTON1_MASK);
+  mouse(fixture, GDK_MOTION_NOTIFY, 4.9, 5.5, GDK_BUTTON1_MASK | GDK_CONTROL_MASK);
   mouse(fixture, GDK_BUTTON_RELEASE, 4.9, 5.5, GDK_BUTTON1_MASK);
   co_await barrier(fixture, false);
   const std::string trimmed = "abc\nabc  \n\n     \n  ab\n";
@@ -782,13 +1050,13 @@ static cardio::promise<void> copy_policy_scenarios(Fixture *fixture) {
     expect(co_await clipboard(GDK_SELECTION_CLIPBOARD) == expected, "context-menu copy uses the current setting");
 
     mouse(fixture, GDK_BUTTON_PRESS, 0.1, 0.5, GDK_CONTROL_MASK);
-    mouse(fixture, GDK_MOTION_NOTIFY, 4.9, 5.5, GDK_BUTTON1_MASK);
+    mouse(fixture, GDK_MOTION_NOTIFY, 4.9, 5.5, GDK_BUTTON1_MASK | GDK_CONTROL_MASK);
     mouse(fixture, GDK_BUTTON_RELEASE, 4.9, 5.5, GDK_BUTTON1_MASK);
     co_await barrier(fixture, false);
     expect(co_await clipboard(GDK_SELECTION_PRIMARY) == expected, "selection completion applies the setting to PRIMARY");
   }
   mouse(fixture, GDK_BUTTON_PRESS, 0.1, 2.5, GDK_CONTROL_MASK);
-  mouse(fixture, GDK_MOTION_NOTIFY, 4.9, 2.5, GDK_BUTTON1_MASK);
+  mouse(fixture, GDK_MOTION_NOTIFY, 4.9, 2.5, GDK_BUTTON1_MASK | GDK_CONTROL_MASK);
   mouse(fixture, GDK_BUTTON_RELEASE, 4.9, 2.5, GDK_BUTTON1_MASK);
   key(fixture, GDK_KEY_c, GDK_KEY_PRESS, GDK_CONTROL_MASK | GDK_SHIFT_MASK);
   key(fixture, GDK_KEY_c, GDK_KEY_RELEASE, GDK_CONTROL_MASK | GDK_SHIFT_MASK);
@@ -837,7 +1105,7 @@ static cardio::promise<void> copy_scenarios(Fixture *fixture, bool trim) {
   terminal_runtime_refresh(runtime);
   while (!terminal_runtime_is_settled(runtime)) co_await fixture->changed.wait();
   mouse(fixture, GDK_BUTTON_PRESS, 2.1, 0.5, GDK_CONTROL_MASK);
-  mouse(fixture, GDK_MOTION_NOTIFY, 4.9, 0.5, GDK_BUTTON1_MASK);
+  mouse(fixture, GDK_MOTION_NOTIFY, 4.9, 0.5, GDK_BUTTON1_MASK | GDK_CONTROL_MASK);
   co_await barrier(fixture, false);
   // Jump over the middle instead of rendering it. The native layout provider
   // must resolve its Unicode and bidi cells while materializing the rectangle.
@@ -845,7 +1113,14 @@ static cardio::promise<void> copy_scenarios(Fixture *fixture, bool trim) {
       "jump across unvisited history");
   terminal_runtime_refresh(runtime);
   while (!terminal_runtime_is_settled(runtime)) co_await fixture->changed.wait();
-  mouse(fixture, GDK_MOTION_NOTIFY, 4.9, layout.rows - 0.5, GDK_BUTTON1_MASK);
+  mouse(fixture, GDK_MOTION_NOTIFY, 4.9, layout.rows - 0.5, GDK_BUTTON1_MASK | GDK_CONTROL_MASK);
+  co_await barrier(fixture, false);
+  mouse(fixture, GDK_MOTION_NOTIFY, 4.8, layout.rows - 0.5, GDK_BUTTON1_MASK);
+  co_await barrier(fixture, false);
+  boxrig_ui_selection switched{};
+  expect(boxrig_ui_view_get_selection(view(fixture), &switched) && switched.shape == BOXRIG_UI_SELECTION_LINEAR,
+      "Unicode selection with its anchor above the viewport can switch to linear");
+  mouse(fixture, GDK_MOTION_NOTIFY, 4.9, layout.rows - 0.5, GDK_BUTTON1_MASK | GDK_CONTROL_MASK);
   mouse(fixture, GDK_BUTTON_RELEASE, 4.9, layout.rows - 0.5, GDK_BUTTON1_MASK);
   co_await barrier(fixture, false);
   expect(selected_text(fixture) == expected, "unvisited Unicode history preserves whole graphemes, bidi logical order and blank padding");
@@ -856,7 +1131,14 @@ static cardio::promise<void> copy_scenarios(Fixture *fixture, bool trim) {
   while (!terminal_runtime_is_settled(runtime)) co_await fixture->changed.wait();
   for (const auto modifier : {GDK_SHIFT_MASK, GDK_CONTROL_MASK}) {
     mouse(fixture, GDK_BUTTON_PRESS, 0.1, 0.5, modifier);
-    mouse(fixture, GDK_MOTION_NOTIFY, 3.9, 2.5, GDK_BUTTON1_MASK);
+    mouse(fixture, GDK_MOTION_NOTIFY, 3.9, 2.5, GDK_BUTTON1_MASK | modifier);
+    co_await barrier(fixture, false);
+    mouse(fixture, GDK_MOTION_NOTIFY, 3.8, 2.5,
+        GDK_BUTTON1_MASK | (modifier == GDK_CONTROL_MASK ? 0 : GDK_CONTROL_MASK));
+    co_await barrier(fixture, false);
+    expect(selected_text(fixture) == (modifier == GDK_CONTROL_MASK ? wrapped + "\ntail" :
+        (trim ? "xxxx\nAB\ntail" : "xxxx\nAB  \ntail")), "mode change preserves wrapping and the rectangular trim policy");
+    mouse(fixture, GDK_MOTION_NOTIFY, 3.9, 2.5, GDK_BUTTON1_MASK | modifier);
     mouse(fixture, GDK_BUTTON_RELEASE, 3.9, 2.5, GDK_BUTTON1_MASK);
     co_await barrier(fixture, false);
     co_await check_text(modifier == GDK_CONTROL_MASK ? (trim ? "xxxx\nAB\ntail" : "xxxx\nAB  \ntail") : wrapped + "\ntail");
@@ -868,7 +1150,7 @@ static cardio::promise<void> copy_scenarios(Fixture *fixture, bool trim) {
     gtk_clipboard_set_text(gtk_clipboard_get(GDK_SELECTION_PRIMARY), "keep PRIMARY", -1);
     gtk_clipboard_set_text(gtk_clipboard_get(GDK_SELECTION_CLIPBOARD), "keep CLIPBOARD", -1);
     mouse(fixture, GDK_BUTTON_PRESS, 0.1, 0.5, GDK_CONTROL_MASK);
-    mouse(fixture, GDK_MOTION_NOTIFY, stale ? 3.9 : 0.1, 1.5, GDK_BUTTON1_MASK);
+    mouse(fixture, GDK_MOTION_NOTIFY, stale ? 3.9 : 0.1, 1.5, GDK_BUTTON1_MASK | GDK_CONTROL_MASK);
     co_await barrier(fixture, false);
     if (stale) {
       expect(terminal_runtime_feed(runtime, "\033[Hchanged"), "invalidate copy selection");
@@ -900,12 +1182,12 @@ static cardio::promise<void> limit_scenarios(Fixture *fixture) {
   gtk_clipboard_set_text(gtk_clipboard_get(GDK_SELECTION_PRIMARY), "bounded PRIMARY", -1);
   gtk_clipboard_set_text(gtk_clipboard_get(GDK_SELECTION_CLIPBOARD), "bounded CLIPBOARD", -1);
   mouse(fixture, GDK_BUTTON_PRESS, 0.1, 0.5, GDK_CONTROL_MASK);
-  mouse(fixture, GDK_MOTION_NOTIFY, 1.9, 1.5, GDK_BUTTON1_MASK);
+  mouse(fixture, GDK_MOTION_NOTIFY, 1.9, 1.5, GDK_BUTTON1_MASK | GDK_CONTROL_MASK);
   co_await barrier(fixture, false);
   expect(selected_text(fixture) == "ab\nmn", "retain a valid rectangle below every configured limit");
   selection_warnings.clear();
   if (selection_limit == "allocation") reject_selection_update = true;
-  mouse(fixture, GDK_MOTION_NOTIFY, 3.9, 3.5, GDK_BUTTON1_MASK);
+  mouse(fixture, GDK_MOTION_NOTIFY, 3.9, 3.5, GDK_BUTTON1_MASK | GDK_CONTROL_MASK);
   co_await barrier(fixture, false);
   if (selection_limit != "bytes") {
     expect(selected_text(fixture) == "ab\nmn", "rejected rectangle growth preserves the complete previous selection");
@@ -928,7 +1210,7 @@ static cardio::promise<void> limit_scenarios(Fixture *fixture) {
         "Copy reports its byte limit and preserves the previous clipboard");
   }
   mouse(fixture, GDK_BUTTON_PRESS, 0.1, 0.5, GDK_CONTROL_MASK);
-  mouse(fixture, GDK_MOTION_NOTIFY, 1.9, 1.5, GDK_BUTTON1_MASK);
+  mouse(fixture, GDK_MOTION_NOTIFY, 1.9, 1.5, GDK_BUTTON1_MASK | GDK_CONTROL_MASK);
   mouse(fixture, GDK_BUTTON_RELEASE, 1.9, 1.5, GDK_BUTTON1_MASK);
   co_await barrier(fixture, false);
   expect(co_await clipboard(GDK_SELECTION_PRIMARY) == "ab\nmn", "a new smaller selection still succeeds after a rejected operation");
@@ -953,11 +1235,11 @@ static cardio::promise<void> limit_scenarios(Fixture *fixture) {
     expect(terminal_runtime_feed(runtime, history), "prepare bounded autoscroll");
     while (!terminal_runtime_is_settled(runtime)) co_await fixture->changed.wait();
     mouse(fixture, GDK_BUTTON_PRESS, 0.1, 1.5, GDK_CONTROL_MASK);
-    mouse(fixture, GDK_MOTION_NOTIFY, 3.9, 0.5, GDK_BUTTON1_MASK);
+    mouse(fixture, GDK_MOTION_NOTIFY, 3.9, 0.5, GDK_BUTTON1_MASK | GDK_CONTROL_MASK);
     co_await barrier(fixture, false);
     const auto retained = selected_text(fixture);
     selection_warnings.clear();
-    mouse(fixture, GDK_MOTION_NOTIFY, 3.9, -2.5, GDK_BUTTON1_MASK);
+    mouse(fixture, GDK_MOTION_NOTIFY, 3.9, -2.5, GDK_BUTTON1_MASK | GDK_CONTROL_MASK);
     co_await observe_main_loop(fixture);
     co_await barrier(fixture, false);
     expect(!selection_warnings.empty() && selected_text(fixture) == retained, "autoscroll stops when its deferred extension exceeds a limit");
@@ -1006,6 +1288,11 @@ static cardio::promise<void> scenarios(Fixture *fixture) {
   gtk_clipboard_set_text(gtk_clipboard_get(GDK_SELECTION_PRIMARY), "retained primary", -1);
   gtk_clipboard_set_text(gtk_clipboard_get(GDK_SELECTION_CLIPBOARD), "retained clipboard", -1);
 
+  if (!selection_mode_probe.empty()) {
+    if (selection_mode_probe == "mode-integration") co_await selection_mode_integration_scenarios(fixture);
+    else co_await selection_mode_scenarios(fixture);
+    co_return;
+  }
   if (!selection_limit.empty()) {
     co_await limit_scenarios(fixture);
     co_return;
@@ -1113,7 +1400,7 @@ static cardio::promise<void> scenarios(Fixture *fixture) {
     expect(terminal_runtime_feed(runtime, history), "prepare selection before connection lifecycle changes");
     while (!terminal_runtime_is_settled(runtime)) co_await fixture->changed.wait();
     mouse(fixture, GDK_BUTTON_PRESS, 0.1, 1.5, GDK_CONTROL_MASK);
-    mouse(fixture, GDK_MOTION_NOTIFY, 3.9, -3.5, GDK_BUTTON1_MASK);
+    mouse(fixture, GDK_MOTION_NOTIFY, 3.9, -3.5, GDK_BUTTON1_MASK | GDK_CONTROL_MASK);
     co_await observe_main_loop(fixture);
     boxrig_scrollbar_model moving{};
     expect(boxrig_scrollbar_model_read(terminal, &moving) == 0 && moving.position < moving.history_rows,
@@ -1156,7 +1443,7 @@ static cardio::promise<void> run(Fixture *fixture, std::exception_ptr *failure) 
   try {
     co_await scenarios(fixture);
     co_await terminal_runtime_disconnect(fixture->window->runtime);
-    if (!selection_limit.empty()) {
+    if (!selection_limit.empty() || !selection_mode_probe.empty()) {
       gtk_main_quit();
       co_return;
     }
@@ -1164,7 +1451,7 @@ static cardio::promise<void> run(Fixture *fixture, std::exception_ptr *failure) 
     boxrig_scrollbar_model before{};
     expect(boxrig_scrollbar_model_read(terminal, &before) == 0, "history before destruction");
     mouse(fixture, GDK_BUTTON_PRESS, 0.1, 1.5, GDK_CONTROL_MASK);
-    mouse(fixture, GDK_MOTION_NOTIFY, 3.9, -3.5, GDK_BUTTON1_MASK);
+    mouse(fixture, GDK_MOTION_NOTIFY, 3.9, -3.5, GDK_BUTTON1_MASK | GDK_CONTROL_MASK);
     co_await observe_main_loop(fixture);
     boxrig_scrollbar_model moving{};
     expect(boxrig_scrollbar_model_read(terminal, &moving) == 0 && moving.position < before.position,
@@ -1187,7 +1474,11 @@ static cardio::promise<void> run(Fixture *fixture, std::exception_ptr *failure) 
 
 extern "C" int __wrap_main(int argc, char **argv) {
   gtk_init(&argc, &argv);
-  if (argc > 1) selection_limit = argv[1];
+  if (argc > 1) {
+    const std::string scenario = argv[1];
+    if (scenario.starts_with("mode-")) selection_mode_probe = scenario;
+    else selection_limit = scenario;
+  }
   g_log_set_handler(nullptr, G_LOG_LEVEL_WARNING, +[](const gchar *domain, GLogLevelFlags level, const gchar *message, gpointer data) {
     selection_warnings += message;
     g_log_default_handler(domain, level, message, data);
@@ -1228,6 +1519,7 @@ extern "C" int __wrap_main(int argc, char **argv) {
     catch (const std::exception &error) { g_printerr("%s\n", error.what()); }
     return 1;
   }
-  std::puts("PASS selection cancellation, retained clipboards and complete native input sequences");
+  if (!selection_mode_probe.empty()) std::printf("PASS %s\n", selection_mode_probe.c_str());
+  else std::puts("PASS selection cancellation, retained clipboards and complete native input sequences");
   return 0;
 }

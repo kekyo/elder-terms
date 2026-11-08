@@ -4,6 +4,7 @@
 // https://github.com/kekyo/elder-terms/
 
 #include "terminal-background-editor.h"
+#include "settings-validation.h"
 #include "settings-presentation.h"
 #include <elder-terms/modal-color-button.h>
 #include <elder-terms/modal-dialog.h>
@@ -31,6 +32,7 @@ struct TerminalBackgroundEditor {
   GtkWidget *mode;
   GtkWidget *color;
   GtkWidget *status;
+  GtkWidget *cell_mode = nullptr;
   GtkWidget *image_path = nullptr;
   GtkWidget *image_fit = nullptr;
   GtkWidget *image_dialog = nullptr;
@@ -59,14 +61,10 @@ static void sync_color(TerminalBackgroundEditor *editor) {
 
 static void validate_fields(TerminalBackgroundEditor *editor) {
   for (const auto &field : editor->fields) {
-    gtk_entry_set_icon_from_icon_name(GTK_ENTRY(field.entry), GTK_ENTRY_ICON_SECONDARY,
-        field.valid ? nullptr : "dialog-error-symbolic");
-    gtk_widget_set_tooltip_text(field.entry, field.valid ? nullptr :
+    set_settings_input_error(field.entry, field.valid ? "" :
         field.number ? _("Enter an integer from 0 to 100") : _("Enter a color as #RRGGBB"));
   }
-  gtk_entry_set_icon_from_icon_name(GTK_ENTRY(editor->image_path), GTK_ENTRY_ICON_SECONDARY,
-      editor->image_valid ? nullptr : "dialog-error-symbolic");
-  gtk_widget_set_tooltip_text(editor->image_path, editor->image_valid ? nullptr : _("Enter an absolute local image path"));
+  set_settings_input_error(editor->image_path, editor->image_valid ? "" : _("Enter an absolute local image path"));
 }
 
 void sync_terminal_background_editor(TerminalBackgroundEditor *editor, bool preserve_invalid) {
@@ -74,7 +72,7 @@ void sync_terminal_background_editor(TerminalBackgroundEditor *editor, bool pres
   editor->synchronizing = true;
   const auto key = terminal_background_mode_setting_key();
   const auto fallback = value_text(setting_fallback_value(*editor->store, key, std::string("opaque")));
-  const auto inherited = inherited_setting_label(setting_choice_label(key, fallback), setting_fallback_source(*editor->store, key));
+  const auto inherited = setting_fallback_label(*editor->store, key, setting_choice_label(key, fallback));
   gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(editor->mode));
   gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(editor->mode), "inherit", inherited.c_str());
   for (const auto *mode : {"opaque", "transparent", "blur"})
@@ -82,11 +80,20 @@ void sync_terminal_background_editor(TerminalBackgroundEditor *editor, bool pres
   const auto effective = setting_string_value_or_default(*editor->store, key, "opaque");
   gtk_combo_box_set_active_id(GTK_COMBO_BOX(editor->mode),
       setting_has_explicit_value(*editor->store, key) ? effective.c_str() : "inherit");
+  const auto cell_key = terminal_cell_background_mode_setting_key();
+  const auto cell_fallback = value_text(setting_fallback_value(*editor->store, cell_key, std::string("transparent")));
+  const auto cell_label = setting_fallback_label(*editor->store, cell_key, setting_choice_label(cell_key, cell_fallback));
+  gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(editor->cell_mode));
+  gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(editor->cell_mode), "inherit", cell_label.c_str());
+  for (const auto *mode : {"transparent", "opaque"})
+    gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(editor->cell_mode), mode, setting_choice_label(cell_key, mode).c_str());
+  const auto cell_mode = setting_string_value_or_default(*editor->store, cell_key, "transparent");
+  gtk_combo_box_set_active_id(GTK_COMBO_BOX(editor->cell_mode),
+      setting_has_explicit_value(*editor->store, cell_key) ? cell_mode.c_str() : "inherit");
   for (auto &field : editor->fields) {
     const auto field_key = make_setting_key("terminal", field.name);
     const auto builtin = field.number ? SettingValue{gint64{0}} : SettingValue{std::string("#000000")};
-    const auto placeholder = inherited_setting_label(value_text(setting_fallback_value(*editor->store, field_key, builtin)),
-        setting_fallback_source(*editor->store, field_key));
+    const auto placeholder = setting_fallback_label(*editor->store, field_key, value_text(setting_fallback_value(*editor->store, field_key, builtin)));
     gtk_entry_set_placeholder_text(GTK_ENTRY(field.entry), placeholder.c_str());
     if (preserve_invalid && !field.valid) continue;
     gtk_entry_set_text(GTK_ENTRY(field.entry), setting_has_explicit_value(*editor->store, field_key)
@@ -96,7 +103,7 @@ void sync_terminal_background_editor(TerminalBackgroundEditor *editor, bool pres
   const auto image_key = terminal_background_image_setting_key();
   const auto image_fallback = setting_string_value_or_default(*editor->store, image_key, "");
   const auto placeholder = setting_has_explicit_value(*editor->store, image_key) ? std::string(_("No image")) :
-      inherited_setting_label(image_fallback.empty() ? _("No image") : image_fallback, setting_fallback_source(*editor->store, image_key));
+      setting_fallback_label(*editor->store, image_key, image_fallback.empty() ? _("No image") : image_fallback);
   gtk_entry_set_placeholder_text(GTK_ENTRY(editor->image_path), placeholder.c_str());
   if (!preserve_invalid || editor->image_valid) {
     gtk_entry_set_text(GTK_ENTRY(editor->image_path), setting_has_explicit_value(*editor->store, image_key) ? image_fallback.c_str() : "");
@@ -104,7 +111,7 @@ void sync_terminal_background_editor(TerminalBackgroundEditor *editor, bool pres
   }
   const auto fit_key = terminal_background_image_fit_setting_key();
   const auto fit_fallback = value_text(setting_fallback_value(*editor->store, fit_key, std::string("cover")));
-  const auto fit_label = inherited_setting_label(setting_choice_label(fit_key, fit_fallback), setting_fallback_source(*editor->store, fit_key));
+  const auto fit_label = setting_fallback_label(*editor->store, fit_key, setting_choice_label(fit_key, fit_fallback));
   gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(editor->image_fit));
   gtk_combo_box_text_append(GTK_COMBO_BOX_TEXT(editor->image_fit), "inherit", fit_label.c_str());
   for (const auto *fit : {"cover", "contain", "stretch"})
@@ -208,6 +215,19 @@ TerminalBackgroundEditor *create_terminal_background_editor(SettingsStore *store
     editor->changed();
   }), editor);
   int index = 1;
+  editor->cell_mode = gtk_combo_box_text_new();
+  identify(editor->cell_mode, editor->prefix + "_terminal_cell_background_mode_combo");
+  row(terminal_cell_background_mode_setting_key(), editor->cell_mode, index++);
+  g_signal_connect(editor->cell_mode, "changed", G_CALLBACK(+[](GtkComboBox *combo, gpointer data) {
+    auto *editor = static_cast<TerminalBackgroundEditor *>(data);
+    if (editor->synchronizing) return;
+    const auto *id = gtk_combo_box_get_active_id(combo);
+    if (!id) return;
+    const auto key = terminal_cell_background_mode_setting_key();
+    if (std::string_view(id) == "inherit") clear_explicit_setting_value(editor->store, key);
+    else set_explicit_setting_value(editor->store, key, std::string(id));
+    editor->changed();
+  }), editor);
   auto &image_opacity = editor->fields.back();
   for (auto &field : editor->fields) {
     field.entry = gtk_entry_new();

@@ -8,6 +8,7 @@
 #include <elder-terms/settings-widget.h>
 
 #include <algorithm>
+#include <tuple>
 #include <array>
 #include <cerrno>
 #include <cctype>
@@ -34,11 +35,14 @@
 #include "hyperlink-settings-editor.h"
 #include "connection-icon-editor.h"
 #include "webdav-settings-editor.h"
+#include "http-settings-editor.h"
 #include "smb-settings-editor.h"
+#include "nfs-settings-editor.h"
 #include "ssh-proxy-settings-editor.h"
 #include "terminal-background-editor.h"
 #include "terminal-color-preview.h"
 #include "settings-presentation.h"
+#include "settings-validation.h"
 
 #define GETTEXT_PACKAGE "elder-terms"
 #include <glib/gi18n-lib.h>
@@ -57,7 +61,9 @@ static constexpr char ssh_connection_type[] = "ssh";
 static constexpr char sftp_connection_type[] = "sftp";
 static constexpr char ftp_connection_type[] = "ftp";
 static constexpr char webdav_connection_type[] = "webdav";
+static constexpr char http_connection_type[] = "http";
 static constexpr char smb_connection_type[] = "smb";
+static constexpr char nfs_connection_type[] = "nfs";
 static constexpr char zmodem_autostart_enabled[] = "enabled";
 static constexpr char zmodem_autostart_disabled[] = "disabled";
 static constexpr char terminal_text_default[] = "default";
@@ -131,10 +137,14 @@ struct SettingsWidgetState {
   GtkWidget *root = nullptr;
   GtkWidget *notebook = nullptr;
   GtkWidget *general_name_entry = nullptr;
+  GtkWidget *general_theme_combo = nullptr;
+  std::string theme_refresh_error;
+  bool theme_valid = true;
   ConnectionIconEditor *connection_icon_editor = nullptr;
   GtkWidget *general_type_combo = nullptr;
   GtkWidget *general_auto_close_combo = nullptr;
   GtkWidget *general_compact_mode_combo = nullptr;
+  GtkWidget *general_receive_effect_combo = nullptr;
   GtkWidget *general_show_border_combo = nullptr;
   GtkWidget *general_border_width_entry = nullptr;
   bool general_border_width_valid = true;
@@ -150,6 +160,7 @@ struct SettingsWidgetState {
   GtkWidget *terminal_height_entry = nullptr;
   GtkWidget *terminal_scrollback_lines_entry = nullptr;
   GtkWidget *terminal_font_size_dip_entry = nullptr;
+  GtkWidget *terminal_font_zoom_mode_combo = nullptr;
   GtkWidget *general_indicator_color_mode_combo = nullptr;
   GtkWidget *general_indicator_color_button = nullptr;
   GtkWidget *general_indicator_off_color_mode_combo = nullptr;
@@ -168,13 +179,15 @@ struct SettingsWidgetState {
   GtkWidget *terminal_ambiguous_width_combo = nullptr;
   GtkWidget *terminal_bell_sound_entry = nullptr;
   GtkWidget *terminal_bell_sound_dialog = nullptr;
+  GtkWidget *terminal_visual_bell_combo = nullptr;
   GtkWidget *terminal_encoding_combo = nullptr;
   GtkWidget *terminal_encoding_entry = nullptr;
   GtkWidget *terminal_backspace_code_combo = nullptr;
   GtkWidget *terminal_cursor_key_mode_combo = nullptr;
   GtkWidget *terminal_cursor_shape_combo = nullptr;
   GtkWidget *terminal_color_filter_combo = nullptr;
-  GtkWidget *terminal_link_decoration_combo = nullptr;
+  GtkWidget *terminal_regex_link_decoration_combo = nullptr;
+  GtkWidget *terminal_osc8_link_decoration_combo = nullptr;
   GtkWidget *terminal_color_vision_combo = nullptr;
   GtkWidget *terminal_color_vision_strength_entry = nullptr;
   bool terminal_color_vision_strength_valid = true;
@@ -210,7 +223,9 @@ struct SettingsWidgetState {
   GtkWidget *macro_move_down_button = nullptr;
   HyperlinkSettingsEditorState *hyperlink_editor = nullptr;
   WebdavSettingsEditor *webdav_editor = nullptr;
+  HttpSettingsEditor *http_editor = nullptr;
   SmbSettingsEditor *smb_editor = nullptr;
+  NfsSettingsEditor *nfs_editor = nullptr;
   SshProxySettingsEditor *ssh_proxy_editor = nullptr;
   GtkWidget *ssh_proxy_experimental_label = nullptr;
   int selected_macro = -1;
@@ -293,6 +308,7 @@ enum IpScanResultColumn {
   ip_scan_webdav_https_column,
   ip_scan_webdav_http_column,
   ip_scan_smb_column,
+  ip_scan_nfs_column,
   ip_scan_result_column_count,
 };
 
@@ -362,6 +378,8 @@ static GtkWidget *create_row_label(const char *text) {
 
 static GtkWidget *attach_row(GtkWidget *grid, int row, const SettingKey &key,
                              GtkWidget *control) {
+  bind_settings_field(control, key);
+  control = decorate_settings_control(control);
   const std::string label_text = setting_label(key);
   GtkWidget *label = create_row_label(label_text.c_str());
   gtk_grid_attach(GTK_GRID(grid), label, 0, row, 1, 1);
@@ -373,6 +391,7 @@ static GtkWidget *attach_row(GtkWidget *grid, int row, const SettingKey &key,
 
 static GtkWidget *attach_text_row(GtkWidget *grid, int row,
                                   const char *text, GtkWidget *control) {
+  control = decorate_settings_control(control);
   GtkWidget *label = create_row_label(text);
   gtk_grid_attach(GTK_GRID(grid), label, 0, row, 1, 1);
   gtk_widget_set_hexpand(control, true);
@@ -455,13 +474,6 @@ static std::string format_setting_value(const SettingValue &value) {
              : settings_ui_text(SettingsUiText::disabled);
 }
 
-static std::string setting_fallback_label(const SettingsStore &store,
-                                          const SettingKey &key,
-                                          const std::string &display_value) {
-  return inherited_setting_label(display_value,
-                                 setting_fallback_source(store, key));
-}
-
 static void sync_inheritable_entry(GtkWidget *entry,
                                    const SettingsStore &store,
                                    const SettingKey &key,
@@ -482,22 +494,7 @@ static void sync_inheritable_entry(GtkWidget *entry,
 
 static void set_entry_validation(GtkWidget *entry, bool valid,
                                  const std::string &reason) {
-  if (entry == nullptr) {
-    return;
-  }
-  GtkStyleContext *context = gtk_widget_get_style_context(entry);
-  if (valid) {
-    gtk_style_context_remove_class(context, GTK_STYLE_CLASS_ERROR);
-  } else {
-    gtk_style_context_add_class(context, GTK_STYLE_CLASS_ERROR);
-  }
-  gtk_entry_set_icon_from_icon_name(
-      GTK_ENTRY(entry), GTK_ENTRY_ICON_SECONDARY,
-      valid ? nullptr : "dialog-error-symbolic");
-  const std::string message = settings_validation_message(reason);
-  gtk_entry_set_icon_tooltip_text(GTK_ENTRY(entry),
-                                  GTK_ENTRY_ICON_SECONDARY,
-                                  valid ? nullptr : message.c_str());
+  set_settings_input_error(entry, valid ? std::string() : reason);
 }
 
 static void update_string_entry(SettingsWidgetState *state, GtkWidget *entry,
@@ -631,8 +628,8 @@ static std::string terminal_encoding_fallback(
     const SettingsWidgetState *state,
     const TerminalTextSettings &built_in_defaults) {
   if (setting_fallback_source(state->draft_store,
-                              terminal_encoding_setting_key()) ==
-      SettingValueSource::global) {
+                              terminal_encoding_setting_key()) !=
+      SettingValueSource::built_in) {
     return std::get<std::string>(setting_fallback_value(
         state->draft_store, terminal_encoding_setting_key(),
         SettingValue{built_in_defaults.encoding}));
@@ -644,8 +641,8 @@ static std::string terminal_backspace_fallback(
     const SettingsWidgetState *state,
     const TerminalTextSettings &built_in_defaults) {
   if (setting_fallback_source(state->draft_store,
-                              terminal_backspace_code_setting_key()) ==
-      SettingValueSource::global) {
+                              terminal_backspace_code_setting_key()) !=
+      SettingValueSource::built_in) {
     return std::get<std::string>(setting_fallback_value(
         state->draft_store, terminal_backspace_code_setting_key(),
         SettingValue{std::string(terminal_backspace_code_to_string(
@@ -658,8 +655,8 @@ static std::string terminal_cursor_fallback(
     const SettingsWidgetState *state,
     const TerminalTextSettings &built_in_defaults) {
   if (setting_fallback_source(state->draft_store,
-                              terminal_cursor_key_mode_setting_key()) ==
-      SettingValueSource::global) {
+                              terminal_cursor_key_mode_setting_key()) !=
+      SettingValueSource::built_in) {
     return std::get<std::string>(setting_fallback_value(
         state->draft_store, terminal_cursor_key_mode_setting_key(),
         SettingValue{std::string(terminal_cursor_key_mode_to_string(
@@ -673,8 +670,8 @@ static std::string terminal_return_fallback(
     const SettingsWidgetState *state,
     const TerminalTextSettings &built_in_defaults) {
   if (setting_fallback_source(state->draft_store,
-                              terminal_return_code_setting_key()) ==
-      SettingValueSource::global) {
+                              terminal_return_code_setting_key()) !=
+      SettingValueSource::built_in) {
     return std::get<std::string>(setting_fallback_value(
         state->draft_store, terminal_return_code_setting_key(),
         SettingValue{std::string(terminal_return_code_to_string(
@@ -870,10 +867,7 @@ static void sync_terminal_text_widgets(SettingsWidgetState *state) {
   populate_terminal_special_code_combos(state, defaults);
   state->terminal_encoding_valid = true;
   if (state->terminal_encoding_entry != nullptr) {
-    gtk_entry_set_icon_from_icon_name(GTK_ENTRY(state->terminal_encoding_entry),
-                                      GTK_ENTRY_ICON_SECONDARY, nullptr);
-    gtk_entry_set_icon_tooltip_text(GTK_ENTRY(state->terminal_encoding_entry),
-                                    GTK_ENTRY_ICON_SECONDARY, nullptr);
+    set_settings_input_error(state->terminal_encoding_entry, "");
   }
   state->synchronizing = previous_synchronizing;
 }
@@ -882,7 +876,8 @@ static void update_connection_pages(SettingsWidgetState *state) {
   const std::string active_type = connection_type_value(state->draft_store);
   for (const ConnectionSettingsPage &page : state->connection_pages) {
     const bool visible =
-        state->mode == SettingsWidgetMode::global_defaults ||
+        state->mode != SettingsWidgetMode::connection ||
+        !settings_validation_summary(page.page).empty() ||
         std::any_of(page.connection_types.begin(),
                     page.connection_types.end(),
                     [&active_type](const char *connection_type) {
@@ -890,14 +885,17 @@ static void update_connection_pages(SettingsWidgetState *state) {
                     });
     gtk_widget_set_visible(page.page, visible);
     gtk_widget_set_visible(page.tab_label, visible);
+    // GTK3 exposes notebook tab visibility through its descendant label to AT-SPI.
+    auto *label = static_cast<GtkWidget *>(g_object_get_data(G_OBJECT(page.tab_label), "elder-terms-tab-label"));
+    if (label) gtk_widget_set_visible(label, visible);
   }
   if (state->ssh_proxy_experimental_label != nullptr) {
     gtk_widget_set_visible(state->ssh_proxy_experimental_label,
                            active_type == smb_connection_type &&
-                           state->mode != SettingsWidgetMode::global_defaults);
+                           state->mode == SettingsWidgetMode::connection);
   }
   const bool terminal_type_visible =
-      state->mode == SettingsWidgetMode::global_defaults ||
+      state->mode != SettingsWidgetMode::connection ||
       active_type == ssh_connection_type;
   if (state->ssh_terminal_type_label != nullptr) {
     gtk_widget_set_visible(state->ssh_terminal_type_label,
@@ -944,8 +942,12 @@ static void update_general_name_from_widget(SettingsWidgetState *state) {
 
 static GtkWidget *create_tab_label(const char *text, const char *id) {
   GtkWidget *label = gtk_label_new(text);
-  assign_accessible_id(label, id);
-  return label;
+  assign_accessible_id(label, (std::string(id) + "_label").c_str());
+  gtk_widget_show(label);
+  auto *tab = decorate_settings_control(label);
+  assign_accessible_id(tab, id);
+  g_object_set_data(G_OBJECT(tab), "elder-terms-tab-label", label);
+  return tab;
 }
 
 static void update_general_type_from_widget(SettingsWidgetState *state) {
@@ -960,6 +962,7 @@ static void update_general_type_from_widget(SettingsWidgetState *state) {
                                SettingValue{type});
   }
   update_connection_pages(state);
+  sync_ssh_proxy_settings_editor(state->ssh_proxy_editor, true);
   sync_terminal_text_widgets(state);
 }
 
@@ -1378,13 +1381,7 @@ static void set_terminal_encoding_validation(
   if (state->terminal_encoding_entry == nullptr) {
     return;
   }
-  gtk_entry_set_icon_from_icon_name(
-      GTK_ENTRY(state->terminal_encoding_entry), GTK_ENTRY_ICON_SECONDARY,
-      valid ? nullptr : "dialog-error-symbolic");
-  const std::string message = settings_validation_message(reason);
-  gtk_entry_set_icon_tooltip_text(
-      GTK_ENTRY(state->terminal_encoding_entry), GTK_ENTRY_ICON_SECONDARY,
-      valid ? nullptr : message.c_str());
+  set_settings_input_error(state->terminal_encoding_entry, valid ? "" : reason);
 }
 
 static void update_terminal_encoding_from_widget(SettingsWidgetState *state) {
@@ -1559,7 +1556,8 @@ static bool macro_rules_are_valid(const SettingsWidgetState *state) {
 }
 
 static bool settings_inputs_valid(const SettingsWidgetState *state) {
-  return terminal_background_editor_is_valid(state->terminal_background_editor) &&
+  return state->theme_valid && state->theme_refresh_error.empty() &&
+         terminal_background_editor_is_valid(state->terminal_background_editor) &&
          ssh_proxy_settings_editor_is_valid(state->ssh_proxy_editor) &&
          state->local_command_line_valid && state->terminal_width_valid &&
          state->terminal_height_valid &&
@@ -1570,11 +1568,15 @@ static bool settings_inputs_valid(const SettingsWidgetState *state) {
          state->terminal_bell_sound_valid && state->terminal_fonts_valid &&
          state->telnet_port_valid && state->ssh_port_valid &&
          state->ftp_port_valid && (state->ftp_tls_valid ||
-         (state->mode != SettingsWidgetMode::global_defaults && connection_type_value(state->draft_store) != ftp_connection_type)) &&
+         (state->mode == SettingsWidgetMode::connection && connection_type_value(state->draft_store) != ftp_connection_type)) &&
+         (http_settings_editor_is_valid(state->http_editor) ||
+          (state->mode == SettingsWidgetMode::connection && connection_type_value(state->draft_store) != http_connection_type)) &&
          (webdav_settings_editor_is_valid(state->webdav_editor) ||
-          (state->mode != SettingsWidgetMode::global_defaults && connection_type_value(state->draft_store) != webdav_connection_type)) &&
+          (state->mode == SettingsWidgetMode::connection && connection_type_value(state->draft_store) != webdav_connection_type)) &&
          (smb_settings_editor_is_valid(state->smb_editor) ||
-          (state->mode != SettingsWidgetMode::global_defaults && connection_type_value(state->draft_store) != smb_connection_type)) &&
+          (state->mode == SettingsWidgetMode::connection && connection_type_value(state->draft_store) != smb_connection_type)) &&
+         (nfs_settings_editor_is_valid(state->nfs_editor) ||
+          (state->mode == SettingsWidgetMode::connection && connection_type_value(state->draft_store) != nfs_connection_type)) &&
          state->serial_baudrate_valid &&
          state->transfer_text_send_rate_valid &&
          terminal_key_binding_inputs_valid(state) &&
@@ -1585,6 +1587,42 @@ static bool settings_inputs_valid(const SettingsWidgetState *state) {
 }
 
 static void update_action_sensitivity(SettingsWidgetState *state) {
+  std::vector<SettingValidationIssue> issues;
+  const auto include = [&](const auto &settings) {
+    issues.insert(issues.end(), settings.validation_issues.begin(), settings.validation_issues.end());
+  };
+  const auto type = connection_type_value(state->draft_store);
+  const bool global = state->mode != SettingsWidgetMode::connection;
+  if (state->http_editor) set_settings_validation_enabled(http_settings_editor_root(state->http_editor), global || type == http_connection_type);
+  if (state->webdav_editor) set_settings_validation_enabled(webdav_settings_editor_root(state->webdav_editor), global || type == webdav_connection_type);
+  if (state->smb_editor) set_settings_validation_enabled(smb_settings_editor_root(state->smb_editor), global || type == smb_connection_type);
+  if (state->nfs_editor) set_settings_validation_enabled(nfs_settings_editor_root(state->nfs_editor), global || type == nfs_connection_type);
+  if (state->ssh_proxy_editor) set_settings_validation_enabled(ssh_proxy_settings_editor_root(state->ssh_proxy_editor),
+      global || (type != local_connection_type && type != serial_connection_type));
+  for (const auto &control : state->ftp_tls_controls) {
+    set_settings_validation_enabled(control.combo, global || type == ftp_connection_type);
+    set_settings_validation_enabled(control.entry, global || type == ftp_connection_type);
+  }
+  if (global || type == ftp_connection_type) include(ftp_connection_settings(state->draft_store));
+  if (global || type == http_connection_type) include(http_connection_settings(state->draft_store));
+  if (global || type == webdav_connection_type) include(webdav_connection_settings(state->draft_store));
+  if (global || type == smb_connection_type) include(smb_connection_settings(state->draft_store));
+  if (global || type == nfs_connection_type) include(nfs_connection_settings(state->draft_store));
+  include(global ? ssh_proxy_settings(state->draft_store) : ssh_proxy_connection_settings(state->draft_store));
+  refresh_settings_validation(state->root, issues);
+  if (state->notebook) {
+    const auto count = gtk_notebook_get_n_pages(GTK_NOTEBOOK(state->notebook));
+    for (int index = 0; index < count; ++index) {
+      auto *page = gtk_notebook_get_nth_page(GTK_NOTEBOOK(state->notebook), index);
+      auto *tab = gtk_notebook_get_tab_label(GTK_NOTEBOOK(state->notebook), page);
+      auto *label = static_cast<GtkWidget *>(g_object_get_data(G_OBJECT(tab), "elder-terms-tab-label"));
+      const auto summary = settings_validation_summary(page);
+      set_settings_input_error(tab, summary);
+      set_settings_input_error(label, summary);
+      refresh_settings_validation(tab, {});
+    }
+    update_connection_pages(state);
+  }
   const gboolean sensitive = !state->action_pending && settings_inputs_valid(state);
   if (state->apply_button != nullptr) {
     gtk_widget_set_sensitive(state->apply_button, sensitive);
@@ -2151,13 +2189,7 @@ static void update_log_base_directory_from_widget(
 static void set_log_file_name_format_validation(
     SettingsWidgetState *state, bool valid, const std::string &reason) {
   state->log_file_name_format_valid = valid;
-  gtk_entry_set_icon_from_icon_name(
-      GTK_ENTRY(state->log_file_name_format_entry), GTK_ENTRY_ICON_SECONDARY,
-      valid ? nullptr : "dialog-error-symbolic");
-  const std::string message = settings_validation_message(reason);
-  gtk_entry_set_icon_tooltip_text(
-      GTK_ENTRY(state->log_file_name_format_entry), GTK_ENTRY_ICON_SECONDARY,
-      valid ? nullptr : message.c_str());
+  set_settings_input_error(state->log_file_name_format_entry, valid ? "" : reason);
 }
 
 static void update_log_file_name_format_from_widget(
@@ -2230,15 +2262,7 @@ static void clear_container(GtkWidget *container) {
 
 static void set_text_view_validation(GtkWidget *view, bool valid,
                                      const std::string &reason) {
-  GtkStyleContext *context = gtk_widget_get_style_context(view);
-  if (valid) {
-    gtk_style_context_remove_class(context, GTK_STYLE_CLASS_ERROR);
-    gtk_widget_set_tooltip_text(view, nullptr);
-    return;
-  }
-  gtk_style_context_add_class(context, GTK_STYLE_CLASS_ERROR);
-  const std::string message = settings_validation_message(reason);
-  gtk_widget_set_tooltip_text(view, message.c_str());
+  set_settings_input_error(view, valid ? "" : reason);
 }
 
 static bool macro_id_is_duplicated(const SettingsWidgetState *state,
@@ -2252,6 +2276,16 @@ static bool macro_id_is_duplicated(const SettingsWidgetState *state,
 }
 
 static void update_macro_validation(SettingsWidgetState *state) {
+  for (std::size_t index = 0; index < state->draft_store.macro_rules.size(); ++index) {
+    auto *row = gtk_list_box_get_row_at_index(GTK_LIST_BOX(state->macro_list), static_cast<int>(index));
+    if (!row) continue;
+    const auto &candidate = state->draft_store.macro_rules[index];
+    std::string reason;
+    macro_rule_is_valid(candidate, &reason);
+    if (macro_id_is_duplicated(state, &candidate)) reason = "identifier must be unique";
+    set_settings_input_error(GTK_WIDGET(row), reason);
+    set_settings_input_error(static_cast<GtkWidget *>(g_object_get_data(G_OBJECT(row), "elder-terms-rule-label")), reason);
+  }
   const MacroRule *rule = selected_macro_rule(state);
   if (rule == nullptr) {
     set_entry_validation(state->macro_id_entry, true, {});
@@ -2287,16 +2321,14 @@ static void update_macro_validation(SettingsWidgetState *state) {
   set_entry_validation(state->macro_regex_entry, regex_valid, regex_reason);
 
   std::string rule_reason;
-  const bool rule_valid = macro_rule_is_valid(*rule, &rule_reason);
-  if (std::holds_alternative<MacroSendAction>(rule->action)) {
-    set_entry_validation(state->macro_command_entry, true, {});
-    set_text_view_validation(state->macro_send_view, rule_valid,
-                             rule_reason);
-  } else {
-    set_text_view_validation(state->macro_send_view, true, {});
-    set_entry_validation(state->macro_command_entry, rule_valid,
-                         rule_reason);
-  }
+  RuleValidationLocation location;
+  const bool rule_valid = macro_rule_is_valid(*rule, &rule_reason, &location);
+  set_entry_validation(state->macro_command_entry,
+      rule_valid || location.field != RuleValidationField::command, rule_reason);
+  set_text_view_validation(state->macro_send_view,
+      rule_valid || location.field != RuleValidationField::send_text, rule_reason);
+  set_settings_argument_error(state->macro_arguments_box, location.argument_index,
+      !rule_valid && location.field == RuleValidationField::argument ? rule_reason : "");
   update_action_sensitivity(state);
 }
 
@@ -2457,7 +2489,8 @@ static void rebuild_macro_list(SettingsWidgetState *state) {
     GtkWidget *label =
         gtk_label_new(state->draft_store.macro_rules[index].id.c_str());
     gtk_label_set_xalign(GTK_LABEL(label), 0.0F);
-    gtk_container_add(GTK_CONTAINER(row), label);
+    gtk_container_add(GTK_CONTAINER(row), decorate_settings_control(label));
+    g_object_set_data(G_OBJECT(row), "elder-terms-rule-label", label);
     g_object_set_data(G_OBJECT(row), "elder-terms-macro-index",
                       GINT_TO_POINTER(static_cast<int>(index) + 1));
     gtk_container_add(GTK_CONTAINER(state->macro_list), row);
@@ -2829,10 +2862,13 @@ static void sync_general_type_combo(SettingsWidgetState *state) {
            .label = connection_type_label(sftp_connection_type)},
           {.id = ftp_connection_type,
            .label = connection_type_label(ftp_connection_type)},
+          {.id = http_connection_type, .label = connection_type_label(http_connection_type)},
           {.id = webdav_connection_type,
            .label = connection_type_label(webdav_connection_type)},
           {.id = smb_connection_type,
            .label = connection_type_label(smb_connection_type)},
+          {.id = nfs_connection_type,
+           .label = connection_type_label(nfs_connection_type)},
       },
       effective);
 }
@@ -3106,7 +3142,9 @@ static void sync_key_binding_reset_button(
               SettingValueSource::global
           ? settings_ui_text(SettingsUiText::use_global_default)
           : settings_ui_text(SettingsUiText::use_built_in_default);
-  gtk_widget_set_tooltip_text(button, tooltip);
+  const auto label = setting_fallback_source(state->draft_store, key) == SettingValueSource::theme
+      ? setting_fallback_label(state->draft_store, key, _("Inherit")) : std::string(tooltip);
+  gtk_widget_set_tooltip_text(button, label.c_str());
 }
 
 static void sync_terminal_type_entries(SettingsWidgetState *state) {
@@ -3165,7 +3203,7 @@ static void sync_ftp_tls_controls(SettingsWidgetState *state) {
     std::vector<ComboOption> options;
     if (control.choices.empty()) {
       const auto builtin = std::string(control.name) == "ca_file" ? _("System CA certificates") : _("Library default");
-      if (state->mode == SettingsWidgetMode::global_defaults && std::string(control.name) == "ca_file") {
+      if (state->mode != SettingsWidgetMode::connection && std::string(control.name) == "ca_file") {
         gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(control.combo));
         append_combo_option(control.combo, "default", builtin);
         append_combo_option(control.combo, "custom", _("Custom"));
@@ -3212,7 +3250,8 @@ static void on_ftp_tls_combo_changed(GtkComboBox *combo, gpointer data) {
       if (choice != "custom") gtk_entry_set_text(GTK_ENTRY(control.entry), ftp_tls_effective_text(state->draft_store, control).c_str());
       gtk_widget_set_sensitive(control.entry, choice == "custom");
       if (control.browse) gtk_widget_set_sensitive(control.browse, choice == "custom");
-      set_entry_validation(control.entry, control.valid, control.valid ? "" : _("Enter a valid value"));
+      set_entry_validation(control.entry, control.valid, control.valid ? "" :
+          settings_rejected_input_reason(state->draft_store, make_setting_key("ftp", control.name), control.entry));
       state->synchronizing = false;
     }
     if (std::string(control.name) == "tls_mode" && state->ftp_port_valid) {
@@ -3235,7 +3274,8 @@ static void on_ftp_tls_text_changed(GtkEditable *entry, gpointer data) {
     if (control.entry != GTK_WIDGET(entry)) continue;
     const std::string text = gtk_entry_get_text(GTK_ENTRY(entry));
     control.valid = !text.empty() && set_explicit_setting_value(&state->draft_store, make_setting_key("ftp", control.name), text);
-    set_entry_validation(control.entry, control.valid, control.valid ? "" : _("Enter a valid value"));
+    set_entry_validation(control.entry, control.valid, control.valid ? "" :
+          settings_rejected_input_reason(state->draft_store, make_setting_key("ftp", control.name), control.entry));
     break;
   }
   update_ftp_tls_validation(state);
@@ -3323,13 +3363,41 @@ static void create_ftp_tls_controls(SettingsWidgetState *state, GtkWidget *page)
   gtk_grid_attach(GTK_GRID(page), state->ftp_tls_error_label, 0, row, 2, 1);
 }
 
+static void sync_theme_selector(SettingsWidgetState *state) {
+  if (!state->general_theme_combo) return;
+  auto *combo = GTK_COMBO_BOX_TEXT(state->general_theme_combo);
+  gtk_combo_box_text_remove_all(combo);
+  gtk_combo_box_text_append(combo, "", _("None"));
+  const auto selected = selected_settings_theme(state->draft_store);
+  bool found = selected.empty();
+  if (state->draft_store.theme_context) {
+    for (const auto &theme : state->draft_store.theme_context->catalog.themes) {
+      gtk_combo_box_text_append(combo, theme.id.c_str(), theme.name.c_str());
+      found = found || theme.id == selected;
+    }
+  }
+  if (!found) {
+    const auto text = std::string(_("Unresolved theme:")) + " " + selected;
+    gtk_combo_box_text_append(combo, selected.c_str(), text.c_str());
+  }
+  gtk_combo_box_set_active_id(GTK_COMBO_BOX(combo), selected.c_str());
+  state->theme_valid = found && (selected.empty() ||
+      (state->draft_store.theme_context && state->draft_store.theme_context->catalog.loaded));
+  set_settings_input_error(state->general_theme_combo,
+      !state->theme_refresh_error.empty() ? state->theme_refresh_error :
+      state->theme_valid ? "" : std::string(_("Unresolved theme:")) + " " + selected);
+}
+
 static void sync_widgets_from_draft(SettingsWidgetState *state, bool preserve_invalid_draft) {
+  sync_theme_selector(state);
   sync_connection_icon_editor(state->connection_icon_editor);
   sync_terminal_background_editor(state->terminal_background_editor, preserve_invalid_draft);
   sync_terminal_color_preview(state->terminal_color_preview);
   sync_ftp_tls_controls(state);
   sync_webdav_settings_editor(state->webdav_editor, preserve_invalid_draft);
+  sync_http_settings_editor(state->http_editor, preserve_invalid_draft);
   sync_smb_settings_editor(state->smb_editor, preserve_invalid_draft);
+  sync_nfs_settings_editor(state->nfs_editor, preserve_invalid_draft);
   sync_ssh_proxy_settings_editor(state->ssh_proxy_editor, preserve_invalid_draft);
   const TerminalDisplaySettings display =
       terminal_display_settings(state->draft_store);
@@ -3398,6 +3466,15 @@ static void sync_widgets_from_draft(SettingsWidgetState *state, bool preserve_in
   if (state->terminal_fonts_mode_combo != nullptr) {
     sync_terminal_font_controls(state);
   }
+  if (state->terminal_font_zoom_mode_combo != nullptr) {
+    const auto key = terminal_font_zoom_mode_setting_key();
+    const auto fallback = std::get<std::string>(setting_fallback_value(state->draft_store, key, std::string("preserve-grid")));
+    std::vector<ComboOption> options;
+    for (const auto *mode : {"preserve-grid", "preserve-window"}) options.push_back({mode, setting_choice_label(key, mode)});
+    populate_inheritable_combo(state->terminal_font_zoom_mode_combo, state->draft_store, key,
+        setting_choice_label(key, fallback), options,
+        setting_string_value_or_default(state->draft_store, key, "preserve-grid"));
+  }
   if (state->general_auto_close_combo != nullptr) {
     populate_boolean_combo(state->general_auto_close_combo,
                            state->draft_store,
@@ -3422,6 +3499,15 @@ static void sync_widgets_from_draft(SettingsWidgetState *state, bool preserve_in
                            terminal_accessibility_enabled_setting_key(),
                            terminal_accessibility_enabled(state->draft_store));
   }
+  for (const auto &[combo, key] : {std::pair{state->terminal_visual_bell_combo, terminal_visual_bell_setting_key()},
+      std::pair{state->general_receive_effect_combo, general_receive_effect_setting_key()}}) {
+    if (!combo) continue;
+    const auto fallback = std::get<std::string>(setting_fallback_value(state->draft_store, key, std::string("medium")));
+    std::vector<ComboOption> options;
+    for (const auto *strength : {"disabled", "weak", "medium", "strong"}) options.push_back({strength, setting_choice_label(key, strength)});
+    populate_inheritable_combo(combo, state->draft_store, key, setting_choice_label(key, fallback), options,
+        setting_string_value_or_default(state->draft_store, key, "medium"));
+  }
   if (state->terminal_block_copy_trim_trailing_spaces_combo != nullptr) {
     populate_boolean_combo(
         state->terminal_block_copy_trim_trailing_spaces_combo,
@@ -3437,13 +3523,15 @@ static void sync_widgets_from_draft(SettingsWidgetState *state, bool preserve_in
     populate_inheritable_combo(state->terminal_ambiguous_width_combo, state->draft_store, key,
         setting_choice_label(key, fallback), options, setting_string_value_or_default(state->draft_store, key, "narrow"));
   }
-  if (state->terminal_link_decoration_combo) {
-    const auto key = terminal_link_decoration_setting_key();
-    const auto fallback = std::get<std::string>(setting_fallback_value(state->draft_store, key, std::string("underline")));
+  for (const auto &[combo, key, default_value] : {
+      std::tuple{state->terminal_regex_link_decoration_combo, terminal_regex_link_decoration_setting_key(), "hover"},
+      std::tuple{state->terminal_osc8_link_decoration_combo, terminal_osc8_link_decoration_setting_key(), "underline"}}) {
+    if (!combo) continue;
+    const auto fallback = std::get<std::string>(setting_fallback_value(state->draft_store, key, std::string(default_value)));
     std::vector<ComboOption> options;
-    for (const auto *mode : {"none", "underline", "validated"}) options.push_back({mode, setting_choice_label(key, mode)});
-    populate_inheritable_combo(state->terminal_link_decoration_combo, state->draft_store, key,
-        setting_choice_label(key, fallback), options, setting_string_value_or_default(state->draft_store, key, "underline"));
+    for (const auto *mode : {"none", "underline", "hover", "validated"}) options.push_back({mode, setting_choice_label(key, mode)});
+    populate_inheritable_combo(combo, state->draft_store, key, setting_choice_label(key, fallback), options,
+        setting_string_value_or_default(state->draft_store, key, default_value));
   }
   if (state->terminal_color_filter_combo) {
     const auto key = terminal_color_filter_setting_key();
@@ -3962,6 +4050,17 @@ static void on_terminal_block_copy_trim_trailing_spaces_changed(GtkComboBox *,
   notify_changed(state);
 }
 
+static void on_titlebar_effect_changed(GtkComboBox *combo, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) return;
+  const auto key = GTK_WIDGET(combo) == state->terminal_visual_bell_combo
+      ? terminal_visual_bell_setting_key() : general_receive_effect_setting_key();
+  const auto choice = active_combo_id(GTK_WIDGET(combo), inherit_choice);
+  if (choice == inherit_choice) clear_explicit_setting_value(&state->draft_store, key);
+  else set_explicit_setting_value(&state->draft_store, key, SettingValue{choice});
+  notify_changed(state);
+}
+
 static void on_terminal_cursor_changed(GtkComboBox *combo, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   if (state->synchronizing) return;
@@ -4119,8 +4218,16 @@ static void update_terminal_font_draft(SettingsWidgetState *state) {
   std::string reason;
   state->terminal_fonts_valid = terminal_font_families_are_valid(
       state->terminal_font_draft, &reason);
-  for (const auto &row : state->terminal_font_rows) {
-    set_entry_validation(row.entry, state->terminal_fonts_valid, reason);
+  for (std::size_t index = 0; index < state->terminal_font_rows.size(); ++index) {
+    const auto &family = state->terminal_font_draft[index];
+    std::string field_reason;
+    bool valid = terminal_font_families_are_valid({family}, &field_reason);
+    if (valid && std::count_if(state->terminal_font_draft.begin(), state->terminal_font_draft.end(),
+        [&](const auto &other) { return trim_ascii_whitespace(other) == trim_ascii_whitespace(family); }) > 1) {
+      valid = false;
+      field_reason = "font family names must be non-empty and unique";
+    }
+    set_entry_validation(state->terminal_font_rows[index].entry, valid, field_reason);
   }
   const bool synchronizing = state->synchronizing;
   state->synchronizing = true;
@@ -4274,14 +4381,16 @@ static void sync_terminal_font_controls(SettingsWidgetState *state) {
   const bool global = state->mode == SettingsWidgetMode::global_defaults;
   auto *combo = state->terminal_fonts_mode_combo;
   gtk_combo_box_text_remove_all(GTK_COMBO_BOX_TEXT(combo));
-  append_combo_option(combo, inherit_choice, settings_ui_text(global
+  if (setting_fallback_source(state->draft_store, key) == SettingValueSource::theme) {
+    append_combo_option(combo, inherit_choice, setting_fallback_label(state->draft_store, key, _("Inherit")).c_str());
+  } else append_combo_option(combo, inherit_choice, settings_ui_text(global
       ? SettingsUiText::font_app_defaults
       : setting_fallback_source(state->draft_store, key) == SettingValueSource::global
           ? SettingsUiText::font_inherit_global : SettingsUiText::font_inherit_builtin));
   if (!global) append_combo_option(combo, terminal_font_default,
       settings_ui_text(SettingsUiText::font_use_app_defaults));
-  append_combo_option(combo, terminal_font_custom, settings_ui_text(global
-      ? SettingsUiText::font_specify : SettingsUiText::font_specify_connection));
+  append_combo_option(combo, terminal_font_custom, settings_ui_text(state->mode == SettingsWidgetMode::connection
+      ? SettingsUiText::font_specify_connection : SettingsUiText::font_specify));
   const auto value = std::get<std::vector<std::string>>(setting_value_or_default(
       state->draft_store, key, SettingValue{std::vector<std::string>{}}));
   gtk_combo_box_set_active_id(GTK_COMBO_BOX(combo), !setting_has_explicit_value(state->draft_store, key)
@@ -4950,6 +5059,11 @@ static void on_log_mode_changed(GtkComboBox *, gpointer data) {
 
 static void request_settings_action(SettingsWidgetState *state, SettingsWidgetApplyCallback callback) {
   if (state->action_pending || !settings_inputs_valid(state)) return;
+  if (state->mode == SettingsWidgetMode::connection && !settings_theme_inputs_unchanged(state->draft_store)) {
+    gtk_label_set_text(GTK_LABEL(state->action_message), _("Connection defaults or themes changed outside this editor. Reopen settings before applying."));
+    gtk_widget_show(state->action_message);
+    return;
+  }
   const auto draft = state->draft_store;
   const auto generation = ++state->action_generation;
   const auto owner = state->action_owner;
@@ -4999,6 +5113,20 @@ static void on_cancel_clicked(GtkButton *, gpointer data) {
   }
 }
 
+static void on_theme_changed(GtkComboBox *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) return;
+  const auto id = active_combo_id(state->general_theme_combo, "");
+  set_explicit_setting_value(&state->draft_store, general_theme_setting_key(), id);
+  if (state->draft_store.theme_context) {
+    const auto context = state->draft_store;
+    settings_widget_rebase_fallbacks(state, context);
+  } else {
+    update_action_sensitivity(state);
+    notify_changed(state);
+  }
+}
+
 static GtkWidget *create_general_page(SettingsWidgetState *state) {
   const std::string page_id = widget_id(state, "general_page");
   GtkWidget *page = create_page_grid(page_id.c_str());
@@ -5016,6 +5144,12 @@ static GtkWidget *create_general_page(SettingsWidgetState *state) {
         state->id_prefix, [state] { notify_changed(state); });
     attach_row(page, row++, general_icon_setting_key(),
         connection_icon_editor_root(state->connection_icon_editor));
+  }
+
+  if (state->mode == SettingsWidgetMode::connection) {
+    state->general_theme_combo = create_combo_box(widget_id(state, "general_theme_combo").c_str());
+    g_signal_connect(state->general_theme_combo, "changed", G_CALLBACK(on_theme_changed), state);
+    attach_row(page, row++, general_theme_setting_key(), state->general_theme_combo);
   }
 
   const std::string type_id = widget_id(state, "general_type_combo");
@@ -5167,6 +5301,10 @@ static GtkWidget *create_general_page(SettingsWidgetState *state) {
   attach_row(page, row++, general_compact_mode_setting_key(),
              state->general_compact_mode_combo);
 
+  state->general_receive_effect_combo = create_combo_box(widget_id(state, "general_receive_effect_combo").c_str());
+  g_signal_connect(state->general_receive_effect_combo, "changed", G_CALLBACK(on_titlebar_effect_changed), state);
+  attach_row(page, row++, general_receive_effect_setting_key(), state->general_receive_effect_combo);
+
   const std::string show_border_id =
       widget_id(state, "general_show_border_combo");
   state->general_show_border_combo =
@@ -5284,6 +5422,20 @@ create_terminal_pages(SettingsWidgetState *state) {
                    G_CALLBACK(on_terminal_font_size_dip_changed), state);
   attach_row(appearance_page, 1, terminal_font_size_dip_setting_key(),
              state->terminal_font_size_dip_entry);
+
+  state->terminal_font_zoom_mode_combo = create_combo_box(widget_id(state, "terminal_font_zoom_mode_combo").c_str());
+  gtk_widget_set_tooltip_text(state->terminal_font_zoom_mode_combo,
+      _("Choose whether font zoom keeps the rows and columns or the window size. Changes apply to the next zoom."));
+  g_signal_connect(state->terminal_font_zoom_mode_combo, "changed", G_CALLBACK(+[](GtkComboBox *, gpointer data) {
+    auto *state = static_cast<SettingsWidgetState *>(data);
+    if (state->synchronizing) return;
+    const auto key = terminal_font_zoom_mode_setting_key();
+    const auto choice = active_combo_id(state->terminal_font_zoom_mode_combo, inherit_choice);
+    if (choice == inherit_choice) clear_explicit_setting_value(&state->draft_store, key);
+    else set_explicit_setting_value(&state->draft_store, key, SettingValue{choice});
+    notify_changed(state);
+  }), state);
+  attach_row(appearance_page, 2, terminal_font_zoom_mode_setting_key(), state->terminal_font_zoom_mode_combo);
 
   state->terminal_bell_sound_entry =
       create_entry(widget_id(state, "terminal_bell_sound_entry"));
@@ -5444,12 +5596,12 @@ create_terminal_pages(SettingsWidgetState *state) {
   state->terminal_cursor_blink_combo = create_combo_box(widget_id(state, "terminal_cursor_blink_combo").c_str());
   for (auto *combo : {state->terminal_cursor_shape_combo, state->terminal_cursor_blink_combo})
     g_signal_connect(combo, "changed", G_CALLBACK(on_terminal_cursor_changed), state);
-  attach_row(appearance_page, 2, terminal_cursor_shape_setting_key(), state->terminal_cursor_shape_combo);
-  attach_row(appearance_page, 3, terminal_cursor_blink_setting_key(), state->terminal_cursor_blink_combo);
+  attach_row(appearance_page, 3, terminal_cursor_shape_setting_key(), state->terminal_cursor_shape_combo);
+  attach_row(appearance_page, 4, terminal_cursor_blink_setting_key(), state->terminal_cursor_blink_combo);
   auto *labels = gtk_size_group_new(GTK_SIZE_GROUP_HORIZONTAL);
   state->terminal_background_editor = create_terminal_background_editor(&state->draft_store, state->id_prefix,
       labels, [state] { notify_changed(state); });
-  gtk_grid_attach(GTK_GRID(appearance_page), terminal_background_editor_root(state->terminal_background_editor), 0, 4, 2, 1);
+  gtk_grid_attach(GTK_GRID(appearance_page), terminal_background_editor_root(state->terminal_background_editor), 0, 5, 2, 1);
   state->terminal_color_filter_combo = create_combo_box(widget_id(state, "terminal_color_filter_combo").c_str());
   gtk_widget_set_tooltip_text(state->terminal_color_filter_combo,
       _("Choose a visibility correction or a background reversal. Only one color filter is applied."));
@@ -5462,7 +5614,7 @@ create_terminal_pages(SettingsWidgetState *state) {
     else set_explicit_setting_value(&state->draft_store, key, SettingValue{choice});
     notify_changed(state);
   }), state);
-  attach_row(appearance_page, 5, terminal_color_filter_setting_key(), state->terminal_color_filter_combo);
+  attach_row(appearance_page, 6, terminal_color_filter_setting_key(), state->terminal_color_filter_combo);
   state->terminal_color_vision_combo = create_combo_box(widget_id(state, "terminal_color_vision_combo").c_str());
   gtk_widget_set_tooltip_text(state->terminal_color_vision_combo,
       _("Recolor text, explicit cell backgrounds and markers to help distinguish colors. Choose the setting that works for you."));
@@ -5475,7 +5627,7 @@ create_terminal_pages(SettingsWidgetState *state) {
     else set_explicit_setting_value(&state->draft_store, key, SettingValue{choice});
     notify_changed(state);
   }), state);
-  attach_row(appearance_page, 6, terminal_color_vision_setting_key(), state->terminal_color_vision_combo);
+  attach_row(appearance_page, 7, terminal_color_vision_setting_key(), state->terminal_color_vision_combo);
   state->terminal_color_vision_strength_entry = create_entry(widget_id(state, "terminal_color_vision_strength_entry"));
   gtk_widget_set_tooltip_text(state->terminal_color_vision_strength_entry,
       _("0 disables recoloring; 100 is the strongest adjustment. This value does not measure your color vision."));
@@ -5485,21 +5637,13 @@ create_terminal_pages(SettingsWidgetState *state) {
     update_terminal_color_vision_strength(state);
     notify_changed(state);
   }), state);
-  attach_row(appearance_page, 7, terminal_color_vision_strength_setting_key(), state->terminal_color_vision_strength_entry);
-  state->terminal_link_decoration_combo = create_combo_box(widget_id(state, "terminal_link_decoration_combo").c_str());
-  g_signal_connect(state->terminal_link_decoration_combo, "changed", G_CALLBACK(+[](GtkComboBox *, gpointer data) {
-    auto *state = static_cast<SettingsWidgetState *>(data);
-    if (state->synchronizing) return;
-    const auto key = terminal_link_decoration_setting_key();
-    const auto choice = active_combo_id(state->terminal_link_decoration_combo, inherit_choice);
-    if (choice == inherit_choice) clear_explicit_setting_value(&state->draft_store, key);
-    else set_explicit_setting_value(&state->draft_store, key, SettingValue{choice});
-    notify_changed(state);
-  }), state);
-  attach_row(appearance_page, 8, terminal_link_decoration_setting_key(), state->terminal_link_decoration_combo);
+  attach_row(appearance_page, 8, terminal_color_vision_strength_setting_key(), state->terminal_color_vision_strength_entry);
+  state->terminal_visual_bell_combo = create_combo_box(widget_id(state, "terminal_visual_bell_combo").c_str());
+  g_signal_connect(state->terminal_visual_bell_combo, "changed", G_CALLBACK(on_titlebar_effect_changed), state);
+  attach_row(appearance_page, 10, terminal_visual_bell_setting_key(), state->terminal_visual_bell_combo);
   state->terminal_color_preview = create_terminal_color_preview(&state->draft_store, state->id_prefix);
   gtk_grid_attach(GTK_GRID(appearance_page), terminal_color_preview_root(state->terminal_color_preview), 0, 9, 2, 1);
-  for (int row = 0; row <= 8; row++) {
+  for (int row = 0; row <= 10; row++) {
     auto *label = gtk_grid_get_child_at(GTK_GRID(appearance_page), 0, row);
     if (GTK_IS_LABEL(label)) gtk_size_group_add_widget(labels, label);
   }
@@ -5561,7 +5705,9 @@ static void update_ip_scan_result(
                      ip_scan_webdav_http_column,
                      ip_scan_check_mark_for_port(entry.open_ports, 80),
                      ip_scan_smb_column,
-                     ip_scan_check_mark_for_port(entry.open_ports, 445), -1);
+                     ip_scan_check_mark_for_port(entry.open_ports, 445),
+                     ip_scan_nfs_column,
+                     ip_scan_check_mark_for_port(entry.open_ports, 2049), -1);
 }
 
 static void update_ip_scan_progress(
@@ -5745,7 +5891,7 @@ create_ip_scan_dialog(SettingsWidgetState *state, GtkWidget *target_entry) {
   GtkListStore *result_store = gtk_list_store_new(
       ip_scan_result_column_count, G_TYPE_STRING, G_TYPE_STRING,
       G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING,
-      G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING);
+      G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_STRING);
   GtkWidget *results =
       gtk_tree_view_new_with_model(GTK_TREE_MODEL(result_store));
   dialog_state->results = results;
@@ -5782,6 +5928,9 @@ create_ip_scan_dialog(SettingsWidgetState *state, GtkWidget *target_entry) {
   append_ip_scan_column(GTK_TREE_VIEW(results),
                         settings_ui_text(SettingsUiText::smb_port_column),
                         ip_scan_smb_column, false);
+  append_ip_scan_column(GTK_TREE_VIEW(results),
+                        settings_ui_text(SettingsUiText::nfs_port_column),
+                        ip_scan_nfs_column, false);
   g_signal_connect(results, "row-activated",
                    G_CALLBACK(on_ip_scan_result_activated),
                    dialog_state.get());
@@ -6443,6 +6592,26 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   auto *state = new SettingsWidgetState();
   state->applied_store = options.store;
   state->draft_store = std::move(options.store);
+  if (options.is_runtime && state->draft_store.theme_context &&
+      !state->draft_store.theme_context->global_path.empty()) {
+    const auto previous = state->draft_store.theme_context;
+    const auto global = load_global_settings(previous->global_path, 12.0);
+    if (!global.loaded) {
+      state->theme_refresh_error = _("Failed to reload connection defaults");
+    } else {
+      auto context = std::make_shared<SettingsThemeContext>();
+      context->global = global.store;
+      context->global_path = previous->global_path;
+      context->theme_path = previous->theme_path;
+      context->catalog = context->theme_path.empty() ? previous->catalog : load_settings_themes(context->theme_path, context->global);
+      rebase_settings_theme(&state->draft_store, context);
+      for (std::size_t index = 0; index < state->draft_store.entries.size(); ++index) {
+        auto &entry = state->draft_store.entries[index];
+        if (entry.value != state->applied_store.entries[index].value ||
+            entry.validation_error != state->applied_store.entries[index].validation_error) entry.dirty = true;
+      }
+    }
+  }
   state->mode = options.mode;
   state->id_prefix =
       options.id_prefix.empty() ? std::string("settings")
@@ -6460,6 +6629,10 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   assign_accessible_id(state->root, root_id.c_str());
 
   state->notebook = gtk_notebook_new();
+  // Global defaults include every protocol. Keep the added HTTP tab from
+  // forcing the dialog wider than the screen and hiding its action buttons.
+  gtk_notebook_set_scrollable(GTK_NOTEBOOK(state->notebook),
+      state->mode != SettingsWidgetMode::connection);
   const std::string notebook_id = widget_id(state, "notebook");
   assign_accessible_id(state->notebook, notebook_id.c_str());
   gtk_widget_set_vexpand(state->notebook, TRUE);
@@ -6591,7 +6764,10 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   gtk_scrolled_window_set_propagate_natural_height(GTK_SCROLLED_WINDOW(webdav_page), FALSE);
   assign_accessible_id(gtk_scrolled_window_get_vscrollbar(GTK_SCROLLED_WINDOW(webdav_page)),
       widget_id(state, "webdav_page_scrollbar").c_str());
-  gtk_container_add(GTK_CONTAINER(webdav_page), webdav_settings_editor_root(state->webdav_editor));
+  // Keep the editor's outer spacing inside a painted scrollable surface.
+  GtkWidget *webdav_surface = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  gtk_container_add(GTK_CONTAINER(webdav_surface), webdav_settings_editor_root(state->webdav_editor));
+  gtk_container_add(GTK_CONTAINER(webdav_page), webdav_surface);
   GtkWidget *webdav_tab = create_tab_label(
       "WebDAV",
       widget_id(state, "webdav_tab").c_str());
@@ -6603,8 +6779,35 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   state->connection_pages.push_back({
       .connection_types = {webdav_connection_type}, .page = webdav_page, .tab_label = webdav_tab});
 
+  state->http_editor = create_http_settings_editor(
+      &state->draft_store, state->id_prefix, state->is_runtime, [state] {
+        update_action_sensitivity(state);
+        notify_changed(state);
+      });
+  GtkWidget *http_page = gtk_scrolled_window_new(nullptr, nullptr);
+  assign_accessible_id(http_page, widget_id(state, "http_page").c_str());
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(http_page), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+  gtk_scrolled_window_set_overlay_scrolling(GTK_SCROLLED_WINDOW(http_page), FALSE);
+  gtk_scrolled_window_set_propagate_natural_height(GTK_SCROLLED_WINDOW(http_page), FALSE);
+  assign_accessible_id(gtk_scrolled_window_get_vscrollbar(GTK_SCROLLED_WINDOW(http_page)),
+      widget_id(state, "http_page_scrollbar").c_str());
+  GtkWidget *http_surface = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  gtk_container_add(GTK_CONTAINER(http_surface), http_settings_editor_root(state->http_editor));
+  gtk_container_add(GTK_CONTAINER(http_page), http_surface);
+  GtkWidget *http_tab = create_tab_label(
+      "HTTP/HTTPS",
+      widget_id(state, "http_tab").c_str());
+  gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), http_page, http_tab);
+  gtk_widget_show_all(http_page);
+  gtk_widget_show_all(http_tab);
+  gtk_widget_set_no_show_all(http_page, TRUE);
+  gtk_widget_set_no_show_all(http_tab, TRUE);
+  state->connection_pages.push_back({
+      .connection_types = {http_connection_type}, .page = http_page, .tab_label = http_tab});
+
   state->smb_editor = create_smb_settings_editor(
       &state->draft_store, state->id_prefix, state->is_runtime, [state] {
+        sync_ssh_proxy_settings_editor(state->ssh_proxy_editor, true);
         update_action_sensitivity(state);
         notify_changed(state);
       }, [state](GtkWidget *entry) {
@@ -6628,9 +6831,37 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   state->connection_pages.push_back({
       .connection_types = {smb_connection_type}, .page = smb_page, .tab_label = smb_tab});
 
+  state->nfs_editor = create_nfs_settings_editor(
+      &state->draft_store, state->id_prefix, state->is_runtime, [state] {
+        sync_ssh_proxy_settings_editor(state->ssh_proxy_editor, true);
+        update_action_sensitivity(state);
+        notify_changed(state);
+      }, [state](GtkWidget *entry) {
+        return create_ip_scan_address_row(
+            state, entry, "nfs_ip_scan_button",
+            state->is_runtime ? FALSE : TRUE);
+      });
+  auto *nfs_page = gtk_scrolled_window_new(nullptr, nullptr);
+  assign_accessible_id(nfs_page, widget_id(state, "nfs_page").c_str());
+  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(nfs_page), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+  gtk_scrolled_window_set_overlay_scrolling(GTK_SCROLLED_WINDOW(nfs_page), FALSE);
+  assign_accessible_id(gtk_scrolled_window_get_vscrollbar(GTK_SCROLLED_WINDOW(nfs_page)),
+      widget_id(state, "nfs_page_scrollbar").c_str());
+  auto *nfs_surface = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  gtk_container_add(GTK_CONTAINER(nfs_surface), nfs_settings_editor_root(state->nfs_editor));
+  gtk_container_add(GTK_CONTAINER(nfs_page), nfs_surface);
+  auto *nfs_tab = create_tab_label("NFS", widget_id(state, "nfs_tab").c_str());
+  gtk_notebook_append_page(GTK_NOTEBOOK(state->notebook), nfs_page, nfs_tab);
+  gtk_widget_show_all(nfs_page);
+  gtk_widget_show_all(nfs_tab);
+  gtk_widget_set_no_show_all(nfs_page, TRUE);
+  gtk_widget_set_no_show_all(nfs_tab, TRUE);
+  state->connection_pages.push_back({
+      .connection_types = {nfs_connection_type}, .page = nfs_page, .tab_label = nfs_tab});
+
   state->ssh_proxy_editor = create_ssh_proxy_settings_editor(
       &state->draft_store, state->id_prefix, state->is_runtime,
-      state->mode == SettingsWidgetMode::global_defaults, [state] {
+      state->mode != SettingsWidgetMode::connection, [state] {
         update_action_sensitivity(state);
         notify_changed(state);
       });
@@ -6648,7 +6879,7 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
   gtk_widget_set_no_show_all(proxy_page, TRUE);
   gtk_widget_set_no_show_all(proxy_tab, TRUE);
   state->connection_pages.push_back({
-      .connection_types = {telnet_connection_type, ssh_connection_type, sftp_connection_type, webdav_connection_type, ftp_connection_type, smb_connection_type}, .page = proxy_page, .tab_label = proxy_tab});
+      .connection_types = {telnet_connection_type, ssh_connection_type, sftp_connection_type, webdav_connection_type, http_connection_type, ftp_connection_type, smb_connection_type, nfs_connection_type}, .page = proxy_page, .tab_label = proxy_tab});
 
   auto [terminal_page, terminal_appearance_page] = create_terminal_pages(state);
   const std::string terminal_tab_id = widget_id(state, "terminal_tab");
@@ -6738,17 +6969,42 @@ SettingsWidgetState *create_settings_widget(SettingsWidgetOptions options) {
         .page = macro_page,
         .tab_label = macro_tab,
     });
+  }
 
-    state->hyperlink_editor = create_hyperlink_settings_editor({
-        .store = &state->draft_store,
-        .id_prefix = state->id_prefix,
-        .changed = [state]() {
-          update_action_sensitivity(state);
-          notify_changed(state);
-        },
-    });
-    GtkWidget *link_page =
-        hyperlink_settings_editor_root(state->hyperlink_editor);
+  {
+    GtkWidget *link_page = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    assign_accessible_id(link_page, widget_id(state, "link_page").c_str());
+    GtkWidget *preferences = create_page_grid(widget_id(state, "link_display_page").c_str());
+    state->terminal_regex_link_decoration_combo = create_combo_box(widget_id(state, "terminal_regex_link_decoration_combo").c_str());
+    state->terminal_osc8_link_decoration_combo = create_combo_box(widget_id(state, "terminal_osc8_link_decoration_combo").c_str());
+    int row = 0;
+    for (const auto &[combo, key] : {
+        std::pair{state->terminal_regex_link_decoration_combo, terminal_regex_link_decoration_setting_key()},
+        std::pair{state->terminal_osc8_link_decoration_combo, terminal_osc8_link_decoration_setting_key()}}) {
+      attach_row(preferences, row++, key, combo);
+      g_signal_connect(combo, "changed", G_CALLBACK(+[](GtkComboBox *combo, gpointer data) {
+        auto *state = static_cast<SettingsWidgetState *>(data);
+        if (state->synchronizing) return;
+        const auto key = GTK_WIDGET(combo) == state->terminal_regex_link_decoration_combo ?
+            terminal_regex_link_decoration_setting_key() : terminal_osc8_link_decoration_setting_key();
+        const auto choice = active_combo_id(GTK_WIDGET(combo), inherit_choice);
+        if (choice == inherit_choice) clear_explicit_setting_value(&state->draft_store, key);
+        else set_explicit_setting_value(&state->draft_store, key, SettingValue{choice});
+        notify_changed(state);
+      }), state);
+    }
+    gtk_box_pack_start(GTK_BOX(link_page), preferences, FALSE, FALSE, 0);
+    if (state->mode == SettingsWidgetMode::connection) {
+      state->hyperlink_editor = create_hyperlink_settings_editor({
+          .store = &state->draft_store,
+          .id_prefix = state->id_prefix,
+          .changed = [state]() {
+            update_action_sensitivity(state);
+            notify_changed(state);
+          },
+      });
+      gtk_box_pack_start(GTK_BOX(link_page), hyperlink_settings_editor_root(state->hyperlink_editor), TRUE, TRUE, 0);
+    }
     const std::string link_tab_id = widget_id(state, "link_tab");
     GtkWidget *link_tab = create_tab_label(
         settings_ui_text(SettingsUiText::links_tab),
@@ -6874,8 +7130,13 @@ void settings_widget_rebase_fallbacks(
     if (!control.valid && control.entry)
       invalid_tls_text.emplace_back(control.name, entry_text(control.entry));
 
-  rebase_settings_store_fallbacks(&state->applied_store, fallbacks);
-  rebase_settings_store_fallbacks(&state->draft_store, fallbacks);
+  if (state->mode == SettingsWidgetMode::connection && fallbacks.theme_context) {
+    rebase_settings_theme(&state->applied_store, fallbacks.theme_context);
+    rebase_settings_theme(&state->draft_store, fallbacks.theme_context);
+  } else {
+    rebase_settings_store_fallbacks(&state->applied_store, fallbacks);
+    rebase_settings_store_fallbacks(&state->draft_store, fallbacks);
+  }
   state->synchronizing = true;
   sync_widgets_from_draft(state, true);
 
@@ -7055,7 +7316,9 @@ void destroy_settings_widget(SettingsWidgetState *state) {
       state->general_open_connection_input);
   destroy_hyperlink_settings_editor(state->hyperlink_editor);
   destroy_webdav_settings_editor(state->webdav_editor);
+  destroy_http_settings_editor(state->http_editor);
   destroy_smb_settings_editor(state->smb_editor);
+  destroy_nfs_settings_editor(state->nfs_editor);
   destroy_ssh_proxy_settings_editor(state->ssh_proxy_editor);
   if (state->root != nullptr && gtk_widget_get_parent(state->root) == nullptr) {
     gtk_widget_destroy(state->root);

@@ -25,7 +25,11 @@ import { describe, expect, it } from 'vitest';
 import { waitForResult, toPass } from 'gestament/testing';
 import type { PNG as PngImage } from 'pngjs';
 import { waitForActivityIndicatorImageState } from './activity-indicator-test-helpers';
-import { expectCaptureToMatchFixture, expectElementKind } from './test-helpers';
+import {
+  withTemporaryDirectory,
+  expectCaptureToMatchFixture,
+  expectElementKind,
+} from '../../shared/tests/connection-test-helpers.ts';
 import {
   assertTerminalTextGridMatches,
   defaultColumns,
@@ -50,7 +54,6 @@ import {
   terminalTextGrid81x25Path,
   terminalFont145ConfigPath,
   telnetLocalhostConfigPath,
-  withTemporaryDirectory,
 } from './gtk-test-helpers';
 
 const require = createRequire(import.meta.url);
@@ -750,6 +753,320 @@ const connectionStatusTextMask = async (
 };
 
 describe.concurrent('elder-terms-terminal settings', () => {
+  for (const backend of ['cairo', 'opengl']) {
+    it(`applies and clears the font zoom mode without changing current geometry (${backend})`, async (context) => {
+      await withTemporaryDirectory(async (directory) => {
+        const configPath = join(directory, 'zoom-mode.ini');
+        await writeFile(configPath, '[general]\nname=Zoom mode\n');
+        const options = {
+          globalSettings: '[terminal]\nfont_zoom_mode=preserve-window\n',
+          env: {
+            LIBGL_ALWAYS_SOFTWARE: '1',
+            ...(backend === 'cairo' ? { GDK_GL: 'disable' } : {}),
+          },
+        };
+        await runGtkTest(
+          context,
+          ['--test-fixture', '-c', configPath],
+          async (app, evidence) => {
+            const initial = await waitForResult(() =>
+              readWindowCellLayout(app)
+            );
+            await pressKeyWithModifiers(app, ['control'], 'equal');
+            const enlarged = await waitForResult(async () => {
+              const layout = await readWindowCellLayout(app);
+              expect(layout.fontSizeDip).toBeGreaterThan(initial.fontSizeDip);
+              expect(layout.mainBounds).toEqual(initial.mainBounds);
+              return layout;
+            });
+            await openSettingsDialog(app);
+            await showTerminalAppearanceSettingsPage(app);
+            const mode = expectElementKind(
+              await app.getById('settings_terminal_font_zoom_mode_combo'),
+              'comboBox'
+            );
+            await expectSelectedComboValue(
+              app,
+              'settings_terminal_font_zoom_mode_combo',
+              'Keep window size (global default)'
+            );
+            await mode.selectChildAt(1);
+            await expectElementKind(
+              await app.getById('settings_cancel_button'),
+              'button'
+            ).click();
+            await expectSettingsDialogClosed(app);
+            await openSettingsDialog(app);
+            await showTerminalAppearanceSettingsPage(app);
+            await expectSelectedComboValue(
+              app,
+              'settings_terminal_font_zoom_mode_combo',
+              'Keep window size (global default)'
+            );
+            await expectElementKind(
+              await app.getById('settings_terminal_font_zoom_mode_combo'),
+              'comboBox'
+            ).selectChildAt(1);
+            await evidence.captureEvidence(
+              'font-zoom-mode-settings',
+              async () => (await app.getById('settings_dialog')).capture()
+            );
+            await expectElementKind(
+              await app.getById('settings_apply_button'),
+              'button'
+            ).click();
+            await closeSettingsDialogAfterApply(app);
+            const applied = await waitForResult(() =>
+              readWindowCellLayout(app)
+            );
+            expect(applied.mainBounds).toEqual(enlarged.mainBounds);
+            expect(applied.fontSizeDip).toBe(enlarged.fontSizeDip);
+            expect([applied.columns, applied.rows]).toEqual([
+              enlarged.columns,
+              enlarged.rows,
+            ]);
+            expect(await readFile(configPath, 'utf8')).not.toContain(
+              'font_zoom_mode'
+            );
+            await pressKeyWithModifiers(app, ['control'], 'equal');
+            const gridZoom = await waitForResult(async () => {
+              const layout = await readWindowCellLayout(app);
+              expect(layout.fontSizeDip).toBeGreaterThan(applied.fontSizeDip);
+              expect([layout.columns, layout.rows]).toEqual([
+                applied.columns,
+                applied.rows,
+              ]);
+              expect(layout.mainBounds).not.toEqual(applied.mainBounds);
+              return layout;
+            });
+            await openSettingsDialog(app);
+            await showTerminalAppearanceSettingsPage(app);
+            await expectElementKind(
+              await app.getById('settings_terminal_font_zoom_mode_combo'),
+              'comboBox'
+            ).selectChildAt(0);
+            await expectElementKind(
+              await app.getById('settings_save_button'),
+              'button'
+            ).click();
+            await expectSettingsDialogClosed(app);
+            const saved = await waitForResult(() => readWindowCellLayout(app));
+            expect(saved.mainBounds).toEqual(gridZoom.mainBounds);
+            expect(saved.fontSizeDip).toBe(gridZoom.fontSizeDip);
+            expect(await readFile(configPath, 'utf8')).not.toContain(
+              'font_zoom_mode'
+            );
+          },
+          options
+        );
+        await runGtkTest(
+          context,
+          ['--test-fixture', '-c', configPath],
+          async (app) => {
+            const initial = await waitForResult(() =>
+              readWindowCellLayout(app)
+            );
+            await pressKeyWithModifiers(app, ['control'], 'minus');
+            await waitForResult(async () => {
+              const layout = await readWindowCellLayout(app);
+              expect(layout.fontSizeDip).toBeLessThan(initial.fontSizeDip);
+              expect(layout.mainBounds).toEqual(initial.mainBounds);
+              expect(layout.rows).toBeGreaterThanOrEqual(initial.rows);
+              expect(layout.columns).toBeGreaterThanOrEqual(initial.columns);
+              expect([layout.columns, layout.rows]).not.toEqual([
+                initial.columns,
+                initial.rows,
+              ]);
+            });
+          },
+          options
+        );
+      });
+    });
+  }
+
+  it('applies and cancels independent link displays on the Links page', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const peer = join(directory, 'links.mjs');
+      const config = join(directory, 'links.ini');
+      const target = 'https://example.test/';
+      const fixture =
+        '\x1b[?25l' +
+        target +
+        '\r\n\x1b]8;;' +
+        target +
+        '\x1b\\' +
+        target +
+        '\x1b]8;;\x1b\\';
+      await writeFile(
+        peer,
+        'process.stdin.setRawMode(true); process.stdin.resume(); process.stdout.write(' +
+          JSON.stringify(fixture) +
+          ');'
+      );
+      const settings =
+        '[local]\ncommand_line=' + process.execPath + ' ' + peer + '\n';
+      await writeFile(config, settings);
+      await runGtkTest(context, ['-c', config], async (app, evidence) => {
+        const terminal = await app.getById('terminal_view');
+        const layout = await readWindowCellLayout(app);
+        const { bounds } = await terminal.capture();
+        await app.input.moveMouseTo(
+          Math.trunc(bounds.x + 3 * layout.cellWidth),
+          Math.trunc(bounds.y + 5 * layout.cellHeight)
+        );
+        const rowPixels = (frame: PngImage, row: number): Buffer => {
+          const rows: Buffer[] = [];
+          for (
+            let y = row * layout.cellHeight;
+            y < (row + 1) * layout.cellHeight;
+            y++
+          ) {
+            const start = y * frame.width * 4;
+            rows.push(
+              frame.data.subarray(
+                start,
+                start + target.length * layout.cellWidth * 4
+              )
+            );
+          }
+          return Buffer.concat(rows);
+        };
+        const initial = await waitForResult(async () => {
+          const frame = PNG.sync.read((await terminal.capture()).image);
+          const plain = rowPixels(frame, 0);
+          const underlined = rowPixels(frame, 1);
+          expect(plain).not.toEqual(underlined);
+          return { plain, underlined };
+        });
+        const checkRows = async (regex: Buffer, osc8: Buffer) => {
+          await toPass(async () => {
+            const frame = PNG.sync.read((await terminal.capture()).image);
+            expect(rowPixels(frame, 0)).toEqual(regex);
+            expect(rowPixels(frame, 1)).toEqual(osc8);
+          });
+        };
+        const regexId = 'settings_terminal_regex_link_decoration_combo';
+        const osc8Id = 'settings_terminal_osc8_link_decoration_combo';
+        await openSettingsDialog(app);
+        await showTerminalAppearanceSettingsPage(app);
+        expect(
+          (await (await app.getById(regexId)).info()).states
+        ).not.toContain('showing');
+        const appearance = await (
+          await app.getById('settings_dialog')
+        ).capture();
+        await app.input.moveMouseTo(
+          appearance.bounds.x + 10,
+          appearance.bounds.y + 110
+        );
+        await app.input.scrollWheel(0, 80);
+        await expectElementKind(
+          await app.getById('settings_terminal_color_preview'),
+          'expander'
+        ).click();
+        await app.input.scrollWheel(0, 80);
+        await toPass(async () =>
+          expect(
+            (
+              await (
+                await app.getById('settings_terminal_color_preview_after')
+              ).info()
+            ).states
+          ).toContain('showing')
+        );
+        await expectSelectedComboValue(
+          app,
+          'settings_terminal_color_vision_combo',
+          'No correction (built-in default)'
+        );
+        await evidence.captureEvidence('appearance-color-preview', async () =>
+          app.capture()
+        );
+        await selectSettingsNotebookTab(app, 'Links', regexId);
+        await expectSelectedComboValue(
+          app,
+          regexId,
+          'Underline on hover (built-in default)'
+        );
+        await expectSelectedComboValue(
+          app,
+          osc8Id,
+          'Always underline (built-in default)'
+        );
+        await evidence.captureEvidence(
+          'independent-link-display-settings',
+          async () => app.capture()
+        );
+        await expectElementKind(
+          await app.getById(regexId),
+          'comboBox'
+        ).selectChildAt(2);
+        await expectSelectedComboValue(
+          app,
+          osc8Id,
+          'Always underline (built-in default)'
+        );
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        await closeSettingsDialogAfterApply(app);
+        await checkRows(initial.underlined, initial.underlined);
+
+        await openSettingsDialog(app);
+        await selectSettingsNotebookTab(app, 'Links', regexId);
+        await expectSelectedComboValue(app, regexId, 'Always underline');
+        await expectElementKind(
+          await app.getById(osc8Id),
+          'comboBox'
+        ).selectChildAt(1);
+        await expectElementKind(
+          await app.getById('settings_cancel_button'),
+          'button'
+        ).click();
+        await checkRows(initial.underlined, initial.underlined);
+
+        await openSettingsDialog(app);
+        await selectSettingsNotebookTab(app, 'Links', osc8Id);
+        await expectSelectedComboValue(
+          app,
+          osc8Id,
+          'Always underline (built-in default)'
+        );
+        await expectElementKind(
+          await app.getById(osc8Id),
+          'comboBox'
+        ).selectChildAt(1);
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        await closeSettingsDialogAfterApply(app);
+        await checkRows(initial.underlined, initial.plain);
+
+        await openSettingsDialog(app);
+        await selectSettingsNotebookTab(app, 'Links', regexId);
+        await expectElementKind(
+          await app.getById(regexId),
+          'comboBox'
+        ).selectChildAt(0);
+        await expectSelectedComboValue(app, osc8Id, 'No decoration');
+        await expectElementKind(
+          await app.getById(osc8Id),
+          'comboBox'
+        ).selectChildAt(0);
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        await closeSettingsDialogAfterApply(app);
+        await checkRows(initial.plain, initial.underlined);
+        await expectConnectionIdentityOnly(config, settings);
+      });
+    });
+  });
+
   for (const backend of ['cairo', 'opengl']) {
     // Two application launches and three settings dialogs need more than the
     // default minute when the full UI suite shares the host.
@@ -2099,6 +2416,10 @@ describe.concurrent('elder-terms-terminal settings', () => {
                 capturePixel(await generalTab.capture(), 0.1, 0.5)
               ).toEqual(componentBackground);
             });
+            await evidence.captureEvidence(
+              'connection-colors-settings-tabs',
+              async () => (await app.getById('settings_dialog')).capture()
+            );
             const generalTabCapture = await generalTab.capture();
             expect(capturePixel(generalTabCapture, 0.5, 0.15)).toEqual(
               componentBackground

@@ -53,6 +53,7 @@ await run(
     join(root, 'scripts/prepare-boxrig.mts'),
     join(root, 'scripts/prepare-jemalloc.mts'),
     join(root, 'scripts/prepare-libsmb2.mts'),
+    join(root, 'scripts/prepare-libdsm.mts'),
     '--module',
     'NodeNext',
     '--target',
@@ -75,7 +76,7 @@ await run(
     'tools/codegen/rules.mk',
     'package-codegen',
     `BUILD_DIR=${join(output, 'boxrig')}`,
-    'BOXRIG_VERSION=0.12.0',
+    'BOXRIG_VERSION=0.13.0',
   ],
   upstream
 );

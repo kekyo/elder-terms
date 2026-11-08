@@ -76,6 +76,8 @@ struct TerminalConnectionState {
   bool carrier_connected = true;
   /** Carrier drops in this generation, including drops restored before a frame. */
   std::uint64_t carrier_losses = 0;
+  /** Received bytes currently belong to a reserved binary transfer, not terminal text. */
+  bool binary_receive = false;
   /** Largest observed application receive queue occupancy. */
   std::size_t receive_peak = 0;
   /** Largest observed application send queue occupancy. */

@@ -18,12 +18,14 @@ if package_build_tools == ''
   boxrig_prepare = files('scripts/prepare-boxrig.mts')
   jemalloc_prepare = files('scripts/prepare-jemalloc.mts')
   libsmb2_prepare = files('scripts/prepare-libsmb2.mts')
+  libdsm_prepare = files('scripts/prepare-libdsm.mts')
   gestament_config = find_program(meson.project_source_root() / 'node_modules/.bin/gestament-config')
   gestament_include_dir = run_command(gestament_config, '--includedir', check: true).stdout().strip()
 else
   boxrig_prepare = package_build_tools / 'prepare-boxrig.mjs'
   jemalloc_prepare = package_build_tools / 'prepare-jemalloc.mjs'
   libsmb2_prepare = package_build_tools / 'prepare-libsmb2.mjs'
+  libdsm_prepare = package_build_tools / 'prepare-libdsm.mjs'
   gestament_include_dir = package_build_tools / 'include'
 endif
 
@@ -140,7 +142,7 @@ install_data(
   'deps/boxrig/deps/utf8proc/LICENSE.md',
   'deps/boxrig/deps/libpng/LICENSE',
   'deps/boxrig/deps/zlib/LICENSE',
-  'deps/boxrig/resources/unicode/17.0.0/LICENSE.txt',
+  'deps/boxrig/resources/unicode/18.0.0/LICENSE.txt',
   'deps/boxrig/data/encoding/whatwg/LICENSE',
   rename: ['LICENSE', 'README.md', 'README_ja.md', 'sources.json',
     'utf8proc-LICENSE.md', 'libpng-LICENSE', 'zlib-LICENSE',
@@ -175,18 +177,44 @@ custom_target('libsmb2-private-runtime',
   depends: libsmb2_build_target, build_by_default: true,
   install: true, install_dir: elder_terms_private_install_dir)
 custom_target('libsmb2-license-bundle',
-  output: ['COPYING', 'LICENCE-LGPL-2.1.txt', 'libsmb2-source.tar.gz'],
+  output: ['COPYING', 'LICENCE-LGPL-2.1.txt', 'libsmb2-source.tar.xz'],
   command: [find_program('cp'),
     meson.project_source_root() / 'deps/libsmb2/COPYING',
     meson.project_source_root() / 'deps/libsmb2/LICENCE-LGPL-2.1.txt',
-    libsmb2_sdk / 'libsmb2-source.tar.gz', '@OUTDIR@'],
+    libsmb2_sdk / 'libsmb2-source.tar.xz', '@OUTDIR@'],
   depends: libsmb2_build_target, build_by_default: true,
   install: true,
   install_dir: get_option('datadir') / 'doc/elder-terms/licenses/libsmb2')
 
+libdsm_prepare_args = [boxrig_node, libdsm_prepare,
+  meson.project_source_root(), meson.project_build_root()]
+run_command(libdsm_prepare_args, check: true)
+libdsm_build_target = custom_target('libdsm-build',
+  output: 'libdsm-build.stamp', command: libdsm_prepare_args,
+  build_by_default: true, build_always_stale: true)
+libdsm_sdk = meson.project_build_root() / 'libdsm/sdk'
+libdsm_runtime_target = custom_target('libdsm-private-runtime',
+  output: 'libdsm.so.3',
+  command: [find_program('cp'), libdsm_sdk / 'lib/libdsm.so.3', '@OUTPUT@'],
+  depends: libdsm_build_target, build_by_default: true,
+  install: true, install_dir: elder_terms_private_install_dir)
+libdsm_dep = declare_dependency(
+  compile_args: ['-isystem', libdsm_sdk / 'include'],
+  dependencies: meson.get_compiler('cpp').find_library('dsm',
+    dirs: libdsm_sdk / 'lib', static: false),
+  sources: [libdsm_build_target, libdsm_runtime_target])
+custom_target('libdsm-source-bundle',
+  output: 'libdsm-source.tar.xz',
+  command: [find_program('cp'), libdsm_sdk / 'libdsm-source.tar.xz', '@OUTPUT@'],
+  depends: libdsm_build_target, build_by_default: true,
+  install: true, install_dir: get_option('datadir') / 'doc/elder-terms/licenses/libdsm')
+install_data('deps/libdsm/COPYING', 'patches/libdsm-correctness.patch',
+  install_dir: get_option('datadir') / 'doc/elder-terms/licenses/libdsm')
+
 cardio_root_dir = meson.project_source_root() / 'deps/cardio'
 cardio_include_dir = include_directories('deps/cardio/include')
 cardio_gio_dep = dependency('gio-2.0')
+nfs_dep = dependency('libnfs', version: '>=5.0.2')
 cardio_liburing_dep = dependency('liburing')
 cardio_cpp_args = [
   '-DCARDIO_SHARED_LIB=1',
@@ -224,6 +252,7 @@ cardio_dep = declare_dependency(
 
 subdir('shared')
 subdir('elder-terms')
+subdir('elder-terms-file-transfer')
 subdir('elder-terms-terminal')
 subdir('po')
 
@@ -238,13 +267,44 @@ install_data(
 
 foreach language : ['ja', 'en']
   install_data(
+    'docs' / language / 'building.md',
+    'docs' / language / 'configuration.md',
+    'docs' / language / 'connection-icons.md',
+    'docs' / language / 'hotkeys.md',
+    'docs' / language / 'terminal-links.md',
+    'docs' / language / 'text-selection.md',
+    'docs' / language / 'ssh-proxy.md',
     'docs' / language / 'webdav.md',
     'docs' / language / 'smb.md',
+    'docs' / language / 'nfs.md',
+    'docs' / language / 'http.md',
     install_dir: get_option('datadir') / 'doc/elder-terms/docs' / language,
   )
 endforeach
 
 install_data(
+  'docs/ja/ftp-ftps.md',
+  'docs/ja/connection-icon-artwork.md',
+  install_dir: get_option('datadir') / 'doc/elder-terms/docs/ja',
+)
+
+install_data(
+  'docs/en/ftp-sftp.md',
   'docs/en/webdav-validation.md',
   install_dir: get_option('datadir') / 'doc/elder-terms/docs/en',
+)
+
+# Keep relative image and license links usable in the installed guides.
+install_subdir(
+  'images',
+  exclude_files: ['capture-manifest.json'],
+  install_dir: get_option('datadir') / 'doc/elder-terms',
+)
+
+install_data(
+  'data/connection-icons/NOTO-LICENSE',
+  'data/connection-icons/NOTO-FLAGS-NOTICE',
+  'data/connection-icons/MATERIAL-LICENSE',
+  'data/connection-icons/UNICODE-LICENSE',
+  install_dir: get_option('datadir') / 'doc/elder-terms/data/connection-icons',
 )

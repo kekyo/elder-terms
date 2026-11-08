@@ -10,6 +10,7 @@
 #include <vector>
 
 #include <elder-terms/export.h>
+#include <elder-terms/settings/rule-validation.h>
 
 namespace elder_terms {
 
@@ -53,7 +54,7 @@ struct HyperlinkActionRule {
       HyperlinkPathValidation::none;
   /** Capture template expanded to the local path that is validated. */
   std::string path_template = {};
-  /** Requires text matches to be separated by whitespace, quotes or line ends. */
+  /** Requires whitespace, directional punctuation or line ends around text matches. */
   bool whole_token = false;
 
   bool operator==(const HyperlinkActionRule &) const = default;
@@ -118,9 +119,11 @@ ELDER_TERMS_API bool hyperlink_action_rule_id_is_valid(
  *
  * @param rule Rule to validate.
  * @param reason Receives a human-readable reason when validation fails.
+ * @param location Optional destination for the editable location of a failure.
  * @returns True when the rule can be compiled and its arguments expanded.
  */
 ELDER_TERMS_API bool hyperlink_action_rule_is_valid(
-    const HyperlinkActionRule &rule, std::string *reason);
+    const HyperlinkActionRule &rule, std::string *reason,
+    RuleValidationLocation *location = nullptr);
 
 } // namespace elder_terms

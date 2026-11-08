@@ -130,7 +130,7 @@ const makeArgs = [
   `-j${Math.min(availableParallelism(), 8)}`,
   `BUILD_DIR=${build}`,
   "GTK_OPENGL=1",
-  "BOXRIG_VERSION=0.12.0",
+  "BOXRIG_VERSION=0.13.0",
   `PREFIX=${sdk}`,
   ...(prepared === undefined
     ? []
@@ -175,7 +175,7 @@ const inputs = [
     "deps/utf8proc/LICENSE.md",
     "deps/libpng/LICENSE",
     "deps/zlib/LICENSE",
-    "resources/unicode/17.0.0/LICENSE.txt",
+    "resources/unicode/18.0.0/LICENSE.txt",
     "data/encoding/whatwg/LICENSE",
     "examples/gtk3/external_scrollbar.h",
     "packaging/linux/rules.mk",

@@ -100,6 +100,7 @@ const createPackageStage = (
     'usr/lib/elder-terms',
     'usr/lib/elder-terms/launcher',
     'usr/lib/elder-terms/elder-terms-terminal',
+    'usr/lib/elder-terms/elder-terms-file-transfer',
     'usr/share/applications',
     'usr/share/doc/elder-terms',
     'usr/share/doc/elder-terms/docs/ja',
@@ -107,6 +108,7 @@ const createPackageStage = (
     'usr/share/doc/elder-terms/licenses/boxrig',
     'usr/share/doc/elder-terms/licenses/jemalloc',
     'usr/share/doc/elder-terms/licenses/libsmb2',
+    'usr/share/doc/elder-terms/licenses/libdsm',
     'usr/share/doc/elder-terms/licenses/connection-icons',
     'usr/share/icons/hicolor/256x256/apps',
     'usr/share/locale/ja/LC_MESSAGES',
@@ -140,9 +142,11 @@ Description: GTK terminal for serial, TELNET, local shell, SSH, SFTP, and FTP co
     'usr/lib/elder-terms/libboxrig-gtk3.so.0',
     'usr/lib/elder-terms/libjemalloc.so.2',
     'usr/lib/elder-terms/libsmb2.so.7',
+    'usr/lib/elder-terms/libdsm.so.3',
+    'usr/lib/elder-terms/elder-terms-file-transfer/elder-terms-smb1-worker',
     'usr/lib/elder-terms/launcher/elder-terms',
     'usr/lib/elder-terms/elder-terms-terminal/elder-terms-terminal',
-    'usr/lib/elder-terms/elder-terms-terminal/elder-terms-file-transfer',
+    'usr/lib/elder-terms/elder-terms-file-transfer/elder-terms-file-transfer',
   ];
   for (const executablePath of executablePaths) {
     if (executablePath !== omittedPath) {
@@ -170,12 +174,16 @@ Description: GTK terminal for serial, TELNET, local shell, SSH, SFTP, and FTP co
     ],
     ['usr/lib/elder-terms/elder-terms-terminal/green-on.png', 'on\n'],
     ['usr/lib/elder-terms/elder-terms-terminal/green-off.png', 'off\n'],
+    ['usr/lib/elder-terms/elder-terms-file-transfer/green-on.png', 'on\n'],
+    ['usr/lib/elder-terms/elder-terms-file-transfer/green-off.png', 'off\n'],
     ['usr/share/doc/elder-terms/README.md', '# elder-terms\n'],
     ['usr/share/doc/elder-terms/README_ja.md', '# elder-terms\n'],
     ['usr/share/doc/elder-terms/docs/ja/webdav.md', '# WebDAV\n'],
     ['usr/share/doc/elder-terms/docs/en/webdav.md', '# WebDAV\n'],
     ['usr/share/doc/elder-terms/docs/ja/smb.md', '# SMB\n'],
     ['usr/share/doc/elder-terms/docs/en/smb.md', '# SMB\n'],
+    ['usr/share/doc/elder-terms/docs/ja/http.md', '# HTTP/HTTPS\n'],
+    ['usr/share/doc/elder-terms/docs/en/http.md', '# HTTP/HTTPS\n'],
     [
       'usr/share/doc/elder-terms/docs/en/webdav-validation.md',
       '# WebDAV validation\n',
@@ -212,10 +220,19 @@ Description: GTK terminal for serial, TELNET, local shell, SSH, SFTP, and FTP co
   for (const name of [
     'COPYING',
     'LICENCE-LGPL-2.1.txt',
-    'libsmb2-source.tar.gz',
+    'libsmb2-source.tar.xz',
   ])
     textFiles.set(
       `usr/share/doc/elder-terms/licenses/libsmb2/${name}`,
+      'source fixture\n'
+    );
+  for (const name of [
+    'COPYING',
+    'libdsm-source.tar.xz',
+    'libdsm-correctness.patch',
+  ])
+    textFiles.set(
+      `usr/share/doc/elder-terms/licenses/libdsm/${name}`,
       'source fixture\n'
     );
   for (const name of [
@@ -244,7 +261,7 @@ Description: GTK terminal for serial, TELNET, local shell, SSH, SFTP, and FTP co
     join(stageRoot, 'usr/bin/elder-terms-terminal')
   );
   symlinkSync(
-    '../lib/elder-terms/elder-terms-terminal/elder-terms-file-transfer',
+    '../lib/elder-terms/elder-terms-file-transfer/elder-terms-file-transfer',
     join(stageRoot, 'usr/bin/elder-terms-file-transfer')
   );
 };
@@ -354,7 +371,24 @@ container_image_for_target debian trixie riscv64
     }
   });
 
-  it('reports the boxrig release version from the build SDK', () => {
+  it('prepares the current boxrig checkout and reports its SDK release version', () => {
+    expectSuccess(
+      run(process.execPath, [
+        join(projectRoot, 'scripts/prepare-boxrig.mts'),
+        projectRoot,
+        join(projectRoot, '.build'),
+      ]),
+      'current boxrig checkout SDK preparation failed'
+    );
+    expectSuccess(
+      run('meson', [
+        'setup',
+        join(projectRoot, '.build'),
+        projectRoot,
+        '--reconfigure',
+      ]),
+      'current boxrig checkout application configuration failed'
+    );
     const versions = run(
       'pkg-config',
       [
@@ -372,11 +406,11 @@ container_image_for_target debian trixie riscv64
     );
     expectSuccess(versions, 'build SDK version lookup failed');
     expect(versions.stdout.trim().split(/\s+/)).toEqual([
-      '0.12.0',
-      '0.12.0',
-      '0.12.0',
-      '0.12.0',
-      '0.12.0',
+      '0.13.0',
+      '0.13.0',
+      '0.13.0',
+      '0.13.0',
+      '0.13.0',
     ]);
   });
 
@@ -509,7 +543,7 @@ int main(void) {
       { ...process.env, PKG_CONFIG_PATH: join(sdk, 'lib/pkgconfig') }
     );
     expectSuccess(versions, 'prepared SDK version lookup failed');
-    expect(versions.stdout.trim().split(/\s+/)).toEqual(['0.12.0', '0.12.0']);
+    expect(versions.stdout.trim().split(/\s+/)).toEqual(['0.13.0', '0.13.0']);
     const consumer = join(temporaryRoot, 'prepared-sdk-consumer');
     expectSuccess(
       run('cc', [
@@ -551,6 +585,7 @@ exit 91
       `#!/bin/sh
 printf '%s\\n' "$*" >>"$ELDER_TERMS_TEST_PKG_CONFIG_INVOCATION"
 if [ "\${ELDER_TERMS_TEST_MISSING_CURL:-0}" = 1 ] && [ "$*" = "--exists libcurl" ]; then exit 1; fi
+if [ "\${ELDER_TERMS_TEST_MISSING_NFS:-0}" = 1 ] && [ "$*" = "--exists libnfs >= 5.0.2" ]; then exit 1; fi
 exit 0
 `
     );
@@ -585,6 +620,9 @@ exit 0
     expect(readFileSync(pkgConfigInvocationPath, 'utf8').split('\n')).toContain(
       '--exists libcanberra'
     );
+    expect(readFileSync(pkgConfigInvocationPath, 'utf8').split('\n')).toContain(
+      '--exists libnfs >= 5.0.2'
+    );
     expect(
       readFileSync(pkgConfigInvocationPath, 'utf8').split('\n')
     ).not.toContain('--exists libpcre2-8');
@@ -597,6 +635,15 @@ exit 0
     expect(missingCurl.status).toBe(1);
     expect(missingCurl.stderr).toContain(
       'Missing required pkg-config module: libcurl'
+    );
+    expect(() => lstatSync(invocationPath)).toThrow();
+    const missingNfs = run(containerScript, [], {
+      ...environment,
+      ELDER_TERMS_TEST_MISSING_NFS: '1',
+    });
+    expect(missingNfs.status).toBe(1);
+    expect(missingNfs.stderr).toContain(
+      'Missing required pkg-config module: libnfs >= 5.0.2'
     );
     expect(() => lstatSync(invocationPath)).toThrow();
   });
@@ -720,6 +767,7 @@ mkdir -p "$build_dir"
     const dpkgRecords = join(temporaryRoot, 'dpkg-records.txt');
     mkdirSync(fakeProject);
     mkdirSync(binDirectory);
+    copyFileSync(prerequisiteScript, join(fakeProject, 'prereq.sh'));
 
     const containerEngine = join(binDirectory, 'container-engine');
     writeExecutable(
@@ -728,6 +776,10 @@ mkdir -p "$build_dir"
 set -eu
 if [ "\${1:-}" = image ] && [ "\${2:-}" = exists ]; then
   printf 'exists %s\\n' "\${3:-}" >>"$ELDER_TERMS_TEST_CONTAINER_RECORDS"
+  exit 0
+fi
+if [ "\${1:-}" = image ] && [ "\${2:-}" = inspect ]; then
+  cksum <"$ELDER_TERMS_TEST_PREREQUISITE_SCRIPT"
   exit 0
 fi
 [ "\${1:-}" = run ] || exit 2
@@ -774,6 +826,7 @@ build_deb_package debian trixie x86_64 linux/amd64
         PATH: `${binDirectory}:${process.env.PATH}`,
         ELDER_TERMS_TEST_CONTAINER_RECORDS: containerRecords,
         ELDER_TERMS_TEST_DPKG_RECORDS: dpkgRecords,
+        ELDER_TERMS_TEST_PREREQUISITE_SCRIPT: prerequisiteScript,
       }
     );
     expectSuccess(result, 'deb package orchestration failed');
@@ -803,6 +856,7 @@ build_deb_package debian trixie x86_64 linux/amd64
     mkdirSync(fakeProject);
     mkdirSync(binDirectory);
     symlinkSync(packageScript, join(fakeProject, 'build_package.sh'));
+    copyFileSync(prerequisiteScript, join(fakeProject, 'prereq.sh'));
 
     const containerEngine = join(binDirectory, 'prerequisite-engine');
     writeExecutable(
@@ -861,6 +915,7 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
       'libgl-dev',
       'libegl-dev',
       'libssh-dev',
+      'libnfs-dev',
       'libudev-dev',
       'libsystemd-dev',
       'liburing-dev',
@@ -868,6 +923,7 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
       'meson',
       'nodejs',
       'openssh-client',
+      'xz-utils',
       'xdg-utils',
     ]) {
       expect(containerfile).toContain(dependency);
@@ -896,6 +952,158 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
     expect(wrapper.stderr).toContain(
       'Run ./prereq.sh --force to rebuild prerequisite images.'
     );
+  });
+
+  it('refreshes cached prerequisite images when their dependencies change', () => {
+    const fakeProject = join(temporaryRoot, 'cached-prerequisite-project');
+    const recordsPath = join(temporaryRoot, 'cached-prerequisite-records.txt');
+    const containerEngine = join(temporaryRoot, 'cached-prerequisite-engine');
+    mkdirSync(fakeProject);
+    symlinkSync(packageScript, join(fakeProject, 'build_package.sh'));
+    const copiedPrerequisite = join(fakeProject, 'prereq.sh');
+    copyFileSync(prerequisiteScript, copiedPrerequisite);
+    writeFileSync(recordsPath, '');
+    writeExecutable(
+      containerEngine,
+      `#!/bin/sh
+set -eu
+case "$1 $2" in
+  'image exists') exit 0 ;;
+  'image inspect')
+    if [ -f "$ELDER_TERMS_TEST_RECORDS.label" ]; then
+      cat "$ELDER_TERMS_TEST_RECORDS.label"
+    fi
+    exit 0
+    ;;
+esac
+[ "$1" = build ] || exit 2
+printf '%s\\n' "$*" >>"$ELDER_TERMS_TEST_RECORDS"
+previous=''
+for argument in "$@"; do
+  if [ "$previous" = --label ]; then
+    printf '%s\\n' "\${argument#*=}" >"$ELDER_TERMS_TEST_RECORDS.label"
+  fi
+  if [ "$previous" = -f ]; then
+    cp "$argument" "$ELDER_TERMS_TEST_RECORDS.containerfile"
+  fi
+  previous=$argument
+done
+`
+    );
+    const arguments_ = [
+      '--distro',
+      'debian',
+      '--release',
+      'trixie',
+      '--arch',
+      'amd64',
+    ];
+    const environment = {
+      ...process.env,
+      CONTAINER_ENGINE: containerEngine,
+      ELDER_TERMS_PREREQ_PROJECT_ROOT: fakeProject,
+      ELDER_TERMS_TEST_RECORDS: recordsPath,
+    };
+
+    expectSuccess(
+      run(copiedPrerequisite, arguments_, environment),
+      'unlabelled prerequisite image refresh failed'
+    );
+    const firstBuild = readFileSync(recordsPath, 'utf8');
+    expect(firstBuild.trim().split('\n')).toHaveLength(1);
+    expect(firstBuild).toContain('build --platform linux/amd64');
+
+    expectSuccess(
+      run(copiedPrerequisite, arguments_, environment),
+      'current prerequisite image reuse failed'
+    );
+    expect(readFileSync(recordsPath, 'utf8')).toBe(firstBuild);
+
+    writeFileSync(
+      copiedPrerequisite,
+      readFileSync(copiedPrerequisite, 'utf8').replace(
+        'libnfs-dev\n',
+        'libnfs-dev\nnew-build-dependency\n'
+      )
+    );
+    expectSuccess(
+      run(copiedPrerequisite, arguments_, environment),
+      'changed prerequisite image refresh failed'
+    );
+    expect(readFileSync(recordsPath, 'utf8').trim().split('\n')).toHaveLength(
+      2
+    );
+    expect(readFileSync(`${recordsPath}.containerfile`, 'utf8')).toContain(
+      'new-build-dependency'
+    );
+
+    expectSuccess(
+      run(copiedPrerequisite, [...arguments_, '--force'], environment),
+      'forced prerequisite image refresh failed'
+    );
+    const forcedBuilds = readFileSync(recordsPath, 'utf8').trim().split('\n');
+    expect(forcedBuilds).toHaveLength(3);
+    expect(forcedBuilds[2]).toContain('build --no-cache');
+  });
+
+  it('rejects outdated prerequisites before preparing tools or replacing artifacts', () => {
+    const fakeProject = join(temporaryRoot, 'outdated-prerequisite-project');
+    const binDirectory = join(temporaryRoot, 'outdated-prerequisite-bin');
+    const recordsPath = join(
+      temporaryRoot,
+      'outdated-prerequisite-records.txt'
+    );
+    const artifactPath = join(fakeProject, 'artifacts/deb/previous.deb');
+    mkdirSync(join(fakeProject, 'artifacts/deb'), { recursive: true });
+    mkdirSync(binDirectory);
+    copyFileSync(prerequisiteScript, join(fakeProject, 'prereq.sh'));
+    writeFileSync(artifactPath, 'previous package\n');
+    writeFileSync(recordsPath, '');
+    const containerEngine = join(binDirectory, 'container-engine');
+    writeExecutable(
+      containerEngine,
+      `#!/bin/sh
+set -eu
+case "$1 $2" in
+  'image exists') exit 0 ;;
+  'image inspect')
+    case "$*" in
+      *debian-trixie-x86_64*) cksum <"$ELDER_TERMS_PACKAGE_PROJECT_ROOT/prereq.sh" ;;
+      *) printf 'outdated\\n' ;;
+    esac
+    exit 0
+    ;;
+esac
+printf 'container started\\n' >>"$ELDER_TERMS_TEST_RECORDS"
+exit 1
+`
+    );
+    writeExecutable(
+      join(binDirectory, 'node'),
+      `#!/bin/sh
+printf 'tool preparation started\\n' >>"$ELDER_TERMS_TEST_RECORDS"
+exit 1
+`
+    );
+
+    const result = run(
+      allPackagesScript,
+      ['--version', '1.2.3-test', '--distro', 'debian', '--arch', 'amd64,i386'],
+      {
+        ...process.env,
+        PATH: `${binDirectory}:${process.env.PATH}`,
+        CONTAINER_ENGINE: containerEngine,
+        ELDER_TERMS_PACKAGE_PROJECT_ROOT: fakeProject,
+        ELDER_TERMS_TEST_RECORDS: recordsPath,
+      }
+    );
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      'Outdated prerequisite image: localhost/elder-terms-pack-deb-debian-trixie-i686:latest'
+    );
+    expect(result.stderr).toContain('Run ./prereq.sh');
+    expect(readFileSync(recordsPath, 'utf8')).toBe('');
+    expect(readFileSync(artifactPath, 'utf8')).toBe('previous package\n');
   });
 
   it('accepts a complete deb and rejects one missing runtime data', () => {
@@ -978,7 +1186,7 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
     createPackageStage(
       missingFileTransferStage,
       debianArchitecture,
-      'usr/lib/elder-terms/elder-terms-terminal/elder-terms-file-transfer',
+      'usr/lib/elder-terms/elder-terms-file-transfer/elder-terms-file-transfer',
       true,
       true
     );
@@ -1052,8 +1260,8 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
     for (const language of ['ja', 'en']) {
       const documents =
         language === 'en'
-          ? ['webdav.md', 'webdav-validation.md', 'smb.md']
-          : ['webdav.md', 'smb.md'];
+          ? ['webdav.md', 'webdav-validation.md', 'smb.md', 'http.md']
+          : ['webdav.md', 'smb.md', 'http.md'];
       for (const document of documents) {
         const missingPath = `usr/share/doc/elder-terms/docs/${language}/${document}`;
         const stage = join(
@@ -1087,6 +1295,7 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
         'libcardio.so.0',
         'libjemalloc.so.2',
         'libsmb2.so.7',
+        'libdsm.so.3',
         'libboxrig.so.0',
         'libboxrig-ui.so.0',
         'libboxrig-session.so.0',
@@ -1106,7 +1315,11 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
         'Wayland-protocols-NOTICES.md',
       ].map((name) => `usr/share/doc/elder-terms/licenses/boxrig/${name}`),
       'usr/share/doc/elder-terms/licenses/jemalloc/COPYING',
-      ...['COPYING', 'LICENCE-LGPL-2.1.txt', 'libsmb2-source.tar.gz'].map(
+      'usr/lib/elder-terms/elder-terms-file-transfer/elder-terms-smb1-worker',
+      ...['COPYING', 'libdsm-source.tar.xz', 'libdsm-correctness.patch'].map(
+        (name) => `usr/share/doc/elder-terms/licenses/libdsm/${name}`
+      ),
+      ...['COPYING', 'LICENCE-LGPL-2.1.txt', 'libsmb2-source.tar.xz'].map(
         (name) => `usr/share/doc/elder-terms/licenses/libsmb2/${name}`
       ),
       ...[
@@ -1156,7 +1369,7 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
     );
     expect(missingFileTransferValidation.status).not.toBe(0);
     expect(missingFileTransferValidation.stderr).toContain(
-      'usr/lib/elder-terms/elder-terms-terminal/elder-terms-file-transfer'
+      'usr/lib/elder-terms/elder-terms-file-transfer/elder-terms-file-transfer'
     );
 
     const missingOpenSshClientValidation = runSourced(
@@ -1240,7 +1453,7 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
         join(
           '..',
           libraryDirectory,
-          'elder-terms/elder-terms-terminal/elder-terms-file-transfer'
+          'elder-terms/elder-terms-file-transfer/elder-terms-file-transfer'
         ),
       ],
     ]);
@@ -1253,6 +1466,14 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
       join(libraryDirectory, 'elder-terms/libelder-terms.so.0'),
       join(libraryDirectory, 'elder-terms/libjemalloc.so.2'),
       join(libraryDirectory, 'elder-terms/libsmb2.so.7'),
+      join(libraryDirectory, 'elder-terms/libdsm.so.3'),
+      join(
+        libraryDirectory,
+        'elder-terms/elder-terms-file-transfer/elder-terms-smb1-worker'
+      ),
+      'share/doc/elder-terms/licenses/libdsm/COPYING',
+      'share/doc/elder-terms/licenses/libdsm/libdsm-source.tar.xz',
+      'share/doc/elder-terms/licenses/libdsm/libdsm-correctness.patch',
       join(libraryDirectory, 'elder-terms/launcher/elder-terms'),
       join(libraryDirectory, 'elder-terms/launcher/main-window.ui'),
       join(
@@ -1261,18 +1482,26 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
       ),
       join(
         libraryDirectory,
-        'elder-terms/elder-terms-terminal/elder-terms-file-transfer'
+        'elder-terms/elder-terms-file-transfer/elder-terms-file-transfer'
       ),
       join(libraryDirectory, 'elder-terms/elder-terms-terminal/main-window.ui'),
       join(libraryDirectory, 'elder-terms/elder-terms-terminal/green-on.png'),
       join(libraryDirectory, 'elder-terms/elder-terms-terminal/green-off.png'),
+      join(
+        libraryDirectory,
+        'elder-terms/elder-terms-file-transfer/green-on.png'
+      ),
+      join(
+        libraryDirectory,
+        'elder-terms/elder-terms-file-transfer/green-off.png'
+      ),
       'share/applications/net.kekyo.elder-terms.desktop',
       'share/applications/net.kekyo.elder-terms-terminal.desktop',
       'share/metainfo/net.kekyo.elder-terms.metainfo.xml',
       'share/doc/elder-terms/licenses/jemalloc/COPYING',
       'share/doc/elder-terms/licenses/libsmb2/COPYING',
       'share/doc/elder-terms/licenses/libsmb2/LICENCE-LGPL-2.1.txt',
-      'share/doc/elder-terms/licenses/libsmb2/libsmb2-source.tar.gz',
+      'share/doc/elder-terms/licenses/libsmb2/libsmb2-source.tar.xz',
       'share/doc/elder-terms/docs/ja/smb.md',
       'share/doc/elder-terms/docs/en/smb.md',
     ]) {
@@ -1318,6 +1547,28 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
     ).toBeDefined();
     expect(realpathSync(smbResolved!)).toBe(realpathSync(smbLibrary));
     const smbDynamic = run('readelf', ['-d', smbLibrary]);
+    const helper = join(
+      installedRoot,
+      libraryDirectory,
+      'elder-terms/elder-terms-file-transfer/elder-terms-smb1-worker'
+    );
+    const helperLibraries = run('ldd', [helper], environment);
+    expectSuccess(
+      helperLibraries,
+      'installed SMB1 helper dependency resolution failed'
+    );
+    expect(helperLibraries.stdout).not.toContain('not found');
+    const dsmResolved = helperLibraries.stdout
+      .split('\n')
+      .find((line) => line.trimStart().startsWith('libdsm.so.3 => '))
+      ?.split(' => ')[1]
+      ?.split(' (')[0];
+    expect(dsmResolved, 'libdsm must load from the installation').toBeDefined();
+    expect(realpathSync(dsmResolved!)).toBe(
+      realpathSync(
+        join(installedRoot, libraryDirectory, 'elder-terms/libdsm.so.3')
+      )
+    );
     expectSuccess(smbDynamic, 'installed libsmb2 ELF inspection failed');
     expect(smbDynamic.stdout).toContain('Library soname: [libsmb2.so.7]');
     for (const component of [
@@ -1406,6 +1657,188 @@ process.stdout.write('INSTALLED-TERMINAL-READY');
       await appLauncher.release();
     }
   });
+
+  it('rebuilds bundled SMB libraries and uses a replacement libdsm', () => {
+    const destination = join(temporaryRoot, 'libdsm-source-install');
+    const buildDirectory = join(projectRoot, '.build');
+    const introspection = run('meson', [
+      'introspect',
+      '--buildoptions',
+      buildDirectory,
+    ]);
+    expectSuccess(introspection, 'Meson build option introspection failed');
+    const options = JSON.parse(introspection.stdout) as Array<{
+      name: string;
+      value: string;
+    }>;
+    const prefix = options.find((option) => option.name === 'prefix')!.value;
+    const libdir = options.find((option) => option.name === 'libdir')!.value;
+    expectSuccess(
+      run('meson', [
+        'install',
+        '-C',
+        buildDirectory,
+        '--no-rebuild',
+        '--destdir',
+        destination,
+      ]),
+      'Corresponding source installation failed'
+    );
+    const installedRoot = join(destination, prefix);
+    const licenses = join(
+      installedRoot,
+      'share/doc/elder-terms/licenses/libdsm'
+    );
+    const extracted = join(temporaryRoot, 'libdsm-corresponding-source');
+    mkdirSync(extracted);
+    expectSuccess(
+      run('tar', [
+        '-xJf',
+        join(licenses, 'libdsm-source.tar.xz'),
+        '-C',
+        extracted,
+      ]),
+      'Installed corresponding source extraction failed'
+    );
+    const source = join(extracted, 'source');
+    const patch = readFileSync(
+      join(licenses, 'libdsm-correctness.patch'),
+      'utf8'
+    );
+    const changed = Array.from(
+      patch.matchAll(/^\+\+\+ b\/(.+)$/gm),
+      (match) => match[1]
+    );
+    expect(changed.length).toBeGreaterThan(0);
+    for (const path of changed) {
+      const contents = readFileSync(join(source, path), 'utf8');
+      expect(
+        contents,
+        `Missing modification notice in distributed ${path}`
+      ).toMatch(/Modified for elder-terms by Kouji Matsui/);
+      expect(
+        contents,
+        `Missing modification dates in distributed ${path}`
+      ).toMatch(/20\d{2}-\d{2}-\d{2}: [^\r\n]+/);
+      expect(contents).toContain('LGPL-2.1-or-later');
+    }
+    expect(readFileSync(join(source, 'COPYING'), 'utf8')).toBe(
+      readFileSync(join(licenses, 'COPYING'), 'utf8')
+    );
+
+    expectSuccess(
+      run('tar', [
+        '-xJf',
+        join(
+          installedRoot,
+          'share/doc/elder-terms/licenses/libsmb2/libsmb2-source.tar.xz'
+        ),
+        '-C',
+        extracted,
+      ]),
+      'Installed libsmb2 source extraction failed'
+    );
+    const smb2Build = join(extracted, 'libsmb2-build');
+    expectSuccess(
+      run('cmake', [
+        '-S',
+        join(extracted, 'libsmb2'),
+        '-B',
+        smb2Build,
+        '-DCMAKE_BUILD_TYPE=Release',
+        '-DBUILD_SHARED_LIBS=ON',
+        '-DENABLE_LIBKRB5=OFF',
+        '-DENABLE_GSSAPI=OFF',
+        '-DENABLE_LIBDCERPC=OFF',
+        '-DENABLE_LIBQUIC=OFF',
+        '-DENABLE_RDMA=OFF',
+        '-DENABLE_UTILS=OFF',
+        '-DENABLE_EXAMPLES=OFF',
+      ]),
+      'Installed libsmb2 source configuration failed'
+    );
+    expectSuccess(
+      run('cmake', ['--build', smb2Build, '--parallel', '2']),
+      'Installed libsmb2 source compilation failed'
+    );
+
+    // Rebuild only from the installed source, with no access to a submodule or
+    // project build script. A debug build distinguishes the replacement binary.
+    const rebuilt = join(extracted, 'build');
+    const sdk = join(extracted, 'sdk');
+    expectSuccess(
+      run('meson', [
+        'setup',
+        rebuilt,
+        source,
+        `--prefix=${sdk}`,
+        '--libdir=lib',
+        '--buildtype=debug',
+        '-Ddefault_library=shared',
+        '-Dbinaries=false',
+        '-Dwerror=true',
+      ]),
+      'Corresponding source configuration failed'
+    );
+    expectSuccess(
+      run('meson', ['compile', '-C', rebuilt, 'dsm']),
+      'Corresponding source compilation failed'
+    );
+    expectSuccess(
+      run('meson', [
+        'install',
+        '-C',
+        rebuilt,
+        '--no-rebuild',
+        '--tags=runtime,devel',
+      ]),
+      'Replacement library installation failed'
+    );
+    const replacement = join(sdk, 'lib/libdsm.so.3');
+    const installedLibrary = join(
+      installedRoot,
+      libdir,
+      'elder-terms/libdsm.so.3'
+    );
+    expect(
+      readFileSync(replacement).equals(readFileSync(installedLibrary))
+    ).toBe(false);
+    copyFileSync(replacement, installedLibrary);
+
+    // The client locates its worker beside itself, so this exercises the actual
+    // installed worker with the user's rebuilt library on both SMB1 transports.
+    const driver = join(
+      installedRoot,
+      libdir,
+      'elder-terms/elder-terms-file-transfer/smb1-client-test'
+    );
+    copyFileSync(
+      join(buildDirectory, 'elder-terms-file-transfer/smb1-client-test'),
+      driver
+    );
+    const environment = { ...process.env };
+    delete environment.LD_LIBRARY_PATH;
+    delete environment.LD_PRELOAD;
+    const transfers = run(
+      process.execPath,
+      [
+        join(
+          projectRoot,
+          'elder-terms-file-transfer/tests/smb/run-smb1-library.mts'
+        ),
+        driver,
+        '--client',
+      ],
+      environment
+    );
+    expectSuccess(
+      transfers,
+      'Installed SMB1 worker failed with the rebuilt library'
+    );
+    expect(transfers.stdout).toMatch(
+      /TCP:[\s\S]*PASS SMB1 client[\s\S]*NBT:[\s\S]*PASS SMB1 client/
+    );
+  }, 180_000);
 
   it('re-includes package data filtered by minimal distribution images', () => {
     const binDirectory = join(temporaryRoot, 'validation-bin');

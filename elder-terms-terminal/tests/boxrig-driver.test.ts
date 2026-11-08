@@ -3,13 +3,13 @@
 // Under MIT.
 // https://github.com/kekyo/elder-terms/
 
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { promisify } from 'node:util';
 import { createGtkAppLauncher } from 'gestament';
-import { toPass } from 'gestament/testing';
+import { toPass, waitForResult } from 'gestament/testing';
 import { describe, expect, it } from 'vitest';
 
 const execFileAsync = promisify(execFile);
@@ -20,6 +20,295 @@ const driverPath = fileURLToPath(
 );
 
 describe('boxrig GTK3 driver', () => {
+  for (const backend of ['cairo', 'opengl']) {
+    it(`preserves the normal window during zoom and adopts its effective grid on mode return (${backend})`, async () => {
+      const launcher = createGtkAppLauncher({
+        appPath: driverPath,
+        args: ['--zoom-modes'],
+        // An explicit display lets this same video assertion exercise a real
+        // window manager on a disposable X server.
+        display:
+          process.env.ELDER_TERMS_TEST_HOST_DISPLAY === '1' ? 'host' : 'xvfb',
+        accessibilitySession: 'minimal',
+        env: {
+          LIBGL_ALWAYS_SOFTWARE: '1',
+          GTK_IM_MODULE: 'gtk-im-context-simple',
+          ...(backend === 'cairo' ? { GDK_GL: 'disable' } : {}),
+        },
+      });
+      try {
+        const app = await launcher.launch();
+        const window = await app.getById('driver_window');
+        const zoomIn = await app.getById('driver_zoom_in');
+        const zoomOut = await app.getById('driver_zoom_out');
+        const mode = await app.getById('driver_preserve_window');
+        if (
+          window.kind !== 'window' ||
+          zoomIn.kind !== 'button' ||
+          zoomOut.kind !== 'button' ||
+          mode.kind !== 'checkbox'
+        )
+          throw new Error('Missing zoom controls');
+        const read = async () => {
+          const report =
+            (await app.output()).stdout
+              .trimEnd()
+              .split('\n')
+              .filter((line) => line.startsWith('backend='))
+              .pop() ?? '';
+          expect(report).toContain(`backend=${backend}`);
+          expect(report).toContain('ready=1');
+          const grid = /grid=(\d+)x(\d+)/.exec(report)!;
+          return {
+            columns: Number(grid[1]),
+            rows: Number(grid[2]),
+            font: Number(/font=([\d.]+)/.exec(report)?.[1]),
+            bounds: await window.bounds(),
+          };
+        };
+        const initial = await waitForResult(read);
+        const initialOutput = (await app.output()).stdout;
+        const allocation = [
+          ...initialOutput.matchAll(/window_allocation=(\d+x\d+)/g),
+        ].pop()?.[1];
+        expect(allocation).toBeDefined();
+        await mode.toggle();
+        const terminal = await app.getById('driver_terminal');
+        const area = (await terminal.capture()).bounds;
+        const screen = PNG.sync.read((await app.capture()).image);
+        const directory = fileURLToPath(
+          new URL(`../../test-results/boxrig/zoom-${backend}/`, import.meta.url)
+        );
+        await mkdir(directory, { recursive: true });
+        const frameBytes = screen.width * screen.height * 4;
+        let pending = Buffer.alloc(0);
+        const ink: number[] = [];
+        const greenBottom: number[] = [];
+        let lowestFrame: Buffer | undefined;
+        let lowestBottom = 0;
+        let recordingError = '';
+        const environment = await app.environment();
+        const recorder = spawn(
+          'ffmpeg',
+          [
+            '-y',
+            '-hide_banner',
+            '-loglevel',
+            'error',
+            '-f',
+            'x11grab',
+            '-framerate',
+            '60',
+            '-draw_mouse',
+            '0',
+            '-video_size',
+            `${screen.width}x${screen.height}`,
+            '-i',
+            environment.DISPLAY ?? '',
+            '-map',
+            '0:v',
+            '-c:v',
+            'ffv1',
+            '-threads',
+            '1',
+            '-pix_fmt',
+            'bgr0',
+            '-fps_mode',
+            'passthrough',
+            `${directory}zoom.mkv`,
+            '-map',
+            '0:v',
+            '-c:v',
+            'rawvideo',
+            '-threads',
+            '1',
+            '-pix_fmt',
+            'bgr0',
+            '-fps_mode',
+            'passthrough',
+            '-f',
+            'rawvideo',
+            'pipe:1',
+          ],
+          { env: environment, stdio: ['pipe', 'pipe', 'pipe'] }
+        );
+        const finished = new Promise<number | null>((resolve) => {
+          recorder.once('error', (error) => {
+            recordingError = error.message;
+            resolve(null);
+          });
+          recorder.once('close', resolve);
+        });
+        recorder.stderr.on('data', (bytes: Buffer) => {
+          recordingError += bytes.toString();
+        });
+        recorder.stdout.on('data', (bytes: Buffer) => {
+          pending = Buffer.concat([pending, bytes]);
+          while (pending.length >= frameBytes) {
+            const frame = pending.subarray(0, frameBytes);
+            pending = pending.subarray(frameBytes);
+            let green = 0;
+            let bottom = 0;
+            for (let y = area.y; y < area.y + area.height; ++y) {
+              for (let x = area.x; x < area.x + 350; ++x) {
+                const offset = (y * screen.width + x) * 4;
+                if (
+                  frame[offset + 1] > 100 &&
+                  frame[offset + 1] > frame[offset] * 1.5 &&
+                  frame[offset + 1] > frame[offset + 2] * 1.3
+                ) {
+                  ++green;
+                  bottom = y;
+                }
+              }
+            }
+            ink.push(green);
+            greenBottom.push(bottom);
+            if (bottom > lowestBottom) {
+              lowestBottom = bottom;
+              lowestFrame = Buffer.from(frame);
+            }
+          }
+        });
+        let enlarged = initial;
+        try {
+          await waitForResult(async () =>
+            expect(ink.length).toBeGreaterThan(0)
+          );
+          await zoomIn.click();
+          enlarged = await waitForResult(async () => {
+            const state = await read();
+            expect(state.font).toBeGreaterThan(initial.font);
+            expect(state.bounds).toEqual(initial.bounds);
+            expect(state.columns).toBeLessThan(initial.columns);
+            expect(state.rows).toBeLessThan(initial.rows);
+            return state;
+          });
+          await zoomOut.click();
+          await waitForResult(async () => {
+            const state = await read();
+            expect(state).toEqual(initial);
+          });
+          await zoomIn.click();
+          await waitForResult(async () =>
+            expect(await read()).toEqual(enlarged)
+          );
+          for (let index = 0; index < 12; ++index) {
+            await zoomOut.click();
+            await waitForResult(async () =>
+              expect(await read()).toEqual(initial)
+            );
+            await zoomIn.click();
+            await waitForResult(async () =>
+              expect(await read()).toEqual(enlarged)
+            );
+          }
+          await writeFile(
+            `${directory}enlarged.png`,
+            (await window.capture()).image
+          );
+          const hints = await window.resizeHints();
+          expect(hints.widthIncrement).toBeLessThanOrEqual(1);
+          expect(hints.heightIncrement).toBeLessThanOrEqual(1);
+        } finally {
+          recorder.stdin.write('q\n');
+          expect(await finished, recordingError).toBe(0);
+          await writeFile(
+            `${directory}frames.json`,
+            JSON.stringify({ ink, greenBottom })
+          );
+          if (lowestFrame) {
+            const sample = new PNG({
+              width: screen.width,
+              height: screen.height,
+            });
+            for (let offset = 0; offset < lowestFrame.length; offset += 4) {
+              sample.data[offset] = lowestFrame[offset + 2];
+              sample.data[offset + 1] = lowestFrame[offset + 1];
+              sample.data[offset + 2] = lowestFrame[offset];
+              sample.data[offset + 3] = 255;
+            }
+            await writeFile(
+              `${directory}maximum-text-bottom.png`,
+              PNG.sync.write(sample)
+            );
+          }
+        }
+        expect(ink.length).toBeGreaterThan(3);
+        expect(
+          ink.every((count) => count > 20),
+          JSON.stringify(ink)
+        ).toBe(true);
+        const zoomOutput = (await app.output()).stdout.slice(
+          initialOutput.length
+        );
+        expect(
+          [...zoomOutput.matchAll(/window_allocation=(\d+x\d+)/g)].every(
+            (match) => match[1] === allocation
+          ),
+          zoomOutput
+        ).toBe(true);
+        const report =
+          (await app.output()).stdout
+            .trimEnd()
+            .split('\n')
+            .filter((line) => line.startsWith('backend='))
+            .pop() ?? '';
+        const metrics = /cell=(\d+)x(\d+)/.exec(report)!;
+        const cellWidth = Number(metrics[1]);
+        const cellHeight = Number(metrics[2]);
+        await window.activate();
+        await app.input.moveMouseTo(
+          Math.trunc(area.x + cellWidth / 2),
+          Math.trunc(area.y + cellHeight * (enlarged.rows - 1.5))
+        );
+        await app.input.setMouseButton('left', true);
+        await app.input.moveMouseTo(
+          Math.trunc(area.x + cellWidth * 25.5),
+          Math.trunc(area.y + cellHeight * (enlarged.rows - 1.5))
+        );
+        await app.input.setMouseButton('left', false);
+        const copy = await app.getById('driver_copy');
+        if (copy.kind !== 'button') throw new Error('Missing copy button');
+        await copy.click();
+        await toPass(async () => {
+          const { stdout } = await execFileAsync(
+            fileURLToPath(
+              new URL(
+                '../../.build/elder-terms-terminal/clipboard-read-helper',
+                import.meta.url
+              )
+            ),
+            [],
+            { env: await app.environment() }
+          );
+          expect(stdout).toBe('Select and copy this text.');
+        });
+        await mode.toggle();
+        await waitForResult(async () => expect(await read()).toEqual(enlarged));
+        await zoomIn.click();
+        await waitForResult(async () => {
+          const state = await read();
+          expect(state.font).toBeGreaterThan(enlarged.font);
+          expect(state.columns).toBe(enlarged.columns);
+          expect(state.rows).toBe(enlarged.rows);
+          expect(state.bounds.width).toBeGreaterThan(initial.bounds.width);
+        });
+        // The marked line is near the cursor at the bottom. It must move
+        // directly between complete layouts, never through a clipped image
+        // drawn with the new cell metrics and the old core row count.
+        expect(
+          Math.max(...greenBottom),
+          JSON.stringify(greenBottom)
+        ).toBeLessThanOrEqual(
+          Math.max(greenBottom[0], greenBottom[greenBottom.length - 1])
+        );
+      } finally {
+        await launcher.release();
+      }
+    });
+  }
+
   it('loads the shared core, UI and GTK3 libraries through the normal build', async () => {
     const { stdout } = await execFileAsync('ldd', [driverPath]);
     for (const name of ['boxrig', 'boxrig-ui', 'boxrig-gtk3']) {

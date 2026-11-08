@@ -17,6 +17,8 @@ struct SshProxySettings {
   SshEndpointSettings endpoint{.address = {}, .port = 22, .username = {}, .identity_file = {}};
   /** Errors that must be rejected before any network connection is opened. */
   std::vector<std::string> validation_errors{};
+  /** Editable fields associated with the validation errors. */
+  std::vector<SettingValidationIssue> validation_issues{};
 };
 
 /** @param name Key name. @returns Key in the ssh_proxy section. */

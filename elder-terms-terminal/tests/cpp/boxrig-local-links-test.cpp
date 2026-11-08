@@ -79,12 +79,13 @@ int main() {
     };
 
     feed("/foo/bar/baz\r\n\"/foo/bar/baz\"\r\n/tmp\r\n/proc/self/exe\r\nhttps://example.test/tmp\r\n");
-    expect(link_style(0).field_mask == (BOXRIG_UI_ANNOTATION_UNDERLINE_STYLE | BOXRIG_UI_ANNOTATION_UNDERLINE_FALLBACK),
-        "the default decoration underlines unconfirmed paths without dimming");
-    terminal_links_set_decoration(links.get(), TerminalLinkDecoration::none);
-    expect(link_style(0).field_mask == 0 && terminal_links_copy_target(links.get(), hit(0, 2)) == "/foo/bar/baz",
+    expect(link_style(0).underline_style == BOXRIG_UNDERLINE_NONE && link_style(0).color_tag == 0,
+        "the default decoration leaves unhovered paths unchanged");
+    terminal_links_set_decorations(links.get(), {TerminalLinkDecoration::none, TerminalLinkDecoration::none});
+    expect(link_style(0).underline_style == BOXRIG_UNDERLINE_NONE && link_style(0).color_tag == 0 &&
+        terminal_links_copy_target(links.get(), hit(0, 2)) == "/foo/bar/baz",
         "no decoration preserves recognition without changing terminal attributes");
-    terminal_links_set_decoration(links.get(), TerminalLinkDecoration::validated);
+    terminal_links_set_decorations(links.get(), {TerminalLinkDecoration::validated, TerminalLinkDecoration::validated});
     wait_checks();
     for (const std::size_t row : {0u, 1u}) {
       const auto point = hit(row, 2);
@@ -139,8 +140,68 @@ int main() {
             std::vector<std::string>{"https://example.test/~/Downloads/"},
         "a tilde inside an HTTP URL remains part of the unmodified URL");
 
-    for (const std::string path : {"/foo//bar", "/foo/bar$", "~/foo//bar", "~/foo/bar$",
-        "relative/foo/bar", "~user/foo", "//foo", "/foo:bar", "/foo/bar@baz", "/foo/bar\\baz"}) {
+    const std::string prompt_path = "~/Projects/elder-terms";
+    const std::string prompt_prefix = "kouji@banshee:";
+    feed("\x1b[2J\x1b[H\x1b[1;32mkouji@banshee\x1b[0m:\x1b[1;34m" + prompt_path + "\x1b[0m$ ");
+    for (std::size_t column = 0; column < prompt_prefix.size() + prompt_path.size() + 2; ++column) {
+      const auto expected = column >= prompt_prefix.size() && column < prompt_prefix.size() + prompt_path.size()
+          ? std::optional<std::string>(prompt_path) : std::nullopt;
+      expect(terminal_links_copy_target(links.get(), hit(0, column)) == expected,
+          "a colored prompt links only the path between its colon and dollar sign");
+    }
+    terminal_links_set_decorations(links.get(), {TerminalLinkDecoration::hover, TerminalLinkDecoration::underline});
+    terminal_links_set_hover(links.get(), hit(0, prompt_prefix.size() + 1));
+    const auto prompt_hit = hit(0, prompt_prefix.size() + 1);
+    boxrig_ui_text_annotation prompt_annotations[8]{};
+    boxrig_ui_text_annotation_style prompt_style{};
+    std::size_t prompt_annotation_count = 0;
+    expect(boxrig_ui_view_query_text_annotation_hits(view, &prompt_hit, BOXRIG_UI_ANNOTATION_HIT_ALL,
+        prompt_annotations, 8, &prompt_annotation_count, &prompt_style) == BOXRIG_UI_OK &&
+        prompt_annotation_count == 1 && prompt_style.underline_style == BOXRIG_UNDERLINE_SINGLE,
+        "hovering a delimited prompt path displays its underline");
+    terminal_links_set_hover(links.get(), {});
+    terminal_links_set_decorations(links.get(), {TerminalLinkDecoration::validated, TerminalLinkDecoration::validated});
+
+    struct BoundaryCase {
+      std::string prefix;
+      std::string suffix;
+      std::size_t prefix_columns;
+      std::size_t suffix_columns;
+    };
+    for (const auto &boundary : std::vector<BoundaryCase>{
+        {"path=", ";", 5, 1}, {":", ":", 1, 1}, {"=", "=", 1, 1},
+        {";", ";", 1, 1}, {"|", "|", 1, 1}, {"&", "&", 1, 1},
+        {"<", ">", 1, 1}, {">", "<", 1, 1}, {",", ",", 1, 1},
+        {"(", ")", 1, 1}, {"[", "]", 1, 1}, {"{", "}", 1, 1},
+        {"`", "`", 1, 1}, {"", "$", 0, 1},
+        {"「", "」", 2, 2}, {"『", "』", 2, 2}, {"（", "）", 2, 2},
+        {"、", "。", 2, 2}, {"。", "、", 2, 2}}) {
+      for (const std::string path : {"/tmp", "~/"}) {
+        feed("\x1b[2J\x1b[H" + boundary.prefix + path + boundary.suffix);
+        wait_checks();
+        for (std::size_t column = 0;
+            column < boundary.prefix_columns + path.size() + boundary.suffix_columns; ++column) {
+          const auto expected = column >= boundary.prefix_columns && column < boundary.prefix_columns + path.size()
+              ? std::optional<std::string>(path) : std::nullopt;
+          expect(terminal_links_copy_target(links.get(), hit(0, column)) == expected,
+              "prose and command punctuation delimit complete paths without becoming clickable");
+        }
+        const auto resolved = terminal_links_resolve(links.get(), hit(0, boundary.prefix_columns));
+        expect(resolved && resolved->action && resolved->action->command == "xdg-open" &&
+            resolved->action->arguments == std::vector<std::string>{path == "~/"
+                ? home->action->arguments[0] : path},
+            "delimited paths validate and open without surrounding punctuation");
+      }
+    }
+    feed("\x1b[2J\x1b[H/tmp,/proc/self/exe;~/");
+    expect(terminal_links_copy_target(links.get(), hit(0, 1)) == "/tmp" &&
+        terminal_links_copy_target(links.get(), hit(0, 6)) == "/proc/self/exe" &&
+        terminal_links_copy_target(links.get(), hit(0, 20)) == "~/",
+        "punctuation separates adjacent paths without spaces");
+
+    for (const std::string path : {"/foo//bar", "~/foo//bar", "relative/foo/bar", "~user/foo", "//foo",
+        "/foo/bar@baz", "/foo/bar\\baz", "\\/tmp", "$/tmp", ")/tmp", "]/tmp", "}/tmp",
+        "/tmp(", "/tmp[", "/tmp{", "/tmp#tail", "/tmp%tail"}) {
       feed("\x1b[2J\x1b[H" + path);
       for (std::size_t column = 0; column < path.size(); ++column)
         expect(!terminal_links_copy_target(links.get(), hit(0, column)),
@@ -152,9 +213,18 @@ int main() {
           "complete root, home, Unicode and permitted-punctuation paths are recognized");
     }
     feed("\x1b[2J\x1b[H" + std::string(97, ' ') + "/foo/bar$");
+    expect(terminal_links_copy_target(links.get(), hit(0, 98)) == "/foo/bar" &&
+        terminal_links_copy_target(links.get(), hit(1, 2)) == "/foo/bar" &&
+        !terminal_links_copy_target(links.get(), hit(1, 5)),
+        "a wrapped path excludes its trailing dollar sign");
+    feed("\x1b[2J\x1b[H" + std::string(99, ' ') + ":/tmp$");
+    expect(terminal_links_copy_target(links.get(), hit(1, 0)) == "/tmp" &&
+        !terminal_links_copy_target(links.get(), hit(0, 99)),
+        "a preceding delimiter is recognized across a soft wrap");
+    feed("\x1b[2J\x1b[H" + std::string(97, ' ') + "/foo//bar");
     expect(!terminal_links_copy_target(links.get(), hit(0, 98)) &&
         !terminal_links_copy_target(links.get(), hit(1, 2)),
-        "path boundaries are checked across soft wraps");
+        "soft wraps do not turn malformed paths into partial links");
 
     feed("\x1b[2J\x1b[H\x1b]8;;https://example.test/\x1b\\web\x1b]8;;\x1b\\\r\n"
         "\x1b]8;;file:///tmp\x1b\\directory\x1b]8;;\x1b\\\r\n"
@@ -170,21 +240,20 @@ int main() {
     expect(link_style(3).underline_style == BOXRIG_UNDERLINE_SINGLE,
         "the same OSC 8 target is decorated independently on every logical line");
     for (const auto mode : {TerminalLinkDecoration::none, TerminalLinkDecoration::underline}) {
-      terminal_links_set_decoration(links.get(), mode);
+      terminal_links_set_decorations(links.get(), {mode, mode});
       for (std::size_t row = 0; row < 3; ++row)
-        expect(link_style(row).field_mask == (mode == TerminalLinkDecoration::none ? 0u :
-            static_cast<unsigned>(BOXRIG_UI_ANNOTATION_UNDERLINE_STYLE | BOXRIG_UI_ANNOTATION_UNDERLINE_FALLBACK)),
+        expect(link_style(row).field_mask == (static_cast<unsigned>(BOXRIG_UI_ANNOTATION_UNDERLINE_STYLE | BOXRIG_UI_ANNOTATION_UNDERLINE_FALLBACK | BOXRIG_UI_ANNOTATION_COLOR_TAG)),
             "OSC 8 decoration follows the selected mode without pointer movement");
       expect(terminal_links_copy_target(links.get(), hit(2, 2)) == "/foo/bar/baz",
           "changing OSC 8 decoration keeps its target recognizable");
     }
 
-    terminal_links_set_decoration(links.get(), TerminalLinkDecoration::validated);
+    terminal_links_set_decorations(links.get(), {TerminalLinkDecoration::validated, TerminalLinkDecoration::validated});
     feed("\x1b[2J\x1b[H\x1b]8;;/foo/bar/baz\x1b\\https://example.test/ label\x1b]8;;\x1b\\");
     wait_checks();
     expect(terminal_links_copy_target(links.get(), hit(0, 2)) == "https://example.test/" &&
-        link_style(0).color_tag == 0,
-        "a higher-priority URL retains normal brightness inside a larger invalid OSC 8 path label");
+        link_style(0).color_tag == terminal_dim_link_color_tag,
+        "OSC 8 display wins over an overlapping text URL while action priority stays unchanged");
 
     links.reset();
     std::vector<std::shared_ptr<cardio::promise_source<std::string>>> requests;
@@ -196,7 +265,7 @@ int main() {
           requested_paths.push_back(std::move(path));
           return request->get_promise();
         }));
-    terminal_links_set_decoration(links.get(), TerminalLinkDecoration::validated);
+    terminal_links_set_decorations(links.get(), {TerminalLinkDecoration::validated, TerminalLinkDecoration::validated});
     feed("\x1b[2J\x1b[H/foo/bar/baz\r\n/foo/bar/baz\r\nhttps://example.test/");
     while (g_main_context_pending(nullptr)) g_main_context_iteration(nullptr, FALSE);
     expect(requested_paths == std::vector<std::string>{"/foo/bar/baz"},
@@ -308,7 +377,8 @@ int main() {
         "disabling validation per rule preserves immediate activation without filesystem I/O");
 
     for (const auto &[change, visible] : std::vector<std::pair<std::string, bool>>{
-        {"\x1b[1;6H00001", true}, {"\x1b[1;5H$", false},
+        {"\x1b[1;6H00001", true}, {"\x1b[1;5H$", true}, {"\x1b[1;5H)", true},
+        {"\x1b[1;5H,", true}, {"\x1b[1;5H(", false}, {"\x1b[1;5H@", false},
         {"\x1b[1;5H//more", false}, {"\x1b[1;2HX", false}}) {
       feed("\x1b[2J\x1b[H/tmp 00000");
       std::size_t consumed = 0;

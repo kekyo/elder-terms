@@ -1,6 +1,27 @@
 # FTP/SFTPの詳細
 
+## 基本の接続設定
+
+![FTPの接続先と暗号化の設定](../../images/ftp-ftps-settings.png)
+
+対応するINI設定は次の形式です。
+
+```ini
+[general]
+type=ftp
+
+[ftp]
+address=ftp.example.com
+port=21
+username=
+data_connection_mode=passive
+local_directory=
+remote_directory=.
+```
+
 ## FTPでTLSを使用する (FTPS)
+
+![FTPSのTLSバージョン、証明書検証、暗号の設定](../../images/ftp-tls-settings.png)
 
 [FTPS](https://everything.curl.dev/ftp/ftps.html)を使用するには、FTPタブの「暗号化」で「FTPS（明示的TLS）」または「FTPS（暗黙的TLS）」を選択して下さい。
 INIでは `[ftp]` の `tls_mode=explicit` または `tls_mode=implicit` に相当します。
@@ -60,6 +81,8 @@ OpenSSL 3.5で追加された[整合性保護のみのTLS 1.3スイート](https
 INIではそれぞれ `certificate_error_action=reject` と `certificate_error_action=prompt` に相当します。
 確認を選ぶと、接続先とポート、制御／データの区別、検証理由、証明書の所有者・発行者・有効期間、SHA-256フィンガープリント全体をオーバーレイに表示します。
 既定の操作はキャンセルです。Escやウィンドウを閉じる操作でも接続を拒否します。
+
+![自己署名証明書を提示したFTPSサーバーへの接続確認](../../images/ftps-certificate.png)
 
 例外の許可は、その接続ウィンドウ内の表示された証明書と検証失敗だけに適用します。
 接続ファイルやシステムの信頼ストアには保存しません。別の検証失敗や証明書変更時には再確認し、新しいウィンドウには許可を引き継ぎません。

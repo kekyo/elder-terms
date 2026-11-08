@@ -12,8 +12,18 @@
 #include <elder-terms/export.h>
 #include <elder-terms/key-binding.h>
 #include <elder-terms/settings/settings-store.h>
+#include <elder-terms/settings/titlebar-effects.h>
 
 namespace elder_terms {
+
+/** @returns Key for receive-driven titlebar effects shared by terminals and file browsers. */
+ELDER_TERMS_API SettingKey general_receive_effect_setting_key();
+/**
+ * Reads the receive-driven titlebar intensity for any connection type.
+ * @param store Layered connection settings.
+ * @returns Effective intensity, defaulting to medium.
+ */
+ELDER_TERMS_API TitlebarEffectStrength general_receive_effect_strength(const SettingsStore &store);
 
 /**
  * Identifies the configured connection type.
@@ -33,8 +43,12 @@ enum class ConnectionKind {
   ftp,
   /** Browses and transfers files over WebDAV HTTP(S) without a terminal. */
   webdav,
+  /** Browses HTML links and receives files over HTTP or HTTPS. */
+  http,
   /** Browses and transfers files over SMB without a terminal. */
   smb,
+  /** Browses and transfers files over NFS without a terminal. */
+  nfs,
 };
 
 /**

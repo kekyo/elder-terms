@@ -1,6 +1,27 @@
 # FTP/SFTP details
 
+## Basic Connection Settings
+
+![FTP connection and encryption settings](../../images/ftp-ftps-settings.png)
+
+The corresponding INI settings have the following form:
+
+```ini
+[general]
+type=ftp
+
+[ftp]
+address=ftp.example.com
+port=21
+username=
+data_connection_mode=passive
+local_directory=
+remote_directory=.
+```
+
 ## Using FTP with TLS (FTPS)
+
+![FTPS TLS version, certificate verification and cipher settings](../../images/ftp-tls-settings.png)
 
 To use [FTPS](https://everything.curl.dev/ftp/ftps.html), choose FTPS (explicit TLS)
 or FTPS (implicit TLS) under Encryption in the FTP tab. The equivalent INI values
@@ -86,6 +107,8 @@ The confirmation overlay shows the
 requested server and port, control/data channel, validation reason, certificate
 subject and issuer, validity dates, and full SHA-256 fingerprint. Cancel is the
 default action; Escape and closing the window also refuse the connection.
+
+![Connection confirmation for an FTPS server presenting a self-signed certificate](../../images/ftps-certificate.png)
 
 Allowing an exception applies only to the displayed certificate and failure in
 this connection window. It is not saved to the connection file or system trust

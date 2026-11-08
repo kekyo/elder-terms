@@ -38,7 +38,7 @@ struct TerminalRuntime {
   std::function<void(TerminalHyperlinkResolution)> activate_link;
   std::optional<std::pair<boxrig_ui_fixed, boxrig_ui_fixed>> pointer_position;
   bool link_hover = false;
-  TerminalLinkDecoration link_decoration = TerminalLinkDecoration::underline;
+  TerminalLinkDecorations link_decorations;
   bool links_pending = false;
   std::unique_ptr<TerminalReceivedMacros, decltype(&destroy_terminal_received_macros)> macros{
       nullptr, destroy_terminal_received_macros};
@@ -87,6 +87,10 @@ struct TerminalRuntime {
   SelectionPhase selection_phase = SelectionPhase::idle;
   PendingSelection selection_press;
   std::optional<std::pair<boxrig_ui_fixed, boxrig_ui_fixed>> selection_pointer;
+  std::optional<std::pair<boxrig_ui_fixed, boxrig_ui_fixed>> selection_motion_pointer;
+  boxrig_ui_selection_options selection_options{};
+  boxrig_ui_selection_kind selection_linear_kind = BOXRIG_UI_SELECTION_CHARACTER;
+  std::optional<boxrig_ui_selection_options> selection_pending_options;
   bool selection_scroll_pending = false;
   bool selection_release_pending = false;
   bool selection_left_down = false;
@@ -107,6 +111,8 @@ struct TerminalRuntime {
   int command_start_width = 0;
   int command_start_height = 0;
   boxrig_ui_window_state window_state = BOXRIG_UI_WINDOW_NORMAL;
+  std::optional<bool> zoom_preserve_window;
+  bool cell_geometry_hints = true;
   void (*changed)(void *) = nullptr;
   void *changed_context = nullptr;
   std::function<void()> prepare_frame;
@@ -124,6 +130,7 @@ static void reset_macros(TerminalRuntime *runtime) {
 
 static void notify_changed(TerminalRuntime *runtime) {
   runtime->notified_settled = terminal_runtime_is_settled(runtime);
+  if (runtime->notified_settled) runtime->zoom_preserve_window.reset();
   if (runtime->changed) runtime->changed(runtime->changed_context);
 }
 
@@ -166,6 +173,7 @@ static void update_link_cursor(TerminalRuntime *runtime, const boxrig_ui_hit_tes
 static gboolean pointer_left(GtkWidget *, GdkEventCrossing *, gpointer context) {
   auto *runtime = static_cast<TerminalRuntime *>(context);
   runtime->pointer_position.reset();
+  if (runtime->links) terminal_links_set_hover(runtime->links.get(), {});
   update_link_cursor(runtime, {});
   return FALSE;
 }
@@ -191,6 +199,8 @@ static void cancel_selection_gesture(TerminalRuntime *runtime) {
   if (selecting(runtime)) runtime->selection_phase = runtime->selection_left_down ? SelectionPhase::cancelled : SelectionPhase::idle;
   runtime->selection_press = {};
   runtime->selection_pointer.reset();
+  runtime->selection_motion_pointer.reset();
+  runtime->selection_pending_options.reset();
   runtime->selection_scroll_pending = false;
   runtime->selection_release_pending = false;
 }
@@ -231,6 +241,18 @@ static bool same_text_boundary(const boxrig_text_position &left, const boxrig_te
       left.line_id.serial == right.line_id.serial && left.line_revision == right.line_revision && left.column == right.column;
 }
 
+static bool same_pointer_target(const boxrig_ui_hit_test_result &left, const boxrig_ui_hit_test_result &right) {
+  return left.inside_grid && left.text_position_valid && right.inside_grid && right.text_position_valid &&
+      left.row == right.row && left.visual_column == right.visual_column &&
+      left.logical_column == right.logical_column && left.trailing_half == right.trailing_half &&
+      left.hyperlink_handle == right.hyperlink_handle &&
+      !(left.overlay_roles & (BOXRIG_UI_OVERLAY_IME | BOXRIG_UI_OVERLAY_CANDIDATES)) &&
+      !(right.overlay_roles & (BOXRIG_UI_OVERLAY_IME | BOXRIG_UI_OVERLAY_CANDIDATES)) &&
+      same_text_boundary(left.leading_position, right.leading_position) &&
+      same_text_boundary(left.trailing_position, right.trailing_position) &&
+      same_text_boundary(left.position, right.position);
+}
+
 static bool refresh_selection_press(TerminalRuntime *runtime) {
   auto &pressed = runtime->selection_press.hit;
   boxrig_ui_hit_test_result current{};
@@ -239,14 +261,7 @@ static bool refresh_selection_press(TerminalRuntime *runtime) {
   // after text replacement, scrolling, bidi changes or a transient overlay.
   if (boxrig_ui_view_hit_test_with_composition(boxrig_gtk3_terminal_widget_view(runtime->widget),
       boxrig_gtk3_terminal_widget_composition(runtime->widget), pressed.x, pressed.y, &current) != BOXRIG_UI_OK ||
-      !current.inside_grid || !current.text_position_valid ||
-      (current.overlay_roles & (BOXRIG_UI_OVERLAY_IME | BOXRIG_UI_OVERLAY_CANDIDATES)) ||
-      current.row != pressed.row || current.visual_column != pressed.visual_column ||
-      current.logical_column != pressed.logical_column || current.trailing_half != pressed.trailing_half ||
-      current.hyperlink_handle != pressed.hyperlink_handle ||
-      !same_text_boundary(current.leading_position, pressed.leading_position) ||
-      !same_text_boundary(current.trailing_position, pressed.trailing_position) ||
-      !same_text_boundary(current.position, pressed.position)) return false;
+      !same_pointer_target(current, pressed)) return false;
   pressed = current;
   // Borrowed hyperlink storage must not survive this synchronous hit.
   pressed.hyperlink_uri = nullptr;
@@ -317,7 +332,14 @@ static boxrig_ui_status update_selection_endpoint(TerminalRuntime *runtime) {
       std::clamp<boxrig_ui_fixed>(runtime->selection_pointer->second, 0, layout.grid_height - 1), &endpoint);
   if (status != BOXRIG_UI_OK) return status;
   if (!endpoint.text_position_valid) return BOXRIG_UI_OK;
-  return selection_result(runtime, boxrig_ui_view_update_selection(view, &endpoint), "selection update");
+  // A motion may precede an asynchronous scroll frame. Retain only the policy
+  // chosen by that real motion; wheel/timer/release modifiers never replace it.
+  const auto options = runtime->selection_pending_options;
+  status = options ? boxrig_ui_view_update_selection_with_options(view, &*options, &endpoint) :
+      boxrig_ui_view_update_selection(view, &endpoint);
+  if (status == BOXRIG_UI_OK && options) runtime->selection_options = *options;
+  runtime->selection_pending_options.reset();
+  return selection_result(runtime, status, "selection update");
 }
 
 static bool update_scrolled_selection(TerminalRuntime *runtime) {
@@ -415,6 +437,13 @@ static boxrig_input_mouse_route route_mouse(
     void *context) {
   auto *runtime = static_cast<TerminalRuntime *>(context);
   auto *view = boxrig_gtk3_terminal_widget_view(runtime->widget);
+  boxrig_ui_hit_test_result refreshed{};
+  // Native events can wait in the component queue while hover annotations
+  // advance. Refresh presentation authority only for the identical grapheme;
+  // changed text, scrolling and OSC 8 replacement never retarget the event.
+  if (runtime->links && boxrig_ui_view_hit_test_with_composition(view,
+      boxrig_gtk3_terminal_widget_composition(runtime->widget), hit->x, hit->y, &refreshed) == BOXRIG_UI_OK &&
+      same_pointer_target(refreshed, *hit)) hit = &refreshed;
   const bool press = event->action == BOXRIG_MOUSE_PRESS && event->button == BOXRIG_MOUSE_BUTTON_LEFT;
   const bool release = event->action == BOXRIG_MOUSE_RELEASE && event->button == BOXRIG_MOUSE_BUTTON_LEFT;
   if (press && runtime->selection_release_pending) cancel_selection_gesture(runtime);
@@ -443,6 +472,7 @@ static boxrig_input_mouse_route route_mouse(
   if (runtime->links) {
     runtime->pointer_position = {hit->x, hit->y};
     update_link_cursor(runtime, *hit);
+    request_frame(runtime);
   }
   if (runtime->selection_release_pending && event->action == BOXRIG_MOUSE_MOTION)
     return BOXRIG_INPUT_MOUSE_ROUTE_TERMINAL;
@@ -473,6 +503,18 @@ static boxrig_input_mouse_route route_mouse(
   }
   if (runtime->selection_phase == SelectionPhase::dragging) {
     if (event->action == BOXRIG_MOUSE_MOTION || release) {
+      const std::pair position{hit->x, hit->y};
+      if (event->action == BOXRIG_MOUSE_MOTION && runtime->selection_motion_pointer != position) {
+        runtime->selection_motion_pointer = position;
+        boxrig_ui_selection_options options{};
+        options.shape = (event->modifiers & BOXRIG_MODIFIER_CONTROL) ?
+            BOXRIG_UI_SELECTION_RECTANGULAR : BOXRIG_UI_SELECTION_LINEAR;
+        options.kind = options.shape == BOXRIG_UI_SELECTION_RECTANGULAR ?
+            BOXRIG_UI_SELECTION_CHARACTER : runtime->selection_linear_kind;
+        if (options.shape != runtime->selection_options.shape)
+          runtime->selection_pending_options = options;
+        else runtime->selection_pending_options.reset();
+      }
       runtime->selection_pointer = {hit->x, hit->y};
       runtime->selection_release_pending = release;
       const auto status = runtime->selection_scroll_pending ? BOXRIG_UI_OK : update_selection_endpoint(runtime);
@@ -518,6 +560,10 @@ static boxrig_input_mouse_route route_mouse(
     options.kind = options.shape == BOXRIG_UI_SELECTION_RECTANGULAR ? BOXRIG_UI_SELECTION_CHARACTER :
         event->click_count >= 3 ? BOXRIG_UI_SELECTION_LINE :
         event->click_count == 2 ? BOXRIG_UI_SELECTION_WORD : BOXRIG_UI_SELECTION_CHARACTER;
+    runtime->selection_options = options;
+    runtime->selection_linear_kind = options.kind;
+    runtime->selection_motion_pointer = runtime->selection_pointer;
+    runtime->selection_pending_options.reset();
     if (event->click_count <= 1) {
       if (boxrig_ui_view_clear_selection(view) != BOXRIG_UI_OK) return BOXRIG_INPUT_MOUSE_ROUTE_ERROR;
       runtime->selection_press = {*hit, options, {}};
@@ -822,6 +868,23 @@ static bool process_layout(TerminalRuntime *runtime) {
   if (runtime->window_state != BOXRIG_UI_WINDOW_NORMAL) {
     return complete_size(runtime, BOXRIG_UI_SIZE_CONSTRAINED);
   }
+  if (runtime->zoom_preserve_window == true && action.value.content_size.cause == BOXRIG_UI_LAYOUT_CHANGE_FONT_METRICS) {
+    if (!complete_size(runtime, BOXRIG_UI_SIZE_REJECTED)) return false;
+    // Rejection preserves the old normal-grid anchor. Adopt the fitted grid
+    // without asking the host to remove fractional-cell padding. Capability
+    // suppression is confined to this synchronous anchor update; settings and
+    // terminal-originated size requests retain the host's real capabilities.
+    auto *view = boxrig_gtk3_terminal_widget_view(runtime->widget);
+    boxrig_ui_layout_result layout{};
+    std::uint32_t capabilities = 0;
+    if (!ui_result(boxrig_gtk3_terminal_widget_get_layout(runtime->widget, &layout), "zoom layout") ||
+        !ui_result(boxrig_ui_view_get_geometry_capabilities(view, &capabilities), "zoom capabilities") ||
+        !ui_result(boxrig_ui_view_set_geometry_capabilities(view,
+            capabilities & ~BOXRIG_UI_GEOMETRY_SIZE_COMMAND), "zoom anchor capabilities")) return false;
+    const auto status = boxrig_gtk3_terminal_widget_set_preferred_grid(runtime->widget, layout.rows, layout.columns);
+    const auto restored = boxrig_ui_view_set_geometry_capabilities(view, capabilities);
+    return ui_result(status, "zoom anchor") && ui_result(restored, "restore zoom capabilities");
+  }
   const auto divisor = static_cast<boxrig_ui_fixed>(gtk_widget_get_scale_factor(widget)) * BOXRIG_UI_FIXED_ONE;
   const auto logical_width = (action.value.content_size.width + divisor - 1) / divisor;
   const auto logical_height = (action.value.content_size.height + divisor - 1) / divisor;
@@ -836,7 +899,7 @@ static bool process_layout(TerminalRuntime *runtime) {
   runtime->command_start_width = gtk_widget_get_allocated_width(widget);
   runtime->command_start_height = gtk_widget_get_allocated_height(widget);
   if (!ui_result(boxrig_gtk3_terminal_widget_set_geometry_hints(
-      runtime->widget, runtime->window, true), "geometry hints")) return false;
+      runtime->widget, runtime->window, runtime->cell_geometry_hints), "geometry hints")) return false;
   // GtkWindow accounts for CSD itself; only actual content siblings are added.
   gtk_window_resize(runtime->window, static_cast<int>(logical_width) + extra_width,
                     static_cast<int>(logical_height) + extra_height);
@@ -972,7 +1035,8 @@ static gboolean dispatch_frame(gpointer context) {
   // Long/custom matches continue in smaller background slices; filesystem
   // validation remains asynchronous and never holds presentation here.
   const std::size_t link_budget = runtime->widget_frame_requested &&
-      runtime->link_decoration == TerminalLinkDecoration::validated ? 65536 : 4096;
+      (runtime->link_decorations.regex == TerminalLinkDecoration::validated ||
+       runtime->link_decorations.osc8 == TerminalLinkDecoration::validated) ? 65536 : 4096;
   runtime->links_pending = runtime->links && terminal_links_dispatch(runtime->links.get(), link_budget);
   if (runtime->links_pending) request_continuation(runtime);
   // Communication and stream finalization continue while the window is hidden.
@@ -983,7 +1047,15 @@ static gboolean dispatch_frame(gpointer context) {
     fail_ui(runtime);
     return G_SOURCE_REMOVE;
   }
-  if (runtime->links) terminal_links_refresh_viewport(runtime->links.get());
+  if (runtime->links) {
+    terminal_links_refresh_viewport(runtime->links.get());
+    boxrig_ui_hit_test_result pointer{};
+    if (runtime->pointer_position)
+      boxrig_gtk3_terminal_widget_hit_test(runtime->widget, runtime->pointer_position->first, runtime->pointer_position->second, &pointer);
+    // Publish hover before painting. Queued pointer hits are refreshed only
+    // while their grapheme identity remains unchanged.
+    terminal_links_set_hover(runtime->links.get(), pointer);
+  }
   // Stream and recognizer continuations do not necessarily change the view.
   // Widget callbacks and received input request component frames,
   // which also publish accessible text; matching alone does not need one.
@@ -1059,7 +1131,7 @@ static void mapped(GtkWidget *, gpointer context) {
   auto *runtime = static_cast<TerminalRuntime *>(context);
   // An initial preferred grid can already fit its allocation and therefore
   // need no content-size action. Install native hints on that path as well.
-  ui_result(boxrig_gtk3_terminal_widget_set_geometry_hints(runtime->widget, runtime->window, true), "geometry hints");
+  ui_result(boxrig_gtk3_terminal_widget_set_geometry_hints(runtime->widget, runtime->window, runtime->cell_geometry_hints), "geometry hints");
   request_frame(runtime);
 }
 
@@ -1077,7 +1149,7 @@ static gboolean window_state_changed(GtkWidget *, GdkEventWindowState *event, gp
       (flags & GDK_WINDOW_STATE_TILED) ? BOXRIG_UI_WINDOW_TILED : BOXRIG_UI_WINDOW_NORMAL;
   if (!runtime->ui_failed) {
     ui_result(boxrig_gtk3_terminal_widget_set_window_state(runtime->widget, runtime->window_state), "window state");
-    ui_result(boxrig_gtk3_terminal_widget_set_geometry_hints(runtime->widget, runtime->window, true), "geometry hints");
+    ui_result(boxrig_gtk3_terminal_widget_set_geometry_hints(runtime->widget, runtime->window, runtime->cell_geometry_hints), "geometry hints");
   }
   request_frame(runtime);
   return FALSE;
@@ -1135,6 +1207,8 @@ static bool attach_widget(TerminalRuntime *runtime) {
   runtime->selection_phase = SelectionPhase::idle;
   runtime->selection_press = {};
   runtime->selection_pointer.reset();
+  runtime->selection_motion_pointer.reset();
+  runtime->selection_pending_options.reset();
   runtime->selection_scroll_pending = false;
   runtime->selection_release_pending = false;
   runtime->selection_left_down = false;
@@ -1254,21 +1328,21 @@ void terminal_runtime_set_host_callbacks(TerminalRuntime *runtime, TerminalRunti
   if (runtime->has_title && runtime->host.title) runtime->host.title(runtime->title);
 }
 
-void terminal_runtime_set_hyperlink_rules(TerminalRuntime *runtime,
+void terminal_runtime_set_hyperlink_rules(TerminalRuntime *runtime, bool enabled,
     std::vector<HyperlinkActionRule> rules, std::function<void(TerminalHyperlinkResolution)> activate,
     TerminalHyperlinkPathValidator validate) {
   runtime->links.reset();
   update_link_cursor(runtime, {});
-  if (!rules.empty()) runtime->links.reset(create_terminal_links(
+  if (enabled) runtime->links.reset(create_terminal_links(
       boxrig_gtk3_terminal_widget_view(runtime->widget), std::move(rules), std::move(validate)));
-  if (runtime->links) terminal_links_set_decoration(runtime->links.get(), runtime->link_decoration);
+  if (runtime->links) terminal_links_set_decorations(runtime->links.get(), runtime->link_decorations);
   runtime->activate_link = std::move(activate);
   request_frame(runtime);
 }
 
-void terminal_runtime_set_link_decoration(TerminalRuntime *runtime, TerminalLinkDecoration decoration) {
-  runtime->link_decoration = decoration;
-  if (runtime->links) terminal_links_set_decoration(runtime->links.get(), decoration);
+void terminal_runtime_set_link_decorations(TerminalRuntime *runtime, TerminalLinkDecorations decorations) {
+  runtime->link_decorations = decorations;
+  if (runtime->links) terminal_links_set_decorations(runtime->links.get(), decorations);
   request_frame(runtime);
 }
 
@@ -1320,17 +1394,37 @@ void terminal_runtime_set_prepare_frame_callback(TerminalRuntime *runtime, std::
   runtime->prepare_frame = std::move(callback);
 }
 
-boxrig_ui_status terminal_runtime_visual_zoom(TerminalRuntime *runtime, boxrig_font_zoom_direction direction) {
+boxrig_ui_status terminal_runtime_visual_zoom(TerminalRuntime *runtime, boxrig_font_zoom_direction direction,
+    bool preserve_window) {
+  if (runtime->zoom_preserve_window && *runtime->zoom_preserve_window != preserve_window)
+    return BOXRIG_UI_BUSY;
+  if (runtime->cell_geometry_hints == preserve_window) {
+    const auto hints = boxrig_gtk3_terminal_widget_set_geometry_hints(runtime->widget, runtime->window, !preserve_window);
+    if (hints != BOXRIG_UI_OK) return hints;
+    runtime->cell_geometry_hints = !preserve_window;
+  }
   bool changed = false;
   const auto status = boxrig_gtk3_terminal_widget_visual_zoom(runtime->widget,
       direction, boxrig_font_visual_step_policy_default(), &changed);
-  if (status == BOXRIG_UI_OK && changed) request_frame(runtime);
+  if (status == BOXRIG_UI_OK && changed) {
+    runtime->zoom_preserve_window = preserve_window;
+    request_frame(runtime);
+  }
   return status;
 }
 
 boxrig_ui_status terminal_runtime_set_preferred_grid(TerminalRuntime *runtime, std::size_t rows, std::size_t columns) {
   const auto status = boxrig_gtk3_terminal_widget_set_preferred_grid(runtime->widget, rows, columns);
   if (status == BOXRIG_UI_OK) request_frame(runtime);
+  return status;
+}
+
+boxrig_ui_status terminal_runtime_set_font(TerminalRuntime *runtime, const boxrig_font_specification &specification) {
+  const auto status = boxrig_gtk3_terminal_widget_set_font_specification(runtime->widget, &specification);
+  if (status == BOXRIG_UI_OK) {
+    runtime->zoom_preserve_window.reset();
+    request_frame(runtime);
+  }
   return status;
 }
 

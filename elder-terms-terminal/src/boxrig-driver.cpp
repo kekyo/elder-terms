@@ -6,9 +6,9 @@
 #include "terminal-runtime.h"
 #include "terminal-presentation.h"
 #include "terminal-transports.h"
-#include "inline-prompt.h"
+#include "../../shared/src/connection-runtime/inline-prompt.h"
 #include "terminal-log.h"
-#include "sftp/sftp-client.h"
+#include "../../elder-terms-file-transfer/src/sftp/sftp-client.h"
 #include <elder-terms/terminal-color-filter.h>
 
 #include <gestament/gtk.h>
@@ -47,10 +47,12 @@ struct Driver {
   bool links = false;
   bool defer_link_validation = false;
   elder_terms::TerminalColorFilterContext link_colors{};
-  elder_terms::TerminalLinkDecoration link_decoration = elder_terms::TerminalLinkDecoration::underline;
+  elder_terms::TerminalLinkDecorations link_decorations;
   std::shared_ptr<cardio::primitives::manually_conditional> link_validation_ready =
       std::make_shared<cardio::primitives::manually_conditional>();
   bool context_loss_control = false;
+  bool zoom_controls = false;
+  bool preserve_window = false;
   gulong context_loss_hook = 0;
   std::vector<elder_terms::MacroRule> macros;
   bool closing = false;
@@ -172,7 +174,14 @@ static void report_state(void *context) {
 
 static void zoom_in(GtkButton *, gpointer context) {
   auto *driver = static_cast<Driver *>(context);
-  elder_terms::terminal_runtime_visual_zoom(driver->runtime, BOXRIG_FONT_ZOOM_INCREASE);
+  elder_terms::terminal_runtime_visual_zoom(driver->runtime, BOXRIG_FONT_ZOOM_INCREASE, driver->preserve_window);
+  gtk_widget_grab_focus(GTK_WIDGET(elder_terms::terminal_runtime_widget(driver->runtime)));
+}
+
+static void zoom_out(GtkButton *, gpointer context) {
+  auto *driver = static_cast<Driver *>(context);
+  elder_terms::terminal_runtime_visual_zoom(driver->runtime, BOXRIG_FONT_ZOOM_DECREASE, driver->preserve_window);
+  gtk_widget_grab_focus(GTK_WIDGET(elder_terms::terminal_runtime_widget(driver->runtime)));
 }
 
 static void copy_selection(GtkButton *, gpointer context) {
@@ -423,8 +432,9 @@ static cardio::promise<elder_terms::SshUserPromptResponse> prompt_ssh(Driver *dr
 }
 
 static void configure_links(Driver *driver) {
-  elder_terms::terminal_runtime_set_link_decoration(driver->runtime, driver->link_decoration);
-  driver->link_colors.dim_links = driver->link_decoration == elder_terms::TerminalLinkDecoration::validated;
+  elder_terms::terminal_runtime_set_link_decorations(driver->runtime, driver->link_decorations);
+  driver->link_colors.dim_links = (driver->link_decorations.regex == elder_terms::TerminalLinkDecoration::validated ||
+      driver->link_decorations.osc8 == elder_terms::TerminalLinkDecoration::validated);
   boxrig_ui_view_set_color_filter(boxrig_gtk3_terminal_widget_view(elder_terms::terminal_runtime_widget(driver->runtime)),
       driver->link_colors.dim_links ? elder_terms::filter_terminal_colors : nullptr, &driver->link_colors);
   elder_terms::TerminalHyperlinkPathValidator validate = elder_terms::validate_terminal_hyperlink_path_async;
@@ -435,7 +445,7 @@ static void configure_links(Driver *driver) {
       co_return co_await elder_terms::validate_terminal_hyperlink_path_async(std::move(path), cancellation);
     };
   }
-  elder_terms::terminal_runtime_set_hyperlink_rules(driver->runtime,
+  elder_terms::terminal_runtime_set_hyperlink_rules(driver->runtime, driver->links,
       driver->links ? elder_terms::default_hyperlink_action_rules() : std::vector<elder_terms::HyperlinkActionRule>{}, [](elder_terms::TerminalHyperlinkResolution resolved) {
         if (resolved.action) {
           std::string value = resolved.action->command;
@@ -475,11 +485,16 @@ int main(int argc, char **argv) {
   elder_terms::AuthenticatedSshTransportOptions options;
   for (int index = 1; index < argc; ++index) {
     if (std::string_view(argv[index]) == "--local") driver.connection_mode = true;
+    else if (std::string_view(argv[index]) == "--zoom-modes") driver.zoom_controls = true;
     else if (std::string_view(argv[index]) == "--links") driver.links = true;
-    else if (std::string_view(argv[index]).starts_with("--link-decoration=")) {
-      const auto mode = std::string_view(argv[index]).substr(18);
-      if (mode != "none" && mode != "underline" && mode != "validated") return 2;
-      driver.link_decoration = mode == "none" ? elder_terms::TerminalLinkDecoration::none :
+    else if (std::string_view(argv[index]).starts_with("--regex-link-decoration=") ||
+        std::string_view(argv[index]).starts_with("--osc8-link-decoration=")) {
+      const std::string_view option(argv[index]);
+      const auto mode = option.substr(option.find('=') + 1);
+      if (mode != "none" && mode != "underline" && mode != "hover" && mode != "validated") return 2;
+      auto &decoration = option.starts_with("--regex-") ? driver.link_decorations.regex : driver.link_decorations.osc8;
+      decoration = mode == "none" ? elder_terms::TerminalLinkDecoration::none :
+          mode == "hover" ? elder_terms::TerminalLinkDecoration::hover :
           mode == "validated" ? elder_terms::TerminalLinkDecoration::validated : elder_terms::TerminalLinkDecoration::underline;
     }
     else if (std::string_view(argv[index]) == "--defer-link-validation") {
@@ -597,6 +612,12 @@ int main(int argc, char **argv) {
   auto *window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
   gtk_window_set_title(GTK_WINDOW(window), "boxrig driver");
   gestament_gtk_assign_accessible_id(window, "driver_window");
+  if (driver.zoom_controls) {
+    g_signal_connect(window, "size-allocate", G_CALLBACK(+[](GtkWidget *, GtkAllocation *allocation, gpointer) {
+      std::printf("window_allocation=%dx%d\n", allocation->width, allocation->height);
+      std::fflush(stdout);
+    }), nullptr);
+  }
   auto *content = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
   auto *overlay = gtk_overlay_new();
   gtk_container_add(GTK_CONTAINER(window), overlay);
@@ -624,6 +645,18 @@ int main(int argc, char **argv) {
   auto *copy = gtk_button_new_with_label("Copy selection");
   gestament_gtk_assign_accessible_id(copy, "driver_copy");
   gtk_box_pack_start(GTK_BOX(controls), copy, FALSE, FALSE, 0);
+  if (driver.zoom_controls) {
+    auto *out = gtk_button_new_with_label("Zoom out");
+    gestament_gtk_assign_accessible_id(out, "driver_zoom_out");
+    gtk_box_pack_start(GTK_BOX(controls), out, FALSE, FALSE, 0);
+    g_signal_connect(out, "clicked", G_CALLBACK(zoom_out), &driver);
+    auto *mode = gtk_check_button_new_with_label("Preserve window");
+    gestament_gtk_assign_accessible_id(mode, "driver_preserve_window");
+    gtk_box_pack_start(GTK_BOX(controls), mode, FALSE, FALSE, 0);
+    g_signal_connect(mode, "toggled", G_CALLBACK(+[](GtkToggleButton *button, gpointer context) {
+      static_cast<Driver *>(context)->preserve_window = gtk_toggle_button_get_active(button);
+    }), &driver);
+  }
   if (driver.context_loss_control) {
     auto *render_controls = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 6);
     gtk_box_pack_start(GTK_BOX(content), render_controls, FALSE, FALSE, 0);

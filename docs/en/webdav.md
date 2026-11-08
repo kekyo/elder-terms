@@ -2,6 +2,8 @@
 
 ## Find a host with IP scan
 
+![WebDAV settings with the IP scan button and connection URL](../../images/webdav-settings.png)
+
 Use the "IP scan" button beside the address field on the WebDAV tab to find a host.
 Check the 443 column for HTTPS or the 80 column for HTTP. Results are candidates that accepted
 a TCP connection; they do not verify the WebDAV path, authentication, or certificate.
@@ -19,6 +21,8 @@ for scan ranges and name lookup shared with the other connection types.
 WebDAV uses the same two-pane browser as SFTP, FTP and FTPS. Select items and use the context menu to send, receive,
 rename or delete them. Folder transfers and deletions include their descendants.
 New Folder is also available in an empty pane.
+
+Before sending, select one folder or regular file in Remote; before receiving, select one in Local. Selecting a folder transfers into that folder. Selecting a file transfers into its containing folder. Send and Receive are unavailable when no destination is selected, a symbolic link is selected, or multiple items are selected. The path field is not used as the destination.
 
 A blank size means the server did not report the file's size; it does not mean the file is empty.
 Progress uses the available size or item information.
@@ -52,6 +56,8 @@ You can supply a custom PEM CA bundle. Certificate verification failures reject 
 With confirmation enabled, an overlay shows the endpoint, reason, Subject, Issuer, validity period and full SHA-256 fingerprint.
 Allow for this connection applies only to that window's certificate and reported verification failure.
 A changed certificate or failure requires another decision. Exceptions are not written to settings or trust stores and do not carry into a new window.
+
+![Certificate confirmation for a WebDAV HTTPS connection](../../images/webdav-certificate.png)
 
 Cancel is the default. Escape, cancellation and closing the window reject the connection.
 Credentials and file data are not sent before approval. Approval can resume a read-only connection check or listing;

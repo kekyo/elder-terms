@@ -5,6 +5,7 @@
 
 #include "ssh-proxy-settings-editor.h"
 #include "settings-presentation.h"
+#include "settings-validation.h"
 
 #include <algorithm>
 #include <charconv>
@@ -54,8 +55,8 @@ static void update_validation(SshProxySettingsEditor *editor) {
   gtk_widget_set_sensitive(editor->enabled, !editor->read_only);
   for (auto &field : editor->fields) {
     gtk_widget_set_sensitive(field.entry, !editor->read_only && settings.enabled);
-    gtk_entry_set_icon_from_icon_name(GTK_ENTRY(field.entry), GTK_ENTRY_ICON_SECONDARY,
-        field.valid ? nullptr : "dialog-error-symbolic");
+    set_settings_input_error(field.entry, !settings.enabled || field.valid ? "" :
+          settings_rejected_input_reason(*editor->store, ssh_proxy_setting_key(field.name), field.entry));
     if (settings.enabled && !field.valid)
       errors.push_back(setting_label(ssh_proxy_setting_key(field.name)) + ": " + _("Enter a valid value"));
   }
@@ -69,9 +70,7 @@ void sync_ssh_proxy_settings_editor(SshProxySettingsEditor *editor, bool preserv
   auto fallback = *editor->store;
   clear_explicit_setting_value(&fallback, enabled_key);
   const auto enabled_text = value_text(*editor->store, "enabled");
-  const auto inherited = inherited_setting_label(
-      value_text(fallback, "enabled") == "true" ? _("Enabled") : _("Disabled"),
-      setting_fallback_source(*editor->store, enabled_key));
+  const auto inherited = setting_fallback_label(*editor->store, enabled_key, value_text(fallback, "enabled") == "true" ? _("Enabled") : _("Disabled"));
   auto *combo = GTK_COMBO_BOX_TEXT(editor->enabled);
   gtk_combo_box_text_remove_all(combo);
   gtk_combo_box_text_append(combo, "inherit", inherited.c_str());
@@ -85,8 +84,7 @@ void sync_ssh_proxy_settings_editor(SshProxySettingsEditor *editor, bool preserv
     const auto key = ssh_proxy_setting_key(field.name);
     fallback = *editor->store;
     clear_explicit_setting_value(&fallback, key);
-    const auto placeholder = inherited_setting_label(value_text(fallback, field.name),
-        setting_fallback_source(*editor->store, key));
+    const auto placeholder = setting_fallback_label(*editor->store, key, value_text(fallback, field.name));
     gtk_entry_set_placeholder_text(GTK_ENTRY(field.entry), placeholder.c_str());
     if (preserve_invalid && !field.valid) continue;
     gtk_entry_set_text(GTK_ENTRY(field.entry), setting_has_explicit_value(*editor->store, key)
@@ -144,7 +142,8 @@ SshProxySettingsEditor *create_ssh_proxy_settings_editor(SettingsStore *store,
   auto *label = gtk_label_new(_("Use SSH proxy"));
   gtk_label_set_xalign(GTK_LABEL(label), 0);
   gtk_grid_attach(GTK_GRID(editor->root), label, 0, 0, 1, 1);
-  gtk_grid_attach(GTK_GRID(editor->root), editor->enabled, 1, 0, 1, 1);
+  bind_settings_field(editor->enabled, ssh_proxy_setting_key("enabled"));
+  gtk_grid_attach(GTK_GRID(editor->root), decorate_settings_control(editor->enabled), 1, 0, 1, 1);
   g_signal_connect(editor->enabled, "changed", G_CALLBACK(enabled_changed), editor);
   int row = 1;
   for (auto &field : editor->fields) {
@@ -154,6 +153,7 @@ SshProxySettingsEditor *create_ssh_proxy_settings_editor(SettingsStore *store,
     gtk_widget_set_hexpand(field.entry, TRUE);
     assign_id(field.entry, editor->prefix + "_ssh_proxy_" + field.name + "_entry");
     gtk_grid_attach(GTK_GRID(editor->root), label, 0, row, 1, 1);
+    bind_settings_field(field.entry, ssh_proxy_setting_key(field.name));
     gtk_grid_attach(GTK_GRID(editor->root), field.entry, 1, row++, 1, 1);
     g_signal_connect(field.entry, "changed", G_CALLBACK(entry_changed), editor);
   }

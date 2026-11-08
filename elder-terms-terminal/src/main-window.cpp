@@ -24,10 +24,11 @@
 #include <glib/gi18n-lib.h>
 
 #include "main-window.h"
-#include "compact-header.h"
-#include "indicator-color.h"
-#include "inline-prompt.h"
-#include "widget-background.h"
+#include "../../shared/src/connection-runtime/titlebar-effects.h"
+#include "../../shared/src/connection-runtime/compact-header.h"
+#include "../../shared/src/connection-runtime/indicator-color.h"
+#include "../../shared/src/connection-runtime/inline-prompt.h"
+#include "../../shared/src/connection-runtime/widget-background.h"
 
 namespace elder_terms {
 
@@ -1140,6 +1141,11 @@ std::optional<MainWindow> load_main_window(TerminalAmbiguousWidth ambiguous_widt
   gestament_gtk_assign_accessible_id(main_window.terminal, "terminal_view");
   install_terminal_dim_overlay_input_pass_through(
       main_window.terminal_dim_overlay);
+  // Block local mouse actions while an authentication panel is visible. The
+  // binding follows widget lifetime and restores input when the panel hides.
+  g_object_bind_property(main_window.ssh_prompt_panel, "visible",
+      main_window.terminal_attachment, "sensitive",
+      static_cast<GBindingFlags>(G_BINDING_SYNC_CREATE | G_BINDING_INVERT_BOOLEAN));
   main_window.ssh_prompt = create_inline_prompt_controller(
       {
           .panel = main_window.ssh_prompt_panel,
@@ -1167,6 +1173,7 @@ std::optional<MainWindow> load_main_window(TerminalAmbiguousWidth ambiguous_widt
                    G_CALLBACK(on_status_bar_button_press),
                    main_window.window);
   apply_main_window_style(&main_window);
+  install_titlebar_effects(main_window.header_bar);
   create_activity_indicator_widgets(&main_window);
   if (!load_indicator_images(&main_window)) {
     release_main_window(&main_window);
@@ -1285,11 +1292,22 @@ void note_main_window_activity(MainWindow *main_window,
     return;
   }
 
+  // Binary protocol data bypasses normal output decoding. Its 0x07 bytes are
+  // payload, not terminal BELs, and still count as reception.
+  if (indicator == ActivityIndicatorId::rd && main_window->runtime &&
+      terminal_runtime_connection_state(main_window->runtime).binary_receive)
+    notify_titlebar_receive(main_window->header_bar);
+
   const std::size_t index = activity_indicator_index(indicator);
   if (!main_window->indicator_visible[index]) {
     return;
   }
   note_activity_indicator_widget(&main_window->indicators[index]);
+}
+
+void note_main_window_output(MainWindow *main_window, std::span<const unsigned char> bytes) {
+  if (main_window && std::any_of(bytes.begin(), bytes.end(), [](unsigned char byte) { return byte != 0x07; }))
+    notify_titlebar_receive(main_window->header_bar);
 }
 
 void set_main_window_indicator_state(MainWindow *main_window,
@@ -1339,16 +1357,36 @@ void set_main_window_connection_failure(MainWindow *main_window,
     return;
   }
 
-  const bool telnet = kind == TerminalConnectionKind::telnet;
+  const char *heading = nullptr;
+  const char *format = nullptr;
+  switch (kind) {
+  case TerminalConnectionKind::local_shell:
+    heading = _("Local command failed");
+    format = _("Local command failed:\n%s");
+    break;
+  case TerminalConnectionKind::serial:
+    heading = _("Serial connection failed");
+    format = _("Serial connection failed:\n%s");
+    break;
+  case TerminalConnectionKind::telnet:
+    heading = _("TELNET connection failed");
+    format = _("TELNET connection failed:\n%s");
+    break;
+  case TerminalConnectionKind::ssh:
+    heading = _("SSH connection failed");
+    format = _("SSH connection failed:\n%s");
+    break;
+  }
   const std::string text =
-      message.empty()
-          ? (telnet ? _("TELNET connection failed") : _("SSH connection failed"))
-          : format_translated_string(
-                telnet ? _("TELNET connection failed:\n%s")
-                       : _("SSH connection failed:\n%s"),
-                message.c_str());
+      message.empty() ? heading : format_translated_string(format, message.c_str());
+  set_main_window_disconnected_message(main_window, text);
+}
+
+void set_main_window_disconnected_message(MainWindow *main_window,
+                                         const std::string &message) {
+  if (main_window == nullptr || main_window->disconnected_notice_label == nullptr) return;
   gtk_label_set_text(GTK_LABEL(main_window->disconnected_notice_label),
-                     text.c_str());
+                     message.c_str());
 }
 
 void set_main_window_reconnect_presentation(

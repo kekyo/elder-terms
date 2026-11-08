@@ -50,8 +50,17 @@ try {
     const value = await progress.valueInfo();
     assert.equal(value.value, value.maximum);
   });
-  assert.equal(await table.getColumnCount(), 9);
-  for (const [index, expected] of ['', '✓', '', '✓', '✓', '✓', '✓'].entries()) {
+  assert.equal(await table.getColumnCount(), 10);
+  for (const [index, expected] of [
+    '',
+    '✓',
+    '',
+    '✓',
+    '✓',
+    '✓',
+    '✓',
+    '✓',
+  ].entries()) {
     assert.equal(
       (await (await table.cellAt(0, index + 2))?.info())?.name,
       expected

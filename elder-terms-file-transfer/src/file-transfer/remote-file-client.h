@@ -1,0 +1,498 @@
+// elder-terms: A terminal application, inspired by personal computing in the 1990s.
+// Copyright (c) Kouji Matsui. (@kekyo@mi.kekyo.net)
+// Under MIT.
+// https://github.com/kekyo/elder-terms/
+
+#pragma once
+
+#include <cstdint>
+#include <memory>
+#include <optional>
+#include <span>
+#include <stdexcept>
+#include <string>
+#include <vector>
+
+#include <cardio.h>
+
+namespace elder_terms {
+
+/** Remote operation failure, including whether the service connection ended. */
+struct RemoteFileError : std::runtime_error {
+  /** True only for transport failures that make the service unavailable. */
+  bool connection_lost;
+
+  /**
+   * Creates a remote operation failure.
+   * @param message Description of the failed operation.
+   * @param connection_lost Whether the connection is no longer available.
+   */
+  RemoteFileError(const std::string &message, bool connection_lost)
+      : std::runtime_error(message), connection_lost(connection_lost) {}
+};
+
+/** Kind of an item exposed by a remote file service. */
+enum class RemoteFileType {
+  regular,
+  directory,
+  symbolic_link,
+  other,
+  /** HTTP link whose response has not been requested or classified. */
+  unresolved,
+};
+
+/** Display-only role of a remote item; permissions still use path_capabilities(). */
+enum class RemoteFileRole {
+  /** Ordinary filesystem item. */
+  ordinary,
+  /** SMB disk share, retaining directory semantics. */
+  smb_share,
+  /** NFS exported root or an ancestor in the export tree, retaining directory semantics. */
+  nfs_export,
+};
+
+/** Optional remote filesystem features understood by the transfer engine. */
+struct RemoteFileCapabilities {
+  /** True when uploads and remote filesystem changes are available. */
+  bool write_operations = true;
+  /** True when symbolic links can be inspected and created. */
+  bool symbolic_links = false;
+  /** True when POSIX permission bits can be read and applied. */
+  bool permissions = false;
+  /** True when access timestamps can be read and applied. */
+  bool access_time = false;
+  /** True when modification timestamps can be read and applied. */
+  bool modification_time = false;
+  /** True when completed uploads have an explicit conditional commit operation. */
+  bool upload_commit = false;
+  /** True when a collection can be explicitly deleted with all descendants. */
+  bool recursive_directory_delete = false;
+  /** True for graph-like sources received incrementally without a pre-scan. */
+  bool incremental_receive = false;
+};
+
+/** Operations permitted at a particular remote path, before server ACL checks. */
+struct RemotePathCapabilities {
+  /** True when files or directories may be created inside this directory. */
+  bool create_children;
+  /** True when this item may be removed, renamed, replaced, or have metadata changed. */
+  bool modify;
+};
+
+/** Portable attributes used by the remote browser and transfer engine. */
+struct RemoteFileAttributes {
+  /** UTF-8 display name without its parent; never reconstruct path from it. */
+  std::string name;
+  /**
+   * Client-owned operation identity, retained exactly as returned by the client.
+   * The identity belongs to this connection; it must not be reused after reconnect.
+   * UTF-8 presentation and new destination names are separate from this value.
+   */
+  std::string path;
+  /** Remote item kind, determined without following symbolic links. */
+  RemoteFileType type = RemoteFileType::other;
+  /** Regular-file size in bytes, or no value when the service omits it. */
+  std::optional<std::uint64_t> size;
+  /** POSIX permission and type bits, when reported by the service. */
+  std::optional<std::uint32_t> permissions;
+  /** Last access time as Unix seconds, when reported by the service. */
+  std::optional<std::int64_t> access_time_unix_seconds;
+  /** Last modification time as Unix seconds, when reported by the service. */
+  std::optional<std::int64_t> modification_time_unix_seconds;
+  /** Presentation role supplied by the service, never inferred from path depth. */
+  RemoteFileRole role = RemoteFileRole::ordinary;
+};
+
+/** One atomically loaded remote directory and its canonical path. */
+struct RemoteDirectorySnapshot {
+  /** Canonical path identifying the loaded directory. */
+  std::string canonical_path;
+  /** Directory entries excluding service-specific self and parent records. */
+  std::vector<RemoteFileAttributes> entries;
+  /** Actual resource type after an attempted expansion. */
+  RemoteFileType resource_type = RemoteFileType::directory;
+  /** Nonfatal discovery information, such as using configured exports after enumeration failed. */
+  std::string notice{};
+};
+
+/** Asynchronous reader for one remote regular file. */
+class RemoteFileReader {
+public:
+  /** Releases the remote file handle. */
+  virtual ~RemoteFileReader() = default;
+
+  /**
+   * Reads the next remote file chunk.
+   *
+   * @param buffer Destination buffer.
+   * @param cancellation Operation cancellation signal.
+   * @returns Number of bytes read, or zero at end of file.
+   */
+  virtual cardio::promise<std::size_t>
+  read_async(std::span<std::byte> buffer,
+             cardio::cancellation cancellation) = 0;
+
+  /**
+   * Closes the remote file handle.
+   *
+   * @param cancellation Operation cancellation signal.
+   */
+  virtual cardio::promise<void>
+  close_async(cardio::cancellation cancellation) = 0;
+};
+
+/** What the final upload response proves about creation of its temporary path. */
+enum class RemoteFileCreationState {
+  /** Creation or ownership cannot be established; do not delete the path. */
+  unknown,
+  /** A creation precondition failed; the path belongs to somebody else. */
+  not_created,
+  /** The exclusive creation completed successfully in this operation. */
+  created,
+};
+
+/** Asynchronous writer for one remote regular file. */
+class RemoteFileWriter {
+public:
+  /** Releases the remote file handle. */
+  virtual ~RemoteFileWriter() = default;
+
+  /**
+   * Reports proven ownership after an exclusive upload, including failed close.
+   * @returns Creation state; only used with the upload_commit capability.
+   */
+  virtual RemoteFileCreationState creation_state() const noexcept {
+    return RemoteFileCreationState::unknown;
+  }
+
+  /**
+   * Writes an entire remote file chunk.
+   *
+   * @param buffer Source buffer.
+   * @param cancellation Operation cancellation signal.
+   */
+  virtual cardio::promise<void>
+  write_all_async(std::span<const std::byte> buffer,
+                  cardio::cancellation cancellation) = 0;
+
+  /**
+   * Closes the remote file handle.
+   *
+   * @param cancellation Operation cancellation signal.
+   */
+  virtual cardio::promise<void>
+  close_async(cardio::cancellation cancellation) = 0;
+};
+
+/** Asynchronous filesystem operations for one authenticated remote service. */
+/** One lazily classified source, optionally retaining its already-started stream. */
+struct RemoteReceiveSource {
+  /** Actual resource attributes with canonical identity and safe name candidate. */
+  RemoteFileAttributes attributes;
+  /** Immediate children for a directory; never a recursively discovered tree. */
+  std::vector<RemoteFileAttributes> children;
+  /** Started content stream, or null for a directory. */
+  std::unique_ptr<RemoteFileReader> reader;
+};
+
+/** Limits of a single incremental transfer operation. */
+struct RemoteReceiveLimits {
+  /** Maximum child depth. */
+  std::size_t depth = 32;
+  /** Maximum expanded pages. */
+  std::size_t pages = 1000;
+  /** Maximum discovered child links. */
+  std::size_t links = 10000;
+};
+
+class RemoteFileClient {
+public:
+  /** Releases the remote service session. */
+  virtual ~RemoteFileClient() = default;
+
+  /**
+   * Returns immutable filesystem capabilities for this session.
+   *
+   * @returns Supported optional operations and metadata.
+   */
+  virtual auto capabilities() const noexcept
+      -> RemoteFileCapabilities = 0;
+
+  /**
+   * Reports structural restrictions for one path, including virtual roots.
+   * @param path Remote path to inspect without performing network I/O.
+   * @returns Allowed mutations; servers may impose additional access restrictions.
+   */
+  virtual RemotePathCapabilities path_capabilities(const std::string &path) const {
+    (void)path;
+    const bool writable = capabilities().write_operations;
+    return {.create_children = writable, .modify = writable};
+  }
+
+  /** @param path Existing operation identity. @returns Identity of its parent, or itself at the root. */
+  virtual std::string parent_path(const std::string &path) const {
+    auto normalized = path;
+    while (normalized.size() > 1 && normalized.back() == '/') normalized.pop_back();
+    const auto separator = normalized.find_last_of('/');
+    if (separator == std::string::npos) return ".";
+    return separator == 0 ? "/" : normalized.substr(0, separator);
+  }
+
+  /** @param path Operation identity. @returns Human-readable path, never used to reconstruct the identity. */
+  virtual std::string display_path(const std::string &path) const { return path; }
+
+  /**
+   * Resolves address-entry text without interpreting operation identities as display text.
+   * @param text User-entered path, using this service's path syntax.
+   * @param cancellation Owner cancellation during any directory lookups.
+   * @returns Operation identity; ambiguous or unavailable paths throw.
+   */
+  virtual cardio::promise<std::string> resolve_input_path_async(
+      std::string text, cardio::cancellation cancellation) {
+    cancellation.throw_if_cancellation_requested();
+    co_return text;
+  }
+
+  /**
+   * Builds a new child identity using this connection's filename rules.
+   * @param parent Existing parent identity, never a display path.
+   * @param name New UTF-8 filename, without directory separators.
+   * @returns Child identity; encoding failures throw before any remote changes.
+   */
+  virtual std::string child_path(const std::string &parent, const std::string &name) const {
+    if (name.empty() || name == "." || name == ".." ||
+        name.find('/') != std::string::npos || name.find('\0') != std::string::npos)
+      throw std::invalid_argument("Invalid new remote item name");
+    return parent.empty() || parent.back() == '/' ? parent + name : parent + "/" + name;
+  }
+
+  /**
+   * Builds an adjacent temporary upload identity without altering opaque paths.
+   * @param destination Final destination identity.
+   * @param suffix Unique ASCII filename suffix supplied by the transfer engine.
+   * @returns Candidate identity; allocation and ownership require remote I/O.
+   */
+  virtual std::string upload_temporary_path(const std::string &destination,
+                                           const std::string &suffix) const {
+    return destination + suffix;
+  }
+
+  /**
+   * Suggests a local UTF-8 filename for an existing remote identity.
+   * @param item Listed or statted item, including its original identity.
+   * @returns Losslessly decoded filename, or no value when explicit naming is required.
+   */
+  virtual std::optional<std::string> local_filename(const RemoteFileAttributes &item) const {
+    return item.name;
+  }
+
+  /**
+   * Converts a local symbolic-link target for creation on this service.
+   * @param target Stored local target, retaining relative segments and separators.
+   * @returns Remote target bytes; throws when the mapping is not lossless.
+   */
+  virtual std::string import_link_target(const std::string &target) const { return target; }
+
+  /**
+   * Converts a remote symbolic-link target for creation in the local filesystem.
+   * @param target Original stored remote bytes, never its display representation.
+   * @returns Local target; throws when conversion would change its meaning.
+   */
+  virtual std::string export_link_target(const std::string &target) const { return target; }
+
+  /**
+   * Loads one directory as a single logical remote operation.
+   *
+   * @param path Remote path accepted by the service.
+   * @param cancellation Operation cancellation signal.
+   * @returns Canonical path and directory entries.
+   */
+  virtual cardio::promise<RemoteDirectorySnapshot>
+  load_directory_async(std::string path,
+                       cardio::cancellation cancellation) = 0;
+
+  /**
+   * Loads a directory with explicit refresh or HTML interpretation options.
+   * @param path Selected resource path.
+   * @param refresh Invalidate the selected page's cached listing.
+   * @param force_html Interpret only this selected response as HTML.
+   * @param cancellation Operation cancellation signal.
+   * @returns Immediate directory snapshot and actual resource type.
+   */
+  virtual cardio::promise<RemoteDirectorySnapshot> browse_directory_async(
+      std::string path, bool refresh, bool force_html, cardio::cancellation cancellation) {
+    (void)refresh; (void)force_html;
+    co_return co_await load_directory_async(std::move(path), cancellation);
+  }
+
+  /** @returns Limits used for a graph-like incremental receive. */
+  virtual RemoteReceiveLimits receive_limits() const { return {}; }
+
+  /**
+   * Classifies and starts one incremental source without probing its children.
+   * @param path Selected or discovered resource identity.
+   * @param as_file Save the response itself, including HTML.
+   * @param cancellation Operation cancellation signal.
+   * @returns Source or no value when already visited in the active transfer.
+   */
+  virtual cardio::promise<std::optional<RemoteReceiveSource>> prepare_receive_async(
+      std::string path, bool as_file, cardio::cancellation cancellation) {
+    (void)path; (void)as_file; (void)cancellation;
+    throw std::logic_error("Incremental receive is not supported");
+    co_return std::nullopt;
+  }
+
+  /**
+   * Reads remote attributes without following a symbolic link.
+   *
+   * @param path Remote item path.
+   * @param cancellation Operation cancellation signal.
+   * @returns Attributes, or no value when the item does not exist.
+   */
+  virtual cardio::promise<std::optional<RemoteFileAttributes>>
+  lstat_async(std::string path, cardio::cancellation cancellation) = 0;
+
+  /**
+   * Reads the stored target of a remote symbolic link.
+   *
+   * @param path Remote symbolic-link path.
+   * @param cancellation Operation cancellation signal.
+   * @returns Stored symbolic-link target.
+   */
+  virtual cardio::promise<std::string>
+  read_link_async(std::string path,
+                  cardio::cancellation cancellation) = 0;
+
+  /**
+   * Creates a remote directory.
+   *
+   * @param path Remote directory path.
+   * @param permissions Optional POSIX permission bits.
+   * @param cancellation Operation cancellation signal.
+   */
+  virtual cardio::promise<void>
+  make_directory_async(std::string path,
+                       std::optional<std::uint32_t> permissions,
+                       cardio::cancellation cancellation) = 0;
+
+  /**
+   * Deletes a remote non-directory item.
+   *
+   * @param path Remote item path.
+   * @param cancellation Operation cancellation signal.
+   */
+  virtual cardio::promise<void>
+  remove_file_async(std::string path,
+                    cardio::cancellation cancellation) = 0;
+
+  /**
+   * Deletes an empty remote directory.
+   *
+   * @param path Remote directory path.
+   * @param cancellation Operation cancellation signal.
+   */
+  virtual cardio::promise<void>
+  remove_directory_async(std::string path,
+                         cardio::cancellation cancellation) = 0;
+
+  /**
+   * Renames a remote item.
+   *
+   * @param source_path Existing remote path.
+   * @param destination_path New remote path.
+   * @param cancellation Operation cancellation signal.
+   */
+  virtual cardio::promise<void>
+  rename_async(std::string source_path, std::string destination_path,
+               cardio::cancellation cancellation) = 0;
+
+  /**
+   * Commits a completed adjacent upload without first deleting its destination.
+   * @param source_path Exclusively created temporary file.
+   * @param destination_path Final file path.
+   * @param overwrite True only after an explicit replacement decision.
+   * @param cancellation Operation cancellation signal.
+   * @remarks Requires upload_commit; ordinary rename remains no-replace.
+   */
+  virtual cardio::promise<void> commit_upload_async(
+      std::string source_path, std::string destination_path, bool overwrite,
+      cardio::cancellation cancellation) {
+    (void)source_path; (void)destination_path; (void)overwrite; (void)cancellation;
+    throw std::logic_error("Remote upload commit is not supported");
+    co_return;
+  }
+
+  /**
+   * Deletes a collection and descendants as an explicit tree operation.
+   * @param path Selected collection path, never the virtual root.
+   * @param cancellation Operation cancellation signal.
+   * @remarks Requires recursive_directory_delete; not an empty-directory API.
+   */
+  virtual cardio::promise<void> remove_directory_tree_async(
+      std::string path, cardio::cancellation cancellation) {
+    (void)path; (void)cancellation;
+    throw std::logic_error("Remote collection tree deletion is not supported");
+    co_return;
+  }
+
+  /**
+   * Creates a remote symbolic link without following its target.
+   *
+   * @param target Stored symbolic-link target.
+   * @param path Remote symbolic-link path.
+   * @param cancellation Operation cancellation signal.
+   */
+  virtual cardio::promise<void>
+  make_symbolic_link_async(std::string target, std::string path,
+                          cardio::cancellation cancellation) = 0;
+
+  /**
+   * Applies metadata supported by the remote service.
+   *
+   * @param path Remote item path.
+   * @param attributes Optional metadata to apply.
+   * @param cancellation Operation cancellation signal.
+   */
+  virtual cardio::promise<void>
+  set_attributes_async(std::string path,
+                       RemoteFileAttributes attributes,
+                       cardio::cancellation cancellation) = 0;
+
+  /**
+   * Opens a remote regular file for reading.
+   *
+   * @param path Remote file path.
+   * @param cancellation Operation cancellation signal.
+   * @returns Remote file reader.
+   */
+  virtual cardio::promise<std::unique_ptr<RemoteFileReader>>
+  open_read_async(std::string path,
+                  cardio::cancellation cancellation) = 0;
+
+  /**
+   * Opens a remote regular file for a known-size upload.
+   *
+   * @param path Remote file path.
+   * @param expected_size Exact discovered source size, including zero.
+   * @param permissions Optional initial POSIX permission bits.
+   * @param cancellation Operation cancellation signal.
+   * @returns Remote file writer.
+   * @remarks upload_commit services create exclusively; other services may truncate.
+   */
+  virtual cardio::promise<std::unique_ptr<RemoteFileWriter>>
+  open_write_async(std::string path, std::uint64_t expected_size,
+                   std::optional<std::uint32_t> permissions,
+                   cardio::cancellation cancellation) = 0;
+
+  /**
+   * Acquires the service's single bulk-transfer slot.
+   *
+   * @returns True when the caller acquired the slot.
+   */
+  virtual bool try_begin_transfer() = 0;
+
+  /** Releases the service's bulk-transfer slot. */
+  virtual void end_transfer() = 0;
+};
+
+} // namespace elder_terms

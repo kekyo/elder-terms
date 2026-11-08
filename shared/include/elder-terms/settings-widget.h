@@ -28,6 +28,8 @@ enum class SettingsWidgetMode {
   connection,
   /** Edits global defaults without connection-specific fields. */
   global_defaults,
+  /** Edits only inheritable settings in a named theme. */
+  named_theme,
 };
 
 /** One pending Apply/Save request. Call its functions only on the GTK thread. */

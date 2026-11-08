@@ -22,12 +22,13 @@ import { describe, expect, it, type TestContext } from 'vitest';
 import { waitForResult } from 'gestament/testing';
 import { waitForActivityIndicatorImageState } from './activity-indicator-test-helpers';
 import {
+  withTemporaryDirectory,
   capturePixel,
   createTestEvidence,
   expectCaptureToMatchFixture,
   expectElementKind,
   type TestEvidence,
-} from './test-helpers';
+} from '../../shared/tests/connection-test-helpers.ts';
 import {
   activateTransferCancel,
   assertTerminalCaptureMatches,
@@ -43,7 +44,6 @@ import {
   transferProgressNoticeZmodemReceivePath,
   transferProgressNoticeZmodemSendPath,
   transferTerminalDimPath,
-  withTemporaryDirectory,
   xyzmPausePeerPath,
   type RunGtkTestOptions,
 } from './gtk-test-helpers';
@@ -2058,7 +2058,7 @@ const registerBaseTests = () =>
           const launcher = createGtkAppLauncher({
             appPath: fileURLToPath(
               new URL(
-                '../../.build/elder-terms-terminal/elder-terms-file-transfer',
+                '../../.build/elder-terms-file-transfer/elder-terms-file-transfer',
                 import.meta.url
               )
             ),

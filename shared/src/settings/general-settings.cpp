@@ -42,7 +42,9 @@ static constexpr char serial_connection_type[] = "serial";
 static constexpr char sftp_connection_type[] = "sftp";
 static constexpr char ftp_connection_type[] = "ftp";
 static constexpr char webdav_connection_type[] = "webdav";
+static constexpr char http_connection_type[] = "http";
 static constexpr char smb_connection_type[] = "smb";
+static constexpr char nfs_connection_type[] = "nfs";
 
 static bool validate_border_width(const SettingValue &value,
                                   std::string *reason) {
@@ -82,8 +84,8 @@ static bool validate_connection_type(const SettingValue &value,
        *text != ssh_connection_type &&
        *text != serial_connection_type && *text != sftp_connection_type &&
        *text != ftp_connection_type && *text != webdav_connection_type &&
-       *text != smb_connection_type)) {
-    *reason = "must be local, telnet, ssh, serial, sftp, ftp, webdav, or smb";
+       *text != smb_connection_type && *text != http_connection_type && *text != nfs_connection_type)) {
+    *reason = "must be local, telnet, ssh, serial, sftp, ftp, webdav, http, smb, or nfs";
     return false;
   }
   return true;
@@ -269,6 +271,14 @@ std::optional<RgbColor> general_indicator_off_color(const SettingsStore &store) 
       store, general_indicator_off_color_setting_key(), "default"));
 }
 
+SettingKey general_receive_effect_setting_key() {
+  return make_setting_key(general_section, "receive_effect");
+}
+
+TitlebarEffectStrength general_receive_effect_strength(const SettingsStore &store) {
+  return titlebar_effect_strength(store, general_receive_effect_setting_key());
+}
+
 SettingKey general_compact_mode_setting_key() {
   return make_setting_key(general_section, general_compact_mode_key);
 }
@@ -281,6 +291,7 @@ bool general_compact_mode(const SettingsStore &store) {
 std::vector<SettingDefinition>
 general_setting_definitions(std::string default_connection_name) {
   return {
+      titlebar_effect_setting_definition(general_receive_effect_setting_key()),
       {
           .key = general_auto_close_setting_key(),
           .default_value = SettingValue{default_general_auto_close},
@@ -387,6 +398,8 @@ ConnectionKind general_connection_kind(const SettingsStore &store) {
   if (configured == ftp_connection_type) {
     return ConnectionKind::ftp;
   }
+  if (configured == http_connection_type) return ConnectionKind::http;
+  if (configured == nfs_connection_type) return ConnectionKind::nfs;
   if (configured == webdav_connection_type) {
     return ConnectionKind::webdav;
   }

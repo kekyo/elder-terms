@@ -28,11 +28,14 @@ int main(int argc, char **argv) {
   gtk_init(&argc, &argv);
   try {
     using namespace elder_terms;
-    for (const auto *type : {"telnet", "ssh", "sftp", "webdav", "ftp", "smb", "local", "serial"}) {
+    for (const auto *type : {"telnet", "ssh", "sftp", "webdav", "ftp", "smb", "nfs", "local", "serial"}) {
       auto store = create_default_settings({}, "proxy test");
       set_explicit_setting_value(&store, general_type_setting_key(), std::string(type));
       if (std::string_view(type) == "smb") {
         set_explicit_setting_value(&store, smb_setting_key("address"), std::string("files.example"));
+      }
+      if (std::string_view(type) == "nfs") {
+        set_explicit_setting_value(&store, nfs_setting_key("address"), std::string("files.example"));
       }
       SettingsWidgetOptions options;
       options.store = store;
@@ -80,6 +83,24 @@ int main(int argc, char **argv) {
           gtk_combo_box_set_active_id(GTK_COMBO_BOX(enabled), "true");
           gtk_combo_box_set_active_id(GTK_COMBO_BOX(mode), "passive");
           require(settings_widget_is_valid(state), "Passive FTP must permit SSH proxy");
+        }
+        if (std::string_view(type) == "nfs") {
+          auto *reserved = find_widget(root, "settings_nfs_require_reserved_port_combo");
+          gtk_combo_box_set_active_id(GTK_COMBO_BOX(reserved), "enabled");
+          require(!settings_widget_is_valid(state), "SSH proxy cannot guarantee a reserved NFS source port");
+          auto *error = find_widget(root, "settings_ssh_proxy_error_label");
+          require(error && std::string_view(gtk_label_get_text(GTK_LABEL(error))).find("reserved") != std::string_view::npos,
+                  "The proxy tab must explain the NFS source-port conflict");
+          require(nfs_connection_settings(settings_widget_draft_store(state)).require_reserved_port,
+                  "Validation must preserve the requested source-port policy");
+          require(!ssh_proxy_connection_settings(settings_widget_draft_store(state)).validation_errors.empty(),
+                  "Persisted settings must reject the same conflict before connecting");
+          gtk_combo_box_set_active_id(GTK_COMBO_BOX(enabled), "false");
+          require(settings_widget_is_valid(state), "Direct NFS must still permit reserved ports");
+          gtk_combo_box_set_active_id(GTK_COMBO_BOX(enabled), "true");
+          gtk_combo_box_set_active_id(GTK_COMBO_BOX(reserved), "disabled");
+          require(settings_widget_is_valid(state), "NFS through SSH must accept non-reserved ports");
+          require(std::string_view(gtk_label_get_text(GTK_LABEL(error))).empty(), "Resolving the conflict must clear its message");
         }
         gtk_entry_set_text(GTK_ENTRY(port), "invalid");
         require(!settings_widget_is_valid(state), "unfinished port must prevent Apply");

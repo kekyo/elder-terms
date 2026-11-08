@@ -23,7 +23,7 @@ import type {
   GtkWidgetElement,
 } from 'gestament';
 import { describe, expect, it } from 'vitest';
-import { waitForResult } from 'gestament/testing';
+import { createGtkCaptureExpect, waitForResult } from 'gestament/testing';
 import {
   countCaptureFixtureDiffPixels,
   countNonBackgroundPixels,
@@ -197,7 +197,9 @@ const scrollTerminalFieldIntoView = async (
     ? 'global_settings'
     : 'settings';
   const appearance =
-    /_terminal_(font|cursor_shape|cursor_blink|background|color_)/.test(id);
+    /_terminal_(font|cursor_shape|cursor_blink|background|cell_background|color_|visual_bell)/.test(
+      id
+    );
   const pageId = `${prefix}_terminal${appearance ? '_appearance' : ''}_page`;
   await selectSettingsTab(
     app,
@@ -561,7 +563,8 @@ const visibleSettingsTabNames = async (
       continue;
     }
     const info = await tab.info();
-    if (info.states.includes('showing')) {
+    // Available tabs may be outside a scrollable strip's current viewport.
+    if (info.states.includes('visible')) {
       names.push(info.name);
     }
   }
@@ -578,20 +581,49 @@ const selectSettingsTab = async (
     'tabList'
   );
   const childCount = await notebook.getChildCount();
+  const visibleIndices: number[] = [];
+  let selectedIndex = -1;
+  let targetIndex = -1;
   for (let index = 0; index < childCount; ++index) {
     const tab = await notebook.childAt(index);
+    if (tab === undefined) continue;
+    const info = await tab.info();
+    if (info.states.includes('visible')) visibleIndices.push(index);
+    if (info.states.includes('selected')) selectedIndex = index;
     if (
-      tab !== undefined &&
       (typeof expectedName === 'string'
         ? [expectedName]
         : expectedName
-      ).includes((await tab.info()).name)
+      ).includes(info.name)
     ) {
-      await notebook.selectChildAt(index);
-      return;
+      targetIndex = index;
     }
   }
-  throw new Error(`settings tab was not found: ${expectedName}`);
+  if (targetIndex < 0 || selectedIndex < 0) {
+    throw new Error(`settings tab was not found: ${expectedName}`);
+  }
+  // A tab outside the scrollable strip cannot be clicked. Keyboard navigation
+  // reaches adjacent pages without depending on the strip's visible bounds.
+  const path = visibleIndices.filter((index) =>
+    selectedIndex < targetIndex
+      ? selectedIndex < index && index <= targetIndex
+      : targetIndex <= index && index < selectedIndex
+  );
+  if (targetIndex < selectedIndex) path.reverse();
+  await notebook.selectChildAt(selectedIndex);
+  await app.input.setModifier('control', true);
+  try {
+    for (const index of path) {
+      await app.input.pressKey(
+        targetIndex < selectedIndex ? 'Page_Up' : 'Page_Down'
+      );
+      await waitForResult(async () => {
+        expect(await notebook.isChildSelected(index)).toBe(true);
+      });
+    }
+  } finally {
+    await app.input.setModifier('control', false);
+  }
 };
 
 const expectPageVisualFixture = async (
@@ -814,7 +846,10 @@ const clearKeyBinding = async (
 ): Promise<void> => {
   await waitForResult(async () => {
     await clickWidget(app, entry);
-    const { bounds } = await entry.capture();
+    const { bounds } = await captureWhenVisuallyStable(
+      entry,
+      'key binding clear icon'
+    );
     await app.input.moveMouseTo(
       Math.trunc(bounds.x + bounds.width - 18),
       Math.trunc(bounds.y + bounds.height / 2)
@@ -830,6 +865,145 @@ const clearKeyBinding = async (
 };
 
 describe.concurrent('shared settings widget', () => {
+  it('explains an inherited SMB1 proxy conflict in Japanese', async (context) => {
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=ssh_proxy',
+        '--type=smb',
+        '--save',
+        '--global=smb.address=server.example',
+        '--global=smb.version=1',
+        '--global=ssh_proxy.enabled=true',
+        '--global=ssh_proxy.address=gateway.example',
+      ],
+      async ({ app, directory }) => {
+        const proxy = await app.getById('settings_ssh_proxy_enabled_combo');
+        const message =
+          'SMB1ではSSH proxyを利用できません。SMB2/3を選ぶか、SSH proxyを無効にしてください';
+        expect((await proxy.info()).description).toBe(message);
+        expect(
+          (await (await app.getById('settings_smb_version_combo')).info())
+            .description
+        ).toBe(message);
+        await expectInsensitive(await app.getById('settings_apply_button'));
+        await expectInsensitive(await app.getById('settings_save_button'));
+        const { bounds } = await proxy.capture();
+        await app.input.moveMouseTo(
+          Math.round(bounds.x + 24),
+          Math.round(bounds.y + bounds.height / 2)
+        );
+        await waitForResult(async () =>
+          expect(await app.getWindowCount()).toBeGreaterThan(1)
+        );
+        await writeFile(
+          join(directory, 'smb1-proxy-ja-screen.png'),
+          (await app.capture()).image
+        );
+        const window = expectElementKind(await app.windowAt(0), 'window');
+        const windowBounds = await window.bounds();
+        expect(bounds.x + bounds.width).toBeLessThanOrEqual(
+          windowBounds.x + windowBounds.width
+        );
+        await expectElementKind(proxy, 'comboBox').selectChildAt(1);
+        await expectSensitive(await app.getById('settings_apply_button'));
+      },
+      { env: japaneseTestEnvironment }
+    );
+  });
+  it('explains required inputs and SMB1 proxy conflicts on real hover', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--page=smb', '--type=smb', '--save'],
+      async ({ app, directory }) => {
+        const visual = createGtkCaptureExpect({ outputResultPath: directory });
+        const hoverError = async (
+          id: string,
+          expected: string,
+          name: string
+        ): Promise<void> => {
+          const control = await app.getById(id);
+          expect((await control.info()).description).toContain(expected);
+          const { bounds } = await control.capture();
+          await app.input.moveMouseTo(
+            Math.round(bounds.x + 24),
+            Math.round(bounds.y + bounds.height / 2)
+          );
+          const popup = await waitForResult(async () => {
+            for (let index = 0; index < (await app.getWindowCount()); ++index) {
+              const window = await app.windowAt(index);
+              if (!window) continue;
+              const info = await window.info();
+              // GTK3 tooltips may be exposed only by X11, without an AT-SPI role.
+              if (
+                info.roleName === 'tool tip' ||
+                (info.roleName === 'window' && info.interfaces.length === 0)
+              )
+                return window;
+            }
+            throw new Error('GTK tooltip has not appeared');
+          });
+          const capture = await popup.capture();
+          await visual.expectCapture(capture, name).toContainText(expected);
+          await writeFile(
+            join(directory, name + '-screen.png'),
+            (await app.capture()).image
+          );
+          await app.input.moveMouseTo(0, 0);
+        };
+        try {
+          await selectSettingsTab(app, 'SMB');
+          await expectInsensitive(await app.getById('settings_apply_button'));
+          await hoverError(
+            'settings_smb_address_entry',
+            'SMB server address is required',
+            'required-address'
+          );
+          await expectElementKind(
+            await app.getById('settings_smb_address_entry'),
+            'entry'
+          ).setText('server.example');
+          await expectElementKind(
+            await app.getById('settings_smb_version_combo'),
+            'comboBox'
+          ).selectChildAt(2);
+          await selectSettingsTab(app, 'SSH proxy');
+          await expectElementKind(
+            await app.getById('settings_ssh_proxy_enabled_combo'),
+            'comboBox'
+          ).selectChildAt(2);
+          await expectElementKind(
+            await app.getById('settings_ssh_proxy_address_entry'),
+            'entry'
+          ).setText('gateway.example');
+          await expectInsensitive(await app.getById('settings_save_button'));
+          await hoverError(
+            'settings_ssh_proxy_enabled_combo',
+            'select SMB 2/3 or disable SSH proxy',
+            'smb1-proxy'
+          );
+          await expectElementKind(
+            await app.getById('settings_ssh_proxy_enabled_combo'),
+            'comboBox'
+          ).selectChildAt(1);
+          await expectSensitive(await app.getById('settings_apply_button'));
+          expect(
+            (
+              await (
+                await app.getById('settings_ssh_proxy_enabled_combo')
+              ).info()
+            ).description
+          ).toBe('');
+        } finally {
+          await writeFile(
+            join(directory, 'hover-final-screen.png'),
+            (await app.capture()).image
+          );
+          await visual.release();
+        }
+      }
+    );
+  });
   it('waits for the complete latest settings record when output arrives in chunks', async () => {
     for (const prefix of ['APPLIED', 'REBASED', 'SAVED'] as const) {
       for (const previous of [
@@ -1167,12 +1341,15 @@ describe.concurrent('shared settings widget', () => {
           'SFTP',
           'FTP',
           'WebDAV',
+          'HTTP/HTTPS',
           'SMB',
+          'NFS',
           'SSH proxy',
           '端末',
           '端末の外観',
           '転送',
           'ログ',
+          'リンク',
         ]);
         const pages = [
           {
@@ -1238,6 +1415,17 @@ describe.concurrent('shared settings widget', () => {
             ],
           },
           {
+            id: 'global_settings_nfs_page',
+            labels: [
+              'NFSの版',
+              'ファイル名の文字コード',
+              '既知のexport（1行に1パス）',
+              'v4の公開ツリーを探索',
+              '利用者ID（-1: 現在のプロセス）',
+              '要求タイムアウト（秒）',
+            ],
+          },
+          {
             id: 'global_settings_ssh_proxy_page',
             labels: [
               'SSH proxyを使用',
@@ -1292,6 +1480,10 @@ describe.concurrent('shared settings widget', () => {
             ],
           },
           {
+            id: 'global_settings_link_display_page',
+            labels: ['regexリンクの表示', 'OSC 8リンクの表示'],
+          },
+          {
             id: 'global_settings_logging_page',
             labels: [
               'ログを有効にする',
@@ -1304,6 +1496,16 @@ describe.concurrent('shared settings widget', () => {
 
         for (const page of pages) {
           await expectPageLabels(app, page.id, page.labels);
+        }
+        for (const id of [
+          'global_settings_terminal_regex_link_decoration_combo',
+          'global_settings_terminal_osc8_link_decoration_combo',
+        ]) {
+          const choices = await comboOptionNames(app, id);
+          expect(choices).toContain('無装飾');
+          expect(choices).toContain('常に下線');
+          expect(choices).toContain('ホバー時に下線を表示');
+          expect(choices).toContain('リンク有効判定（減光あり）');
         }
         await expectSelectedComboValue(
           app,
@@ -1897,6 +2099,68 @@ describe.concurrent('shared settings widget', () => {
     expect(visualErrors).toEqual([]);
   }, 60_000);
 
+  it('saves independent BEL and receive intensities across appearance and general pages', async (context) => {
+    const temporary = await mkdtemp(
+      join(tmpdir(), 'elder-terms-titlebar-settings-')
+    );
+    const path = join(temporary, 'connection.ini');
+    try {
+      await runSharedGtkTest(
+        context,
+        [
+          '--page=terminal_appearance',
+          '--global=terminal.visual_bell=disabled',
+          '--global=general.receive_effect=disabled',
+          `--save-file=${path}`,
+        ],
+        async ({ app, directory }) => {
+          await scrollTerminalFieldIntoView(
+            app,
+            'settings_terminal_visual_bell_combo'
+          );
+          const bell = expectElementKind(
+            await app.getById('settings_terminal_visual_bell_combo'),
+            'comboBox'
+          );
+          expect(await bell.isChildSelected(0)).toBe(true);
+          await bell.selectChildAt(2);
+          await selectSettingsTab(app, '一般');
+          const receive = expectElementKind(
+            await app.getById('settings_general_receive_effect_combo'),
+            'comboBox'
+          );
+          expect((await receive.info()).states).toContain('showing');
+          expect(await receive.isChildSelected(0)).toBe(true);
+          await receive.selectChildAt(4);
+          const save = expectElementKind(
+            await app.getById('settings_save_button'),
+            'button'
+          );
+          await save.click();
+          await waitForResult(async () => {
+            const saved = await readFile(path, 'utf8');
+            expect(saved).toContain('visual_bell=weak');
+            expect(saved).toContain('receive_effect=strong');
+          });
+          await receive.selectChildAt(0);
+          await save.click();
+          await waitForResult(async () => {
+            const saved = await readFile(path, 'utf8');
+            expect(saved).toContain('visual_bell=weak');
+            expect(saved).not.toContain('receive_effect');
+          });
+          await writeFile(
+            join(directory, 'titlebar-settings.png'),
+            (await app.capture()).image
+          );
+        },
+        { env: japaneseTestEnvironment }
+      );
+    } finally {
+      await rm(temporary, { recursive: true, force: true });
+    }
+  });
+
   it('identifies the font inheritance source in a single option', async (context) => {
     for (const global of [false, true]) {
       await runSharedGtkTest(
@@ -1987,6 +2251,67 @@ describe.concurrent('shared settings widget', () => {
     }
   });
 
+  for (const mode of ['runtime', 'global']) {
+    it(`saves and inherits the font zoom mode in ${mode} settings`, async (context) => {
+      const directory = await mkdtemp(join(tmpdir(), 'elder-terms-zoom-mode-'));
+      const path = join(directory, 'settings.ini');
+      const prefix = mode === 'global' ? 'global_settings' : 'settings';
+      try {
+        await runSharedGtkTest(
+          context,
+          [
+            '--page=terminal_appearance',
+            `--save-file=${path}`,
+            ...(mode === 'global'
+              ? ['--global-mode']
+              : [
+                  '--runtime',
+                  '--global=terminal.font_zoom_mode=preserve-window',
+                ]),
+          ],
+          async ({ app }) => {
+            const id = `${prefix}_terminal_font_zoom_mode_combo`;
+            const combo = expectElementKind(await app.getById(id), 'comboBox');
+            const names = await comboOptionNames(app, id);
+            expect(names.slice(1)).toEqual([
+              'Keep rows and columns',
+              'Keep window size',
+            ]);
+            expect(names[0]).toContain(
+              mode === 'global' ? 'Keep rows and columns' : 'Keep window size'
+            );
+            expect(await combo.isChildSelected(0)).toBe(true);
+            const save = expectElementKind(
+              await app.getById(`${prefix}_save_button`),
+              'button'
+            );
+            for (const [index, value] of [
+              [2, 'preserve-window'],
+              [1, 'preserve-grid'],
+            ] as const) {
+              await combo.selectChildAt(index);
+              await save.click();
+              await waitForResult(async () =>
+                expect(await readFile(path, 'utf8')).toContain(
+                  `font_zoom_mode=${value}`
+                )
+              );
+            }
+            await combo.selectChildAt(0);
+            await save.click();
+            await waitForResult(async () =>
+              expect(await readFile(path, 'utf8')).not.toContain(
+                'font_zoom_mode='
+              )
+            );
+          }
+        );
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
+    });
+  }
+
   it('edits independent color vision settings and validates their strength', async (context) => {
     const directory = await mkdtemp(join(tmpdir(), 'elder-terms-vision-'));
     const path = join(directory, 'connection.ini');
@@ -2056,6 +2381,69 @@ describe.concurrent('shared settings widget', () => {
     }
   });
 
+  for (const mode of ['launcher', 'runtime', 'global']) {
+    it(`saves and inherits cell background transparency in ${mode} settings`, async (context) => {
+      const directory = await mkdtemp(
+        join(tmpdir(), 'elder-terms-cell-background-')
+      );
+      const path = join(directory, 'settings.ini');
+      const prefix = mode === 'global' ? 'global_settings' : 'settings';
+      try {
+        await runSharedGtkTest(
+          context,
+          [
+            '--page=terminal_appearance',
+            `--save-file=${path}`,
+            ...(mode === 'global'
+              ? ['--global-mode']
+              : ['--global=terminal.cell_background_mode=opaque']),
+            ...(mode === 'runtime' ? ['--runtime'] : []),
+          ],
+          async ({ app, directory: evidenceDirectory }) => {
+            const id = `${prefix}_terminal_cell_background_mode_combo`;
+            const combo = expectElementKind(await app.getById(id), 'comboBox');
+            await scrollTerminalFieldIntoView(app, id);
+            const names = await comboOptionNames(app, id);
+            expect(names.slice(1)).toEqual(['Transparent', 'Opaque']);
+            expect(names[0]).toContain(
+              mode === 'global' ? 'Transparent' : 'Opaque'
+            );
+            expect(await combo.isChildSelected(0)).toBe(true);
+            const save = expectElementKind(
+              await app.getById(`${prefix}_save_button`),
+              'button'
+            );
+            for (const [index, value] of [
+              [2, 'opaque'],
+              [1, 'transparent'],
+            ] as const) {
+              await combo.selectChildAt(index);
+              await save.click();
+              await waitForResult(async () =>
+                expect(await readFile(path, 'utf8')).toContain(
+                  `cell_background_mode=${value}`
+                )
+              );
+            }
+            await combo.selectChildAt(0);
+            await save.click();
+            await waitForResult(async () =>
+              expect(await readFile(path, 'utf8')).not.toContain(
+                'cell_background_mode='
+              )
+            );
+            await writeFile(
+              join(evidenceDirectory, `settings-${mode}.png`),
+              (await app.capture()).image
+            );
+          }
+        );
+      } finally {
+        await rm(directory, { recursive: true, force: true });
+      }
+    });
+  }
+
   for (const mode of ['launcher', 'runtime']) {
     it(`aligns all terminal appearance controls in ${mode} settings`, async (context) => {
       await runSharedGtkTest(
@@ -2074,6 +2462,7 @@ describe.concurrent('shared settings widget', () => {
             'cursor_shape_combo',
             'cursor_blink_combo',
             'background_mode_combo',
+            'cell_background_mode_combo',
             'background_opacity_entry',
             'background_tint_color_entry',
             'background_tint_opacity_entry',
@@ -3579,8 +3968,12 @@ describe.concurrent('shared settings widget', () => {
             } else {
               await app.input.pressKey('Escape');
             }
+            // GTK tooltips are also top-level windows. Observe the chooser
+            // itself instead of counting unrelated tooltip windows.
             await waitForResult(async () =>
-              expect(await app.getWindowCount()).toBe(1)
+              expect(
+                await findWindowByName(app, 'Select a PEM CA bundle')
+              ).toBeUndefined()
             );
             await expectSensitive(parent);
             expect(await entry.text()).toBe(accept ? file : '');
@@ -3684,6 +4077,133 @@ describe.concurrent('shared settings widget', () => {
         await expectInsensitive(await app.getById('settings_apply_button'));
         await port.setText('8081');
         await expectSensitive(await app.getById('settings_apply_button'));
+      }
+    );
+  });
+
+  it('edits NFS filename encoding with explicit inheritance and validation', async (context) => {
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=nfs',
+        '--type=nfs',
+        '--global=nfs.address=localhost',
+        '--global=nfs.filename_encoding=CP932',
+      ],
+      async ({ app, directory }) => {
+        await selectSettingsTab(app, 'NFS');
+        const encoding = await expectInheritedEntry(
+          app,
+          'settings_nfs_filename_encoding_entry',
+          'CP932 (global default)'
+        );
+        await expectSensitive(encoding);
+        expect(
+          await comboOptionNames(app, 'settings_nfs_version_combo')
+        ).toEqual([
+          'NFS v3 (TCP) (built-in default)',
+          'NFS v2 (TCP)',
+          'NFS v3 (TCP)',
+          'NFS v4.0 (TCP)',
+        ]);
+        expect(
+          await comboOptionNames(app, 'settings_nfs_discover_exports_combo')
+        ).toEqual(['Enabled (built-in default)', 'Enabled', 'Disabled']);
+        expect(
+          await comboOptionNames(
+            app,
+            'settings_nfs_require_reserved_port_combo'
+          )
+        ).toEqual(['Disabled (built-in default)', 'Enabled', 'Disabled']);
+        await encoding.setText('CP932//IGNORE');
+        await expectInsensitive(await app.getById('settings_apply_button'));
+        await encoding.setText('EUC-JP');
+        await expectSensitive(await app.getById('settings_apply_button'));
+        await writeFile(
+          join(directory, 'nfs-settings.png'),
+          (await app.capture()).image
+        );
+        await encoding.setText('');
+        await expectInheritedEntry(
+          app,
+          'settings_nfs_filename_encoding_entry',
+          'CP932 (global default)'
+        );
+        await expectSensitive(encoding);
+        const scroll = expectElementKind(
+          await app.getById('settings_nfs_page_scrollbar'),
+          'scrollbar'
+        );
+        await scroll.setValue((await scroll.valueInfo()).maximum);
+        await waitForResult(async () => {
+          const field = await (
+            await app.getById('settings_nfs_require_reserved_port_combo')
+          ).capture();
+          const apply = await (
+            await app.getById('settings_apply_button')
+          ).capture();
+          expect(field.bounds.y).toBeGreaterThan(0);
+          expect(field.bounds.y + field.bounds.height).toBeLessThan(
+            apply.bounds.y
+          );
+        });
+        await writeFile(
+          join(directory, 'nfs-reserved-port-setting.png'),
+          (await app.capture()).image
+        );
+      }
+    );
+  });
+
+  it('shows the SMB version as read-only during a connection', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--page=smb', '--type=smb', '--runtime', '--connection=smb.version=1'],
+      async ({ app }) => {
+        await selectSettingsTab(app, 'SMB');
+        await expectInsensitive(
+          await app.getById('settings_smb_version_combo')
+        );
+      }
+    );
+  });
+
+  it('selects SMB1 while retaining inherited security requirements', async (context) => {
+    await runSharedGtkTest(
+      context,
+      [
+        '--page=smb',
+        '--type=smb',
+        '--global=smb.address=server',
+        '--global=smb.require_signing=true',
+      ],
+      async ({ app }) => {
+        await selectSettingsTab(app, 'SMB');
+        const version = expectElementKind(
+          await app.getById('settings_smb_version_combo'),
+          'comboBox'
+        );
+        await version.selectChildAt(2);
+        await expectInsensitive(await app.getById('settings_apply_button'));
+        const scroll = expectElementKind(
+          await app.getById('settings_smb_page_scrollbar'),
+          'scrollbar'
+        );
+        await scroll.setValue((await scroll.valueInfo()).maximum);
+        const signing = expectElementKind(
+          await app.getById('settings_smb_require_signing_combo'),
+          'comboBox'
+        );
+        await signing.selectChildAt(2);
+        await expectSensitive(await app.getById('settings_apply_button'));
+        await expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        ).click();
+        expect(await waitForAppliedStore(app)).toMatchObject({
+          smb_version: '1',
+          smb_signing: 'false',
+        });
       }
     );
   });
@@ -4413,6 +4933,7 @@ describe.concurrent('shared settings widget', () => {
           'settings_ftp_ip_scan_button',
           'settings_webdav_ip_scan_button',
           'settings_smb_ip_scan_button',
+          'settings_nfs_ip_scan_button',
         ]) {
           const button = expectElementKind(await app.getById(id), 'button');
           expect((await button.info()).name).toBe('IP scan');
@@ -4456,7 +4977,7 @@ describe.concurrent('shared settings widget', () => {
         await waitForResult(async () => {
           expect(await results.getRowCount()).toBe(1);
         });
-        expect(await results.getColumnCount()).toBe(9);
+        expect(await results.getColumnCount()).toBe(10);
         for (const heading of [
           'SSH/SFTP(22)',
           'TELNET(23)',
@@ -4465,6 +4986,7 @@ describe.concurrent('shared settings widget', () => {
           'WebDAV(443)',
           'WebDAV(80)',
           'SMB(445)',
+          'NFS(2049)',
         ]) {
           expect(await dialog.findText(heading)).toBeDefined();
         }
@@ -4474,6 +4996,7 @@ describe.concurrent('shared settings widget', () => {
           '',
           '✓',
           '✓',
+          '',
           '',
           '',
           '',
@@ -4524,8 +5047,9 @@ describe.concurrent('shared settings widget', () => {
     '443',
     '445',
     '990',
-    '21,22,23,80,443,445,990',
-    '21,443,990',
+    '2049',
+    '21,22,23,80,443,445,990,2049',
+    '21,443,990,2049',
     '',
   ]) {
     it(`shows only the responding IP scan ports: ${ports || 'none'}`, async (context) => {
@@ -4555,12 +5079,12 @@ describe.concurrent('shared settings widget', () => {
             await app.getById('settings_ip_scan_results'),
             'table'
           );
-          expect(await results.getColumnCount()).toBe(9);
           expect(await results.getRowCount()).toBe(ports ? 1 : 0);
+          expect(await results.getColumnCount()).toBe(10);
           if (ports) {
             const open = ports.split(',').map(Number);
             for (const [index, port] of [
-              22, 23, 21, 990, 443, 80, 445,
+              22, 23, 21, 990, 443, 80, 445, 2049,
             ].entries()) {
               expect(
                 (await (await results.cellAt(0, index + 2))?.info())?.name
@@ -4627,7 +5151,7 @@ describe.concurrent('shared settings widget', () => {
         await waitForResult(async () => {
           expect((await dialog.bounds()).width).toBeLessThanOrEqual(640);
         });
-        expect(await results.getColumnCount()).toBe(9);
+        expect(await results.getColumnCount()).toBe(10);
         for (const [column, expected] of [
           '✓',
           '',
@@ -4687,6 +5211,98 @@ describe.concurrent('shared settings widget', () => {
       }
     );
   });
+
+  for (const version of ['2', '3', '4.0']) {
+    for (const language of ['C', 'ja']) {
+      it(`preserves NFS v${version} settings after IP scan in ${language}`, async (context) => {
+        const directory = await mkdtemp(join(tmpdir(), 'elder-scan-nfs-'));
+        const savePath = join(directory, 'connection.ini');
+        const retained = [
+          `version=${version}`,
+          `nfs_port=${version === '4.0' ? 0 : 22049}`,
+          'mount_port=20048',
+          'filename_encoding=CP932',
+          'uid=1234',
+          'gid=2345',
+          version === '4.0'
+            ? 'namespace_path=/public'
+            : 'export_path=/srv/public',
+        ];
+        try {
+          await runSharedGtkTest(
+            context,
+            [
+              '--page=nfs',
+              '--type=nfs',
+              '--connection=nfs.address=before.example.test',
+              ...retained.map((setting) => `--connection=nfs.${setting}`),
+              '--ip-scan=complete',
+              '--ip-scan-ports=2049',
+              `--save-file=${savePath}`,
+            ],
+            async ({ app, directory: evidence }) => {
+              await selectSettingsTab(app, 'NFS');
+              const entry = expectElementKind(
+                await app.getById('settings_nfs_address_entry'),
+                'entry'
+              );
+              const button = expectElementKind(
+                await app.getById('settings_nfs_ip_scan_button'),
+                'button'
+              );
+              expect((await button.info()).name).toBe(
+                language === 'ja' ? 'IPスキャン' : 'IP scan'
+              );
+              await button.click();
+              const results = expectElementKind(
+                await app.getById('settings_ip_scan_results'),
+                'table'
+              );
+              await waitForResult(async () => {
+                expect(await results.getRowCount()).toBe(1);
+                expect((await (await results.cellAt(0, 1))?.info())?.name).toBe(
+                  'router.example.test'
+                );
+              });
+              const dialog = expectElementKind(
+                await app.getById('settings_ip_scan_dialog'),
+                'window'
+              );
+              expect(await dialog.findText('NFS(2049)')).toBeDefined();
+              expect((await (await results.cellAt(0, 9))?.info())?.name).toBe(
+                '✓'
+              );
+              await writeFile(
+                join(evidence, 'nfs-scan.png'),
+                (await dialog.capture()).image
+              );
+              await doubleClickTableRow(app, results, 0);
+              await waitForResult(async () => {
+                expect(
+                  await app.findById('settings_ip_scan_dialog')
+                ).toBeUndefined();
+              });
+              expect(await entry.text()).toBe('router.example.test');
+              await expectElementKind(
+                await app.getById('settings_save_button'),
+                'button'
+              ).click();
+              await waitForPrintedStore(app, 'SAVED');
+              const saved = await readFile(savePath, 'utf8');
+              expect(saved).toContain('type=nfs\n');
+              expect(saved).toContain('[nfs]\n');
+              expect(saved).toContain('address=router.example.test\n');
+              for (const setting of retained)
+                expect(saved).toContain(`${setting}\n`);
+            },
+            language === 'ja' ? { env: japaneseTestEnvironment } : undefined
+          );
+        } finally {
+          await rm(directory, { recursive: true, force: true });
+        }
+      });
+    }
+  }
 
   for (const type of ['ssh', 'sftp', 'telnet', 'ftp', 'webdav', 'smb']) {
     for (const mode of ['complete', 'no-name', 'pending', 'mdns', 'llmnr']) {
@@ -7208,7 +7824,7 @@ describe.concurrent('shared settings widget', () => {
     await runSharedGtkTest(
       context,
       ['--global-mode', '--page=terminal', '--global=terminal.width=97'],
-      async ({ app }) => {
+      async ({ app, directory }) => {
         expect(await visibleSettingsTabNames(app, 'global_settings')).toEqual([
           'General',
           'Local',
@@ -7218,12 +7834,15 @@ describe.concurrent('shared settings widget', () => {
           'SFTP',
           'FTP',
           'WebDAV',
+          'HTTP/HTTPS',
           'SMB',
+          'NFS',
           'SSH proxy',
           'Terminal',
           'Terminal appearance',
           'Transfer',
           'Logging',
+          'Links',
         ]);
         await expect(
           app.getById('global_settings_general_name_entry')
@@ -7249,6 +7868,10 @@ describe.concurrent('shared settings widget', () => {
           'comboBox'
         );
         await selectSettingsTab(app, 'SSH', 'global_settings');
+        await writeFile(
+          join(directory, 'ssh-selected.png'),
+          (await app.capture()).image
+        );
         await waitForResult(async () => {
           expect(
             (

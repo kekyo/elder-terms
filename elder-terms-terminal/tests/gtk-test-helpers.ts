@@ -35,7 +35,7 @@ import {
   createTestEvidence,
   expectElementKind,
   type TestEvidence,
-} from './test-helpers';
+} from '../../shared/tests/connection-test-helpers.ts';
 
 const require = createRequire(import.meta.url);
 const { PNG } = require('pngjs') as typeof import('pngjs');
@@ -268,6 +268,8 @@ export interface TerminalGridSize {
  * Launch options forwarded by runGtkTest.
  */
 export interface RunGtkTestOptions {
+  /** Whether this test needs the visible Xvfb tray host. Defaults to true. */
+  readonly trayHost?: boolean;
   /** Use a disposable display when testing a window manager or compositor. */
   readonly isolatedDisplay?: boolean;
   /** Environment overrides, including the isolated XDG config home. */
@@ -309,25 +311,6 @@ const cropPng = (
   }
 
   return cropped;
-};
-
-/**
- * Creates and deletes a temporary directory for a test body.
- *
- * @param body Test body receiving the directory path.
- * @returns Promise resolved after cleanup.
- */
-export const withTemporaryDirectory = async (
-  body: (directory: string) => Promise<void>
-): Promise<void> => {
-  const directory = await mkdtemp(
-    join(tmpdir(), 'elder-terms-terminal-config-')
-  );
-  try {
-    await body(directory);
-  } finally {
-    await rm(directory, { force: true, recursive: true });
-  }
 };
 
 /**
@@ -406,9 +389,11 @@ export const expectDisconnectedNoticeHidden = async (
  * Asserts the disconnected notice is visible at the terminal top-right edge.
  *
  * @param app Running GTK app.
+ * @param expectedMessage Expected reason, or the generic fixture text by default.
  */
 export const expectDisconnectedNoticeVisibleAtTerminalTopRight = async (
-  app: GtkApp
+  app: GtkApp,
+  expectedMessage: string | RegExp = 'Disconnected'
 ): Promise<void> => {
   const terminal = await app.getById('terminal_view');
   const notice = await app.getById('disconnected_notice');
@@ -417,13 +402,14 @@ export const expectDisconnectedNoticeVisibleAtTerminalTopRight = async (
     'label'
   );
 
-  expect(await label.text()).toBe('Disconnected');
-
   const { noticeCapture, terminalCapture } = await waitForResult(
     async () => {
       const info = await notice.info();
       expect(info.states).toContain('showing');
       expect(info.states).toContain('visible');
+      if (typeof expectedMessage === 'string')
+        expect(await label.text()).toBe(expectedMessage);
+      else expect(await label.text()).toMatch(expectedMessage);
       return {
         noticeCapture: await notice.capture(),
         terminalCapture: await terminal.capture(),
@@ -583,10 +569,19 @@ export const activateTransferCancel = async (app: GtkApp): Promise<void> => {
  * Asserts the disconnected notice is rendered above terminal dimming.
  *
  * @param app Running GTK app.
+ * @param evidence Writer receiving the rendered notice capture.
+ * @param expectedMessage Expected explanation displayed above the dimming layer.
  */
 export const expectDisconnectedNoticeRenderedUndimmedAtTerminalTopRight =
-  async (app: GtkApp, evidence: TestEvidence): Promise<void> => {
-    await expectDisconnectedNoticeVisibleAtTerminalTopRight(app);
+  async (
+    app: GtkApp,
+    evidence: TestEvidence,
+    expectedMessage: string | RegExp
+  ): Promise<void> => {
+    await expectDisconnectedNoticeVisibleAtTerminalTopRight(
+      app,
+      expectedMessage
+    );
 
     const terminalOverlay = await app.getById('terminal_overlay');
     const notice = await app.getById('disconnected_notice');
@@ -616,20 +611,30 @@ export const expectDisconnectedNoticeRenderedUndimmedAtTerminalTopRight =
       ...noticeCapture,
       image: PNG.sync.write(renderedNoticePng),
     };
-    const savedCapture = await evidence.captureEvidence(
+    await evidence.captureEvidence(
       'disconnected-notice-rendered-on-terminal',
       async () => renderedNoticeCapture
     );
 
-    await evidence.expectCaptureToLookSimilar(
-      savedCapture,
-      'disconnected-notice-rendered-on-terminal',
-      disconnectedNoticeOnTerminalPath,
-      {
-        maxDiffPixels: 0,
-        threshold: 0.01,
-      }
+    // Dynamic device paths change the notice dimensions. Its background and
+    // bright foreground must still be painted above the terminal dimming layer.
+    const reference = PNG.sync.read(
+      await readFile(disconnectedNoticeOnTerminalPath)
     );
+    const backgroundOffset = (2 * reference.width + 2) * 4;
+    const renderedOffset = (2 * renderedNoticePng.width + 2) * 4;
+    expect(
+      renderedNoticePng.data.subarray(renderedOffset, renderedOffset + 4)
+    ).toEqual(reference.data.subarray(backgroundOffset, backgroundOffset + 4));
+    let brightTextPixels = 0;
+    for (let i = 0; i < renderedNoticePng.data.length; i += 4)
+      if (
+        renderedNoticePng.data[i] === 255 &&
+        renderedNoticePng.data[i + 1] === 255 &&
+        renderedNoticePng.data[i + 2] === 0
+      )
+        ++brightTextPixels;
+    expect(brightTextPixels).toBeGreaterThan(10);
   };
 
 /**
@@ -723,7 +728,7 @@ export const runGtkTest = async (
             maxIdleTotal: 8,
             type: 'xvfb',
           },
-      xvfbTrayHost: true,
+      xvfbTrayHost: options?.trayHost ?? true,
     });
     const apps: GtkApp[] = [];
 

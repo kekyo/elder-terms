@@ -842,6 +842,44 @@ static void test_terminal_background_image_settings() {
   std::filesystem::remove(connection_path);
 }
 
+static void test_terminal_cell_background_settings() {
+  const auto global = temporary_config_path("cell-background-global");
+  const auto path = temporary_config_path("cell-background-connection");
+  const auto key = elder_terms::make_setting_key("terminal", "cell_background_mode");
+  const SettingsLoadOptions options{.config_path = path,
+      .startup_config_path = std::nullopt, .global_config_path = global};
+  write_config(global, "");
+  write_config(path, "");
+  auto loaded = load_settings(options, 12);
+  expect_true(elder_terms::setting_string_value_or_default(loaded.store, key, "missing") == "transparent",
+              "unset cell backgrounds must retain transparent rendering");
+  write_config(global, "[terminal]\ncell_background_mode=opaque\n");
+  loaded = load_settings(options, 12);
+  expect_true(elder_terms::setting_string_value_or_default(loaded.store, key, "missing") == "opaque",
+              "connections must inherit the global cell background policy");
+  expect_true(set_explicit_setting_value(&loaded.store, key, std::string("transparent")) &&
+                  save_settings(loaded.store, path).saved,
+              "connections may save an independent transparent override");
+  loaded = load_settings(options, 12);
+  expect_true(elder_terms::setting_string_value_or_default(loaded.store, key, "missing") == "transparent",
+              "cell background overrides survive restart");
+  for (const auto *invalid : {"", "blur", "invalid"})
+    expect_true(!set_explicit_setting_value(&loaded.store, key, std::string(invalid)),
+                "cell background modes accept only transparent or opaque");
+  clear_explicit_setting_value(&loaded.store, key);
+  expect_true(save_settings(loaded.store, path).saved && read_config(path).empty(),
+              "clearing a cell background override restores inheritance");
+  loaded = load_settings(options, 12);
+  expect_true(elder_terms::setting_string_value_or_default(loaded.store, key, "missing") == "opaque",
+              "the inherited opaque preference survives override removal");
+  write_config(path, "[terminal]\ncell_background_mode=invalid\n");
+  loaded = load_settings(options, 12);
+  expect_true(elder_terms::setting_string_value_or_default(loaded.store, key, "missing") == "opaque",
+              "invalid stored modes must retain the valid inherited policy");
+  remove_config(path);
+  remove_config(global);
+}
+
 static void test_terminal_background_settings() {
   const auto global = temporary_config_path("background-global");
   const auto path = temporary_config_path("background-connection");
@@ -898,25 +936,35 @@ static void test_terminal_background_settings() {
 static void test_terminal_link_decoration_settings() {
   const auto global = temporary_config_path("link-decoration-global");
   const auto path = temporary_config_path("link-decoration-connection");
-  const auto key = elder_terms::make_setting_key("terminal", "link_decoration");
+  const auto regex_key = elder_terms::make_setting_key("terminal", "regex_link_decoration");
+  const auto osc8_key = elder_terms::make_setting_key("terminal", "osc8_link_decoration");
   const SettingsLoadOptions options{.config_path = path, .startup_config_path = std::nullopt, .global_config_path = global};
   write_config(global, ""); write_config(path, "");
   auto loaded = load_settings(options, 1.0);
-  expect_true(elder_terms::setting_string_value_or_default(loaded.store, key, "missing") == "underline",
-      "link decoration defaults to always underline");
-  write_config(global, "[terminal]\nlink_decoration=none\n");
+  expect_true(elder_terms::setting_string_value_or_default(loaded.store, regex_key, "missing") == "hover" &&
+      elder_terms::setting_string_value_or_default(loaded.store, osc8_key, "missing") == "underline",
+      "regex defaults to hover and OSC 8 to always underline");
+  write_config(global, "[terminal]\nregex_link_decoration=none\nosc8_link_decoration=validated\n");
   loaded = load_settings(options, 1.0);
-  expect_true(elder_terms::setting_string_value_or_default(loaded.store, key, "missing") == "none" &&
-      setting_value_source(loaded.store, key) == SettingValueSource::global, "link decoration inherits normally");
-  for (const auto *value : {"none", "underline", "validated"}) {
-    expect_true(set_explicit_setting_value(&loaded.store, key, elder_terms::SettingValue{std::string(value)}) &&
-        save_settings(loaded.store, path).saved, "link decoration selection saves");
-    loaded = load_settings(options, 1.0);
-    expect_true(elder_terms::setting_string_value_or_default(loaded.store, key, "missing") == value,
-        "link decoration survives restart");
+  for (const auto &key : {regex_key, osc8_key}) {
+    expect_true(setting_value_source(loaded.store, key) == SettingValueSource::global, "each decoration inherits normally");
+    const auto other = key.name == regex_key.name ? osc8_key : regex_key;
+    const auto unchanged = elder_terms::setting_string_value_or_default(loaded.store, other, "missing");
+    for (const auto *value : {"none", "underline", "hover", "validated"}) {
+      expect_true(set_explicit_setting_value(&loaded.store, key, elder_terms::SettingValue{std::string(value)}) &&
+          save_settings(loaded.store, path).saved, "link decoration selection saves");
+      loaded = load_settings(options, 1.0);
+      expect_true(elder_terms::setting_string_value_or_default(loaded.store, key, "missing") == value &&
+          elder_terms::setting_string_value_or_default(loaded.store, other, "missing") == unchanged,
+          "one decoration survives restart without changing the other");
+    }
+    expect_true(!set_explicit_setting_value(&loaded.store, key, elder_terms::SettingValue{std::string("unknown")}),
+        "unknown decoration is rejected");
+    clear_explicit_setting_value(&loaded.store, key);
+    expect_true(setting_value_source(loaded.store, key) == SettingValueSource::global,
+        "clearing one decoration restores only its inherited value");
+    expect_true(save_settings(loaded.store, path).saved, "save inherited decoration");
   }
-  expect_true(!set_explicit_setting_value(&loaded.store, key, elder_terms::SettingValue{std::string("unknown")}),
-      "unknown decoration is rejected");
   remove_config(path); remove_config(global);
 }
 
@@ -1132,6 +1180,60 @@ static void test_terminal_block_copy_trailing_spaces_setting() {
   remove_config(global);
 }
 
+static void test_terminal_font_zoom_mode() {
+  const auto global = temporary_config_path("zoom-mode-global");
+  const auto path = temporary_config_path("zoom-mode-connection");
+  const auto theme = temporary_config_path("zoom-mode-theme");
+  const auto key = elder_terms::make_setting_key("terminal", "font_zoom_mode");
+  const auto mode = [&key](const SettingsStore &store) {
+    return elder_terms::setting_string_value_or_default(store, key, "");
+  };
+  auto store = create_default_settings(default_terminal_display_settings(12), "Zoom");
+  expect_true(mode(store) == "preserve-grid", "font zoom must preserve the grid by default");
+  write_config(global, "[terminal]\nfont_zoom_mode=preserve-window\n");
+  write_config(path, "");
+  write_config(theme, "[theme.grid]\nname=Grid\n[theme.grid.terminal]\nfont_zoom_mode=preserve-grid\n");
+  const SettingsLoadOptions options{.config_path = path, .startup_config_path = std::nullopt,
+      .global_config_path = global, .theme_config_path = theme};
+  auto loaded = load_settings(options, 12);
+  expect_true(mode(loaded.store) == "preserve-window" &&
+                  setting_value_source(loaded.store, key) == SettingValueSource::global,
+              "the connection must inherit its global zoom mode");
+  expect_true(save_settings(loaded.store, path).saved && read_config(path).empty(),
+              "inherited zoom modes must not be written into connection files");
+  expect_true(set_explicit_setting_value(&loaded.store, key, std::string("preserve-grid")) &&
+                  save_settings(loaded.store, path).saved,
+              "explicit zoom modes must save");
+  loaded = load_settings(options, 12);
+  expect_true(mode(loaded.store) == "preserve-grid" && setting_has_explicit_value(loaded.store, key),
+              "the explicit default must survive reload above a different global mode");
+  clear_explicit_setting_value(&loaded.store, key);
+  expect_true(mode(loaded.store) == "preserve-window" && save_settings(loaded.store, path).saved &&
+                  read_config(path).empty(), "clearing the zoom mode must restore inheritance");
+  for (const auto *invalid : {"", "window", "preserve-both"}) {
+    expect_true(!set_explicit_setting_value(&loaded.store, key, std::string(invalid)) &&
+                    mode(loaded.store) == "preserve-window", "unknown zoom modes must be rejected");
+  }
+  write_config(path, "[terminal]\nfont_zoom_mode=unknown\n");
+  loaded = load_settings(options, 12);
+  expect_true(warnings_contain(loaded.warnings, "font_zoom_mode") &&
+                  mode(loaded.store) == "preserve-window", "invalid file modes must report a validation error");
+  write_config(path, "[general]\ntheme=grid\n");
+  loaded = load_settings(options, 12);
+  expect_true(loaded.loaded && mode(loaded.store) == "preserve-grid" &&
+                  setting_value_source(loaded.store, key) == SettingValueSource::theme,
+              "the selected theme must supply its zoom mode");
+  expect_true(set_explicit_setting_value(&loaded.store, key, std::string("preserve-window")) &&
+                  save_settings(loaded.store, path).saved, "a connection must override its theme's zoom mode");
+  loaded = load_settings(options, 12);
+  expect_true(mode(loaded.store) == "preserve-window", "the theme override must survive restart");
+  clear_explicit_setting_value(&loaded.store, key);
+  expect_true(mode(loaded.store) == "preserve-grid", "clearing a theme override must inherit the theme again");
+  remove_config(path);
+  remove_config(global);
+  remove_config(theme);
+}
+
 static void test_terminal_font_list_round_trip_and_validation() {
   const auto global = temporary_config_path("font-list-global");
   const auto path = temporary_config_path("font-list-connection");
@@ -1234,6 +1336,40 @@ static void test_terminal_font_list_defaults_and_rebase() {
   expect_true(terminal_font_families(loaded.store).families ==
                   std::vector<std::string>{"Changed Global"},
               "resetting after rebase must inherit the replacement list");
+  remove_config(path);
+  remove_config(global);
+}
+
+static void test_titlebar_effect_settings() {
+  const auto global = temporary_config_path("titlebar-global");
+  const auto path = temporary_config_path("titlebar-connection");
+  auto store = create_default_settings(default_terminal_display_settings(12), "Effects");
+  for (const auto &key : {elder_terms::terminal_visual_bell_setting_key(), elder_terms::general_receive_effect_setting_key()}) {
+    expect_true(elder_terms::setting_string_value_or_default(store, key, "") == "medium", "effects must default to medium");
+  }
+  write_config(global, "[terminal]\nvisual_bell=weak\n[general]\nreceive_effect=strong\n");
+  const SettingsLoadOptions options{.config_path = path, .startup_config_path = std::nullopt, .global_config_path = global};
+  const auto bell = elder_terms::terminal_visual_bell_setting_key();
+  const auto receive = elder_terms::general_receive_effect_setting_key();
+  for (const auto *value : {"disabled", "weak", "medium", "strong"}) {
+    write_config(path, std::string("[terminal]\nvisual_bell=") + value + "\n");
+    auto loaded = load_settings(options, 12);
+    expect_true(loaded.warnings.empty() && elder_terms::setting_string_value_or_default(loaded.store, bell, "") == value &&
+        elder_terms::setting_string_value_or_default(loaded.store, receive, "") == "strong", "strength and inheritance must stay independent");
+    expect_true(setting_value_source(loaded.store, receive) == SettingValueSource::global, "inherited strength source");
+    expect_true(save_settings(loaded.store, path).saved && read_config(path).find(std::string("visual_bell=") + value) != std::string::npos &&
+        read_config(path).find("receive_effect") == std::string::npos, "save every explicit intensity and omit inherited values");
+    loaded = load_settings(options, 12);
+    expect_true(elder_terms::setting_string_value_or_default(loaded.store, bell, "") == value, "reload intensity");
+    clear_explicit_setting_value(&loaded.store, bell);
+    expect_true(elder_terms::setting_string_value_or_default(loaded.store, bell, "") == "weak" &&
+        save_settings(loaded.store, path).saved && read_config(path).empty(), "restore inherited strength and remove override");
+  }
+  write_config(path, "[terminal]\nvisual_bell=invalid\n[general]\nreceive_effect=invalid\n");
+  const auto loaded = load_settings(options, 12);
+  expect_true(warnings_contain(loaded.warnings, "visual_bell") && warnings_contain(loaded.warnings, "receive_effect") &&
+      elder_terms::setting_string_value_or_default(loaded.store, bell, "") == "weak" &&
+      elder_terms::setting_string_value_or_default(loaded.store, receive, "") == "strong", "invalid strengths warn and inherit");
   remove_config(path);
   remove_config(global);
 }
@@ -4803,6 +4939,49 @@ static void test_webdav_invalid_numeric_settings_remain_invalid_after_save() {
               "Correcting a port must clear the retained malformed input");
 }
 
+static void test_smb_versions_and_security_inheritance() {
+  auto store = create_default_settings(default_terminal_display_settings(1.0), "SMB versions");
+  set_explicit_setting_value(&store, general_type_setting_key(), std::string("smb"));
+  set_explicit_setting_value(&store, elder_terms::smb_setting_key("address"), std::string("server.example"));
+  const auto version = elder_terms::smb_setting_key("version");
+  expect_true(set_explicit_setting_value(&store, version, std::string("1")), "SMB1 must be selectable");
+  expect_true(!elder_terms::smb_connection_settings(store).require_signing &&
+                  elder_terms::smb_connection_settings(store).validation_errors.empty(),
+              "SMB1 built-in defaults must permit a basic direct connection");
+  auto globals = create_default_settings(default_terminal_display_settings(1.0), "Defaults");
+  set_explicit_setting_value(&globals, elder_terms::smb_setting_key("require_signing"), true);
+  elder_terms::rebase_settings_store_fallbacks(&store, globals);
+  expect_true(elder_terms::smb_connection_settings(store).require_signing &&
+                  !elder_terms::smb_connection_settings(store).validation_errors.empty(),
+              "SMB1 must retain and reject an inherited signing requirement");
+  set_explicit_setting_value(&store, elder_terms::smb_setting_key("require_signing"), false);
+  expect_true(elder_terms::smb_connection_settings(store).validation_errors.empty(), "Explicit signing override must work");
+  set_explicit_setting_value(&store, elder_terms::smb_setting_key("port"), gint64{1445});
+  expect_true(!elder_terms::smb_connection_settings(store).validation_errors.empty(), "SMB1 arbitrary ports must be rejected");
+  set_explicit_setting_value(&store, elder_terms::smb_setting_key("port"), gint64{139});
+  expect_true(!elder_terms::smb_connection_settings(store).validation_errors.empty(), "SMB1 NBT requires a NetBIOS name");
+  expect_true(set_explicit_setting_value(&store, elder_terms::smb_setting_key("netbios_name"), std::string("ELDERTEST")),
+              "A NetBIOS name must be configurable");
+  expect_true(elder_terms::smb_connection_settings(store).validation_errors.empty(), "Named NBT must validate");
+  set_explicit_setting_value(&store, elder_terms::ssh_proxy_setting_key("enabled"), true);
+  set_explicit_setting_value(&store, elder_terms::ssh_proxy_setting_key("address"), std::string("gateway"));
+  expect_true(!elder_terms::ssh_proxy_connection_settings(store).validation_errors.empty(), "SMB1 cannot silently bypass SSH proxy");
+  set_explicit_setting_value(&store, elder_terms::ssh_proxy_setting_key("enabled"), false);
+  const auto path = temporary_config_path("smb-versions");
+  for (const auto *value : {"auto", "1", "2", "3"}) {
+    expect_true(set_explicit_setting_value(&store, version, std::string(value)), "All supported SMB versions must be selectable");
+    expect_true(save_settings(store, path).saved, "SMB version must save");
+    const auto loaded = load_settings({.config_path = path, .startup_config_path = std::nullopt}, 1.0);
+    expect_true(elder_terms::setting_string_value_or_default(loaded.store, version, "missing") == value,
+                "SMB version must survive reload");
+  }
+  expect_true(!set_explicit_setting_value(&store, version, std::string("4")), "Unknown SMB versions must be rejected");
+  set_explicit_setting_value(&store, version, std::string("1"));
+  set_explicit_setting_value(&store, elder_terms::smb_setting_key("address"), std::string("::1"));
+  expect_true(!elder_terms::smb_connection_settings(store).validation_errors.empty(), "SMB1 IPv6 must be rejected");
+  remove_config(path);
+}
+
 static void test_smb_settings_round_trip_and_validation() {
   auto store = create_default_settings(default_terminal_display_settings(1.0), "SMB");
   expect_true(set_explicit_setting_value(&store, general_type_setting_key(), std::string("smb")),
@@ -4907,6 +5086,7 @@ int main() {
     elder_terms_settings_test::test_webdav_settings_round_trip();
     elder_terms_settings_test::test_webdav_invalid_numeric_settings_remain_invalid_after_save();
     elder_terms_settings_test::test_smb_settings_round_trip_and_validation();
+    elder_terms_settings_test::test_smb_versions_and_security_inheritance();
     elder_terms_settings_test::test_smb_invalid_numeric_input_remains_invalid_after_save();
     elder_terms_settings_test::test_smb_remote_directory_matches_transfer_paths();
     elder_terms_settings_test::test_independent_inactive_indicator_color();
@@ -4914,10 +5094,12 @@ int main() {
     elder_terms_settings_test::test_terminal_ambiguous_width_setting();
     elder_terms_settings_test::test_terminal_block_copy_trailing_spaces_setting();
     elder_terms_settings_test::test_terminal_background_settings();
+    elder_terms_settings_test::test_terminal_cell_background_settings();
     elder_terms_settings_test::test_terminal_link_decoration_settings();
     elder_terms_settings_test::test_terminal_color_filter_settings();
     elder_terms_settings_test::test_terminal_color_vision_settings();
     elder_terms_settings_test::test_terminal_background_image_settings();
+    elder_terms_settings_test::test_terminal_font_zoom_mode();
     elder_terms_settings_test::test_terminal_font_list_round_trip_and_validation();
     elder_terms_settings_test::test_default_settings();
     elder_terms_settings_test::test_general_indicator_color_round_trip_and_layering();
@@ -4931,6 +5113,7 @@ int main() {
         test_terminal_font_list_defaults_and_rebase();
     elder_terms_settings_test::
         test_terminal_bell_sound_validation_and_round_trip();
+    elder_terms_settings_test::test_titlebar_effect_settings();
     elder_terms_settings_test::test_connection_name_settings();
     elder_terms_settings_test::test_general_color_settings();
     elder_terms_settings_test::

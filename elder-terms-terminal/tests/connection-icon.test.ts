@@ -12,8 +12,12 @@ import { PNG } from 'pngjs';
 import type { GtkApp, GtkWidgetElement } from 'gestament';
 import { expect, it } from 'vitest';
 import { waitForResult } from 'gestament/testing';
-import { capturePixel, expectElementKind } from './test-helpers';
-import { runGtkTest, withTemporaryDirectory } from './gtk-test-helpers';
+import {
+  withTemporaryDirectory,
+  capturePixel,
+  expectElementKind,
+} from '../../shared/tests/connection-test-helpers.ts';
+import { runGtkTest } from './gtk-test-helpers';
 
 const clickWidget = async (
   app: GtkApp,

@@ -55,10 +55,15 @@ bool macro_rule_id_is_valid(const std::string &id, std::string *reason) {
   return true;
 }
 
-bool macro_rule_is_valid(const MacroRule &rule, std::string *reason) {
+bool macro_rule_is_valid(const MacroRule &rule, std::string *reason,
+                        RuleValidationLocation *location) {
+  RuleValidationLocation ignored;
+  if (!location) location = &ignored;
+  location->field = RuleValidationField::identifier;
   if (!macro_rule_id_is_valid(rule.id, reason)) {
     return false;
   }
+  location->field = RuleValidationField::pattern;
   if (rule.pattern.empty()) {
     *reason = "regular expression must not be empty";
     return false;
@@ -72,23 +77,29 @@ bool macro_rule_is_valid(const MacroRule &rule, std::string *reason) {
 
   bool valid = false;
   if (const auto *send = std::get_if<MacroSendAction>(&rule.action)) {
+    location->field = RuleValidationField::send_text;
     if (send->text.empty()) {
       *reason = "send text must not be empty";
     } else {
       valid = macro_template_is_valid(send->text, regex, reason);
     }
   } else {
+    location->field = RuleValidationField::command;
     const auto &command = std::get<MacroCommandAction>(rule.action);
     if (trim_ascii_whitespace(command.command).empty()) {
       *reason = "command must not be empty";
     } else if (!macro_template_is_valid(command.command, regex, reason)) {
       valid = false;
     } else {
-      valid = std::all_of(
-          command.arguments.begin(), command.arguments.end(),
-          [regex, reason](const std::string &argument) {
-            return macro_template_is_valid(argument, regex, reason);
-          });
+      location->field = RuleValidationField::argument;
+      valid = true;
+      for (std::size_t index = 0; index < command.arguments.size(); ++index) {
+        location->argument_index = index;
+        if (!macro_template_is_valid(command.arguments[index], regex, reason)) {
+          valid = false;
+          break;
+        }
+      }
     }
   }
 

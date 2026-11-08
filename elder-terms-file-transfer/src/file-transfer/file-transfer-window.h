@@ -1,0 +1,220 @@
+// elder-terms: A terminal application, inspired by personal computing in the 1990s.
+// Copyright (c) Kouji Matsui. (@kekyo@mi.kekyo.net)
+// Under MIT.
+// https://github.com/kekyo/elder-terms/
+
+#pragma once
+
+#include <filesystem>
+#include <functional>
+#include <memory>
+#include <optional>
+#include <string>
+
+#include <gtk/gtk.h>
+
+#include <elder-terms/settings.h>
+
+#include "../../../shared/src/connection-runtime/inline-prompt.h"
+#include "file-hash.h"
+#include "remote-file-client.h"
+#include "../../../shared/src/connection-runtime/ssh/ssh-user-prompt.h"
+
+namespace elder_terms {
+
+/**
+ * Construction options for one independent remote file browser window.
+ */
+struct FileTransferWindowOptions {
+  /** User-visible connection name. */
+  std::string connection_name;
+  /** User-visible protocol name, such as SFTP or FTP. */
+  std::string protocol_name;
+  /** Initial native local filesystem directory. */
+  std::string local_directory;
+  /** Initial remote directory. */
+  std::string remote_directory;
+  /** Calculates hashes for a remote regular file, or empty if unsupported. */
+  std::function<cardio::promise<FileHashes>(
+      std::string, cardio::cancellation)> remote_file_hash;
+  /** Initial exterior and browser background colors. */
+  GeneralColorSettings colors;
+  /** Called asynchronously after the GTK window is destroyed. */
+  std::function<void()> closed;
+  /** Runtime settings copied into the Settings editor. */
+  SettingsStore settings = {};
+  /** Writable connection file, or no Save action when absent. */
+  std::optional<std::filesystem::path> config_path = std::nullopt;
+  /** Reopens and attaches the remote service using the current settings. */
+  std::function<cardio::promise<void>(SettingsStore)> reconnect = {};
+};
+
+/**
+ * Opaque state for one dual-pane remote file browser window.
+ */
+struct FileTransferWindow;
+
+/**
+ * Creates a terminal-independent dual-pane remote file browser.
+ *
+ * @param options Protocol label, paths, colors, and lifecycle callback.
+ * @returns Owned file-transfer window state.
+ */
+std::shared_ptr<FileTransferWindow>
+create_file_transfer_window(FileTransferWindowOptions options);
+
+/**
+ * Returns the top-level GTK widget.
+ *
+ * @param window File-transfer window state.
+ * @returns Top-level GtkWindow widget, or null for invalid state.
+ */
+GtkWidget *file_transfer_window_widget(
+    const std::shared_ptr<FileTransferWindow> &window) noexcept;
+
+/**
+ * Shows the file-transfer window and starts loading both directory trees.
+ *
+ * @param window File-transfer window state.
+ */
+void show_file_transfer_window(const std::shared_ptr<FileTransferWindow> &window);
+
+/**
+ * Attaches an authenticated remote service and starts remote browsing.
+ *
+ * @param window File-transfer window waiting for its remote service.
+ * @param client Initialized remote service used by browsing and transfers.
+ * @param initial_directory Optional connection-owned initial identity; empty preserves the configured path.
+ * @remarks A remote service may be attached initially or during the reconnect callback.
+ */
+void attach_file_transfer_window_client(
+    const std::shared_ptr<FileTransferWindow> &window,
+    std::shared_ptr<RemoteFileClient> client, std::string initial_directory = {});
+
+/**
+ * Collects authentication input inside the file-transfer surface.
+ *
+ * @param window File-transfer window hosting the prompt.
+ * @param request Presentation and input requirements.
+ * @param cancellation Authentication cancellation signal.
+ * @returns Accepted response, or a rejected response after cancellation.
+ */
+cardio::promise<InlinePromptResponse> prompt_file_transfer_window_async(
+    const std::shared_ptr<FileTransferWindow> &window,
+    InlinePromptRequest request, cardio::cancellation cancellation);
+
+/**
+ * Confirms an identity exception without changing the browser connection state.
+ * @param window File-transfer window hosting the prompt.
+ * @param request Certificate presentation and explicit response labels.
+ * @param cancellation Cancellation of the operation or connection.
+ * @returns Accepted response, or rejection after cancellation or close.
+ */
+cardio::promise<InlinePromptResponse> confirm_file_transfer_window_async(
+    const std::shared_ptr<FileTransferWindow> &window,
+    InlinePromptRequest request, cardio::cancellation cancellation);
+
+/**
+ * Marks the connection status as using an explicitly accepted certificate.
+ * @param window Window retaining the indication until it closes.
+ */
+void mark_file_transfer_certificate_exception(const std::shared_ptr<FileTransferWindow> &window);
+
+/**
+ * Shows a persistent connection failure with direct reconnect and close actions.
+ *
+ * @param window File-transfer window hosting the error.
+ * @param title Short connection failure heading.
+ * @param message Detailed failure text.
+ * @param cancellation Application shutdown cancellation signal.
+ * @remarks Returns immediately so the failed connection can finish cleanup before
+ * a new attempt. The local browser remains usable while the notice is visible.
+ */
+void show_file_transfer_window_connection_error(
+    const std::shared_ptr<FileTransferWindow> &window, std::string title,
+    std::string message, cardio::cancellation cancellation);
+
+/**
+ * Enables or disables remote operations after transport state changes.
+ *
+ * @param window File-transfer window state.
+ * @param available True while the remote transport is usable.
+ * @param reason Optional transport failure detail when becoming unavailable.
+ * @remarks Unexpected disconnections retain the notice regardless of auto_close.
+ * The local browser remains usable. The first available failure detail is kept.
+ */
+void set_file_transfer_window_connection_available(
+    const std::shared_ptr<FileTransferWindow> &window, bool available,
+    std::string reason = {});
+
+/**
+ * Displays the protocol negotiated by the current connection.
+ * @param window Transfer window receiving the connection result.
+ * @param protocol_name Protocol and negotiated version for the title and jobs.
+ */
+void set_file_transfer_window_protocol(
+    const std::shared_ptr<FileTransferWindow> &window, std::string protocol_name);
+
+/**
+ * Applies optional exterior and browser backgrounds at runtime.
+ *
+ * @param window File-transfer window state.
+ * @param settings Effective optional RGB colors.
+ */
+void set_file_transfer_window_colors(
+    const std::shared_ptr<FileTransferWindow> &window,
+    const GeneralColorSettings &settings);
+
+/**
+ * Applies a connection icon to an existing file-transfer window.
+ *
+ * @param window File-transfer window state.
+ * @param specification Saved icon specification to show and retain for its Settings editor.
+ */
+void set_file_transfer_window_connection_icon(
+    const std::shared_ptr<FileTransferWindow> &window,
+    const std::string &specification);
+
+/**
+ * Applies indicator colors without changing connection or blink state.
+ * @param window File-transfer window state.
+ * @param color Active tint, or no value for the original green lamp.
+ * @param off_color Inactive tint, or no value for the original gray lamp.
+ */
+void set_file_transfer_window_indicator_colors(
+    const std::shared_ptr<FileTransferWindow> &window,
+    const std::optional<RgbColor> &color,
+    const std::optional<RgbColor> &off_color);
+
+/**
+ * Presents an existing file-transfer window above other application windows.
+ *
+ * @param window File-transfer window state.
+ */
+void present_file_transfer_window(const std::shared_ptr<FileTransferWindow> &window);
+
+/**
+ * Closes a file browser and waits for its owned asynchronous work to finish.
+ *
+ * @param window Window retained until browsing, management, and transfer
+ * cleanup has completed.
+ * @returns Completion after all asynchronous work owned by the window ends.
+ * @remarks Keep the caller dispatcher alive until completion. The underlying
+ * remote client must also be stopped by its owner. Repeated calls are allowed.
+ */
+cardio::promise<void>
+close_file_transfer_window_async(std::shared_ptr<FileTransferWindow> window);
+
+/**
+ * Presents an SSH gateway or destination question in the file-transfer window.
+ * @param window Window owning the prompt.
+ * @param prompt Host-key or authentication question.
+ * @param cancellation Prompt cancellation signal.
+ * @returns User response, including an explicit changed-key reset.
+ * @throws cardio::canceled_exception when the user cancels.
+ */
+cardio::promise<SshUserPromptResponse> prompt_file_transfer_ssh_async(
+    std::shared_ptr<FileTransferWindow> window, const SshUserPrompt &prompt,
+    cardio::cancellation cancellation);
+
+} // namespace elder_terms

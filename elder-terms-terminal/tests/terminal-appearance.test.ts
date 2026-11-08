@@ -10,12 +10,11 @@ import { join } from 'node:path';
 import { PNG } from 'pngjs';
 import { describe, expect, it } from 'vitest';
 import { waitForResult } from 'gestament/testing';
+import { runGtkTest, readTerminalGridLayout } from './gtk-test-helpers';
 import {
-  runGtkTest,
   withTemporaryDirectory,
-  readTerminalGridLayout,
-} from './gtk-test-helpers';
-import { expectElementKind } from './test-helpers';
+  expectElementKind,
+} from '../../shared/tests/connection-test-helpers.ts';
 
 const exec = promisify(execFile);
 const luminance = (rgb: number): number => {
@@ -48,7 +47,7 @@ process.stdout.write('\\x1b]12;#ffffff\\x07\\x1b[48;2;0;0;0m\\x1b[2J\\x1b[H\\x1b
         );
         await writeFile(
           config,
-          `[terminal]\ncursor_shape=${shape}\ncursor_blink=false\n[local]\ncommand_line=${process.execPath} ${peer}\n`
+          `[terminal]\ncursor_shape=${shape}\ncursor_blink=false\nbackground_mode=transparent\nbackground_opacity=50\nbackground_tint_color=#0000ff\nbackground_tint_opacity=100\ncell_background_mode=opaque\n[local]\ncommand_line=${process.execPath} ${peer}\n`
         );
         await runGtkTest(
           context,
@@ -56,6 +55,28 @@ process.stdout.write('\\x1b]12;#ffffff\\x07\\x1b[48;2;0;0;0m\\x1b[2J\\x1b[H\\x1b
           async (app, evidence) => {
             const layout = await readTerminalGridLayout(app);
             const terminal = await app.getById('terminal_view');
+            await waitForResult(async () => {
+              const png = PNG.sync.read((await terminal.capture()).image);
+              let white = 0;
+              for (let y = 0; y < layout.cellHeight; y++)
+                for (let x = 0; x < layout.cellWidth; x++) {
+                  const at = (y * png.width + x) * 4;
+                  if (
+                    png.data[at] === 255 &&
+                    png.data[at + 1] === 255 &&
+                    png.data[at + 2] === 255
+                  )
+                    white++;
+                }
+              expect(white).toBeGreaterThan(0);
+              const blank =
+                (Math.floor(layout.cellHeight / 2) * png.width +
+                  Math.floor(layout.cellWidth * 1.5)) *
+                4;
+              expect([...png.data.subarray(blank, blank + 3)]).toEqual([
+                0, 0, 0,
+              ]);
+            });
             // The existing modal overlay dims white to 166 while Settings is open.
             // Count the box geometry in both states, preserving that behavior.
             const count = async (): Promise<number> => {
@@ -128,6 +149,10 @@ process.stdout.write('\\x1b]12;#ffffff\\x07\\x1b[48;2;0;0;0m\\x1b[2J\\x1b[H\\x1b
                   'rawvideo',
                   '-pix_fmt',
                   'rgb24',
+                  // Decode each recorded frame once, regardless of the frame
+                  // rate inferred from variable X11 capture timestamps.
+                  '-fps_mode',
+                  'passthrough',
                   'pipe:1',
                 ],
                 { encoding: 'buffer', maxBuffer: 1024 * 1024 }

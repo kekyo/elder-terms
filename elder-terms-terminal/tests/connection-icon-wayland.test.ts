@@ -24,7 +24,7 @@ import {
 import { waitForResult } from 'gestament/testing';
 import { PNG } from 'pngjs';
 import { expect, it } from 'vitest';
-import { expectElementKind } from './test-helpers';
+import { expectElementKind } from '../../shared/tests/connection-test-helpers.ts';
 
 const binary = (name: string): string =>
   fileURLToPath(new URL(`../../.build/${name}`, import.meta.url));
@@ -67,7 +67,7 @@ for (const appKind of ['terminal', 'file-transfer'] as const) {
         const appPath = binary(
           appKind === 'terminal'
             ? 'elder-terms-terminal/elder-terms-terminal'
-            : 'elder-terms-terminal/elder-terms-file-transfer'
+            : 'elder-terms-file-transfer/elder-terms-file-transfer'
         );
         const gtkPath = runtime === 'system-gtk' ? undefined : supportedGtk;
         const launcher = createGtkAppLauncher({

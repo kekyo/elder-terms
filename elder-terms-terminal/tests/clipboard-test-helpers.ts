@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import type { GtkApp, GtkToggleButtonElement } from 'gestament';
 import { expect } from 'vitest';
 import { waitForResult } from 'gestament/testing';
-import { expectElementKind } from './test-helpers';
+import { expectElementKind } from '../../shared/tests/connection-test-helpers.ts';
 
 const clipboardWriteHelperPath = fileURLToPath(
   new URL(

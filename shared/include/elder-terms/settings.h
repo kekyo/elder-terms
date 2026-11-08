@@ -15,12 +15,14 @@
 #include <elder-terms/settings/application-settings.h>
 #include <elder-terms/settings/ftp-settings.h>
 #include <elder-terms/settings/webdav-settings.h>
+#include <elder-terms/settings/http-settings.h>
 #include <elder-terms/settings/general-settings.h>
 #include <elder-terms/settings/hyperlink-settings.h>
 #include <elder-terms/settings/local-session-settings.h>
 #include <elder-terms/settings/log-settings.h>
 #include <elder-terms/settings/serial-settings.h>
 #include <elder-terms/settings/smb-settings.h>
+#include <elder-terms/settings/nfs-settings.h>
 #include <elder-terms/settings/settings-store.h>
 #include <elder-terms/settings/sftp-settings.h>
 #include <elder-terms/settings/ssh-settings.h>
@@ -176,6 +178,9 @@ struct SettingsLoadOptions {
   std::optional<std::filesystem::path> startup_config_path;
   /** Optional global defaults INI path. Missing files are ignored. */
   std::optional<std::filesystem::path> global_config_path = std::nullopt;
+  /** Optional theme.ini path. Otherwise resolved beside global_config_path;
+   * without either path, no user theme file is read. */
+  std::optional<std::filesystem::path> theme_config_path = std::nullopt;
 };
 
 /**
@@ -184,8 +189,7 @@ struct SettingsLoadOptions {
 struct SettingsLoadResult {
   /** Loaded store, with defaults applied for missing or invalid values. */
   SettingsStore store;
-  /** True when every requested connection and startup INI file was read
-   * successfully. */
+  /** True when requested settings files were read and the selected theme resolved. */
   bool loaded = true;
   /** Non-fatal warnings encountered while loading. */
   std::vector<std::string> warnings;
@@ -200,6 +204,162 @@ struct SettingsSaveResult {
   /** Non-fatal warnings encountered while saving. */
   std::vector<std::string> warnings;
 };
+
+/** Named reusable overrides for settings inherited by connections. */
+struct SettingsTheme {
+  /** Stable reference ID, independent of the display name. */
+  std::string id;
+  /** Nonblank, unique display name. */
+  std::string name;
+  /** Only loaded entries are theme overrides; other entries are inherited. */
+  SettingsStore store;
+};
+
+/** Theme definitions and diagnostics from one theme.ini. */
+struct SettingsThemeCatalog {
+  /** Themes in file order. */
+  std::vector<SettingsTheme> themes;
+  /** False for read, syntax, schema, or name errors; saving is disallowed. */
+  bool loaded = true;
+  /** Diagnostics, including errors retained by individual theme entries. */
+  std::vector<std::string> warnings;
+};
+
+/** Immutable inheritance inputs shared by a connection and its editor drafts. */
+struct SettingsThemeContext {
+  /** Global settings, represented as explicit values over built-in defaults. */
+  SettingsStore global;
+  /** Available themes. */
+  SettingsThemeCatalog catalog;
+  /** Global path, empty for an isolated in-memory configuration. */
+  std::filesystem::path global_path;
+  /** Theme path, empty when theme files are disabled. */
+  std::filesystem::path theme_path;
+};
+
+/** @returns The connection-only [general] theme key. */
+ELDER_TERMS_API SettingKey general_theme_setting_key();
+
+/** @param store Connection settings. @returns Selected stable ID, or empty for none. */
+ELDER_TERMS_API std::string selected_settings_theme(const SettingsStore &store);
+
+/** @param key Registered setting key. @returns Whether global defaults and themes can supply it. */
+ELDER_TERMS_API bool setting_is_inheritable(const SettingKey &key);
+
+/**
+ * Creates a theme editor store with no explicit values.
+ * @param global Global defaults, including current unsaved edits for preview.
+ * @returns Only inheritable registered settings, rebased on global.
+ */
+ELDER_TERMS_API SettingsStore create_theme_settings(const SettingsStore &global);
+
+/**
+ * Loads a theme catalog using the registered setting types and validators.
+ * @param path Theme file path. A missing file produces an empty catalog.
+ * @param global Global defaults used for inherited theme values.
+ * @returns Themes and diagnostics; errors never become an editable empty catalog.
+ */
+ELDER_TERMS_API SettingsThemeCatalog load_settings_themes(
+    const std::filesystem::path &path, const SettingsStore &global);
+
+/**
+ * Refreshes a connection's inherited values for its own selected theme.
+ * @param store Connection draft; explicit values and dirty state are retained.
+ * @param context New global settings, catalog and file paths.
+ * @returns False if the selected ID cannot be resolved. The ID and error remain in store.
+ */
+ELDER_TERMS_API bool rebase_settings_theme(
+    SettingsStore *store, std::shared_ptr<const SettingsThemeContext> context);
+
+/** @param store Connection settings. @returns Whether its selected theme exists and is valid; no selection is valid. */
+ELDER_TERMS_API bool settings_theme_is_resolved(const SettingsStore &store);
+
+/**
+ * Checks current global and selected-theme definitions before applying an open editor.
+ * @param store Draft whose inheritance context was read when the editor opened.
+ * @returns True when persisted inputs still match that context, or no file context is attached.
+ */
+ELDER_TERMS_API bool settings_theme_inputs_unchanged(const SettingsStore &store);
+
+/** Original bytes for detecting changes to one edited configuration file. */
+struct SettingsFileSnapshot {
+  /** File being edited. */
+  std::filesystem::path path;
+  /** Original contents; absent means the file did not exist. */
+  std::optional<std::string> contents;
+  /** Whether the file could be inspected. */
+  bool readable = true;
+};
+
+/** Saved baselines for independently committing global.ini and theme.ini. */
+struct SettingsEditSession {
+  /** Most recently saved global values. */
+  SettingsStore global;
+  /** Most recently saved theme definitions. */
+  SettingsThemeCatalog catalog;
+  /** Expected global file contents. */
+  SettingsFileSnapshot global_file;
+  /** Expected theme file contents. */
+  SettingsFileSnapshot theme_file;
+  /** False when an input file could not be loaded for editing. */
+  bool loaded = true;
+  /** Read diagnostics. */
+  std::vector<std::string> warnings;
+};
+
+/** Outcome for a single file in a settings save operation. */
+enum class SettingsFileSaveStatus {
+  /** No edits required writing this file. */
+  unchanged,
+  /** The file was successfully replaced. */
+  saved,
+  /** A conflict or write failure left this file unsaved. */
+  failed,
+};
+
+/** Independent file results; a partial success leaves the editor open. */
+struct SettingsEditResult {
+  /** Result for global.ini. */
+  SettingsFileSaveStatus global = SettingsFileSaveStatus::unchanged;
+  /** Result for theme.ini. */
+  SettingsFileSaveStatus themes = SettingsFileSaveStatus::unchanged;
+  /** True when every changed file was saved. */
+  bool complete = false;
+  /** Validation, conflict, or write diagnostics. */
+  std::vector<std::string> warnings;
+};
+
+/**
+ * Starts an editor session without modifying either file.
+ * @param global_path Global configuration path.
+ * @param theme_path Theme configuration path.
+ * @param font_size Built-in terminal font size in DIP.
+ * @returns Saved baselines, expected file bytes and diagnostics.
+ */
+ELDER_TERMS_API SettingsEditSession begin_settings_edit(
+    const std::filesystem::path &global_path, const std::filesystem::path &theme_path,
+    gdouble font_size);
+
+/** @param left First store. @param right Second store.
+ * @returns Whether their explicit registered values match, ignoring inherited values and dirtiness. */
+ELDER_TERMS_API bool explicit_settings_equal(const SettingsStore &left, const SettingsStore &right);
+
+/** @param left First catalog. @param right Second catalog.
+ * @returns Whether IDs, names and explicit settings match in catalog order. */
+ELDER_TERMS_API bool settings_themes_equal(const SettingsThemeCatalog &left, const SettingsThemeCatalog &right);
+
+/** @param catalog Candidate themes. @returns Name, identity and value errors, or an empty vector. */
+ELDER_TERMS_API std::vector<std::string> validate_settings_themes(const SettingsThemeCatalog &catalog);
+
+/**
+ * Validates all drafts and saves changed files against their own baseline.
+ * @param session Saved baselines, advanced only for files successfully saved.
+ * @param global Edited application settings and connection defaults.
+ * @param catalog Edited theme catalog.
+ * @returns Per-file results. Retrying naturally writes only remaining changes.
+ */
+ELDER_TERMS_API SettingsEditResult save_settings_edit(
+    SettingsEditSession *session, const SettingsStore &global, const SettingsThemeCatalog &catalog);
 
 /**
  * Creates a settings store initialized with application defaults.

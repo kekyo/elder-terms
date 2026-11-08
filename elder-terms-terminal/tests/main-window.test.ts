@@ -28,7 +28,10 @@ import {
   activateTextSend,
   expectTextSendActive,
 } from './text-send-test-helpers';
-import { expectElementKind } from './test-helpers';
+import {
+  withTemporaryDirectory,
+  expectElementKind,
+} from '../../shared/tests/connection-test-helpers.ts';
 import {
   defaultColumns,
   defaultRows,
@@ -36,7 +39,6 @@ import {
   readTerminalGridLayout,
   readWindowCellLayout,
   runGtkTest,
-  withTemporaryDirectory,
 } from './gtk-test-helpers';
 
 const execFileAsync = promisify(execFile);
@@ -1206,8 +1208,12 @@ describe.concurrent('elder-terms-terminal main window', () => {
                     `ROUND ${round}`
                   );
                 });
+                // Connection and macro replies can precede the final draw.
+                const layout = await waitForResult(() =>
+                  readTerminalGridLayout(app)
+                );
                 await expectVideoFrame(
-                  (await readTerminalGridLayout(app)).terminalCapture,
+                  layout.terminalCapture,
                   `connected-${round}`
                 );
                 await waitForResult(async () => {
@@ -1252,8 +1258,11 @@ describe.concurrent('elder-terms-terminal main window', () => {
                 }
               }
 
-              const { bounds } = (await readTerminalGridLayout(app))
-                .terminalCapture;
+              // New frames may be pending after recording; selection only
+              // needs the terminal bounds, not settled rendering metrics.
+              const { bounds } = await (
+                await app.getById('terminal_view')
+              ).capture();
               await selectTerminalCells(
                 app,
                 bounds,
@@ -1439,7 +1448,7 @@ describe.concurrent('elder-terms-terminal main window', () => {
   }
 
   for (const autoClose of ['[general]', 'auto_close=true\n', '']) {
-    it(`preserves TELNET automatic closing after connection refusal with ${autoClose === '' ? 'default' : 'explicit'} settings`, async (context) => {
+    it(`offers TELNET reconnection after connection refusal with ${autoClose === '' ? 'default' : 'explicit'} auto-close settings`, async (context) => {
       await withTemporaryDirectory(async (directory) => {
         const server = createServer();
         const port = await listenOnLocalhost(server);
@@ -1451,12 +1460,23 @@ describe.concurrent('elder-terms-terminal main window', () => {
           'utf8'
         );
         await runGtkTest(context, ['-c', configPath], async (app) => {
-          await waitForResult(async () => {
-            const output = await app.output();
-            expect(output.exitCode).toBe(0);
-            expect(output.exitSignal).toBeNull();
-            expect(output.stderr).toContain('Connection refused');
-          });
+          const reconnect = expectElementKind(
+            await app.getById('reconnect_button'),
+            'button'
+          );
+          for (let attempt = 1; attempt <= 2; ++attempt) {
+            await waitForResult(async () => {
+              const output = await app.output();
+              expect(output.exitCode).toBeNull();
+              expect(output.exitSignal).toBeNull();
+              expect(output.stderr.match(/Connection refused/g)).toHaveLength(
+                attempt
+              );
+              expect((await reconnect.info()).states).toContain('showing');
+              expect((await reconnect.info()).states).toContain('sensitive');
+            });
+            if (attempt === 1) await clickWidget(app, reconnect);
+          }
         });
       });
     });
@@ -1775,7 +1795,7 @@ describe.concurrent('elder-terms-terminal main window', () => {
     });
   });
 
-  it('keeps local SFTP browsing available when shared SSH disconnects', async (context) => {
+  it('blocks the SFTP background until reconnect after shared SSH disconnects', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const localDirectory = join(directory, 'local');
       const configPath = join(directory, 'ssh.ini');
@@ -1825,17 +1845,26 @@ describe.concurrent('elder-terms-terminal main window', () => {
           );
           await waitForResult(
             async () => {
-              expect((await localPath.info()).states).toContain('sensitive');
+              expect((await localPath.info()).states).not.toContain(
+                'sensitive'
+              );
               expect((await remotePath.info()).states).not.toContain(
                 'sensitive'
               );
               expect(await status.text()).toBe('Disconnected');
+              expect(
+                (await (await app.getById('file_transfer_dim_overlay')).info())
+                  .states
+              ).toContain('showing');
             },
             {
-              message: 'shared disconnect should only disable remote SFTP',
+              message: 'shared disconnect should block both SFTP browsers',
               timeoutMs: 5_000,
             }
           );
+          expect(
+            (await (await app.getById('terminal_view')).info()).states
+          ).toContain('sensitive');
           const reconnect = expectElementKind(
             await app.getById('file_transfer_reconnect_button'),
             'button'
@@ -1843,8 +1872,13 @@ describe.concurrent('elder-terms-terminal main window', () => {
           expect((await reconnect.info()).states).toContain('showing');
           await reconnect.click();
           await waitForResult(async () => {
+            expect((await localPath.info()).states).toContain('sensitive');
             expect((await remotePath.info()).states).toContain('sensitive');
             expect((await reconnect.info()).states).not.toContain('showing');
+            expect(
+              (await (await app.getById('file_transfer_dim_overlay')).info())
+                .states
+            ).not.toContain('showing');
           });
         }
       );

@@ -292,6 +292,7 @@ static cardio::promise<void> scenarios(Fixture *fixture) {
     fixture->changed.trigger();
   };
   expect(terminal_runtime_start_text_send(fixture->runtime, sending), "accept text send while normal output drains");
+  expect(!terminal_runtime_connection_state(fixture->runtime).binary_receive, "text sending retains normal receive classification");
   boxrig_ui_input_state input{};
   do {
     co_await fixture->changed.wait();
@@ -340,12 +341,13 @@ static cardio::promise<void> scenarios(Fixture *fixture) {
   transfer.base_path = fixture->transfer_directory;
   transfer.finished = sending.finished;
   expect(terminal_runtime_start_transfer(fixture->runtime, transfer), "reserve binary input before stopping widget input");
+  expect(terminal_runtime_connection_state(fixture->runtime).binary_receive, "reserved receive bytes are binary before protocol startup");
   while (fixture->outgoing.empty()) co_await fixture->changed.wait();
   expect(fixture->outgoing == "C", "binary receiver requests CRC after normal output drains");
   boxrig_gtk3_terminal_widget_get_input_state(terminal_runtime_widget(fixture->runtime), &input);
   expect(input.phase == BOXRIG_UI_INPUT_DISABLED, "binary transfer starts only after widget input is disabled");
   const auto normal_size = fixture->normal_output.size();
-  fixture->incoming = "\x01\x01\xfe" "BINARY_PAYLOAD_NOT_TEXT";
+  fixture->incoming = "\x01\x01\xfe\x07" "BINARY_PAYLOAD_NOT_TEXT";
   fixture->received.trigger();
   while (!fixture->incoming.empty()) co_await fixture->changed.wait();
   expect(terminal_runtime_feed(fixture->runtime, "\033[H\033[6n"), "generate a late normal terminal reply");
@@ -355,6 +357,7 @@ static cardio::promise<void> scenarios(Fixture *fixture) {
   expect(terminal_runtime_cancel_transfer(fixture->runtime), "cancel binary transfer");
   while (finished != 4 || !fixture->outgoing.ends_with("\033[1;1R")) co_await fixture->changed.wait();
   expect(!succeeded && !fixture->closed, "binary cancellation resumes normal output on the same connection");
+  expect(!terminal_runtime_connection_state(fixture->runtime).binary_receive, "binary cancellation restores normal receive classification");
 
   const auto before_pending_cancel = fixture->outgoing;
   expect(terminal_runtime_start_transfer(fixture->runtime, transfer), "reserve a second binary transfer");
@@ -365,6 +368,7 @@ static cardio::promise<void> scenarios(Fixture *fixture) {
   while (fixture->outgoing == before_pending_cancel) co_await fixture->changed.wait();
   co_await terminal_runtime_disconnect(fixture->runtime);
   expect(finished == 6 && !succeeded && fixture->closed, "disconnect recovers binary receive and transfer work before closing");
+  expect(!terminal_runtime_connection_state(fixture->runtime).binary_receive, "disconnect releases binary receive classification");
 
   fixture->outgoing.clear();
   fixture->hold_write = true;

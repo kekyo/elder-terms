@@ -1,0 +1,8 @@
+# A guest kernel is required: host kernels may omit NFS v2 server support.
+# All services and exports run inside this disposable VM, never on the host.
+FROM docker.io/library/debian:bullseye@sha256:6f519a81440354a85eb592c5f32109ab80605f6b892455983a6f618bf87fabe9
+RUN printf 'deb http://archive.debian.org/debian bullseye main\ndeb http://archive.debian.org/debian-security bullseye-security main\n' > /etc/apt/sources.list && \
+    apt-get -o Acquire::Check-Valid-Until=false update && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+    linux-image-5.10.0-46-amd64=5.10.262-1 initramfs-tools nfs-kernel-server rpcbind iproute2 \
+    openssh-server tcpdump busybox kmod ca-certificates && \
+    rm -rf /var/lib/apt/lists/*

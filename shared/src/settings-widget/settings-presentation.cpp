@@ -6,6 +6,7 @@
 #include "settings-presentation.h"
 
 #include <array>
+#include <algorithm>
 #include <string>
 
 #define GETTEXT_PACKAGE "elder-terms"
@@ -27,11 +28,21 @@ struct SettingChoiceEntry {
 };
 
 static constexpr std::array setting_labels{
+    SettingLabelEntry{"general", "theme", N_("Theme")},
     SettingLabelEntry{"ssh_proxy", "address", N_("Address")},
     SettingLabelEntry{"ssh_proxy", "port", N_("Port")},
     SettingLabelEntry{"ssh_proxy", "username", N_("User name")},
     SettingLabelEntry{"ssh_proxy", "identity_file", N_("Identity file")},
     SettingLabelEntry{"ftp", "tls_mode", N_("Encryption")},
+    SettingLabelEntry{"http", "base_url", N_("Base URL")},
+    SettingLabelEntry{"http", "start_url", N_("Start page URL")},
+    SettingLabelEntry{"http", "authentication", N_("Authentication")},
+    SettingLabelEntry{"http", "username", N_("User name")},
+    SettingLabelEntry{"http", "local_directory", N_("Local directory")},
+    SettingLabelEntry{"http", "ca_file", N_("CA certificates")},
+    SettingLabelEntry{"http", "certificate_error_action", N_("Certificate validation failure")},
+    SettingLabelEntry{"http", "connect_timeout_seconds", N_("Connection timeout (seconds)")},
+    SettingLabelEntry{"http", "idle_timeout_seconds", N_("Idle timeout (seconds)")},
     SettingLabelEntry{"webdav", "scheme", N_("Connection security")},
     SettingLabelEntry{"webdav", "address", N_("Address")},
     SettingLabelEntry{"webdav", "port", N_("Port")},
@@ -45,7 +56,27 @@ static constexpr std::array setting_labels{
     SettingLabelEntry{"webdav", "connect_timeout_seconds", N_("Connection timeout (seconds)")},
     SettingLabelEntry{"webdav", "idle_timeout_seconds", N_("Idle timeout (seconds)")},
     SettingLabelEntry{"smb", "address", N_("Address")},
+    SettingLabelEntry{"nfs", "address", N_("Address")},
+    SettingLabelEntry{"nfs", "version", N_("NFS version")},
+    SettingLabelEntry{"nfs", "filename_encoding", N_("Filename encoding")},
+    SettingLabelEntry{"nfs", "export_path", N_("Initial export path (empty: server root)")},
+    SettingLabelEntry{"nfs", "known_exports", N_("Known exports (one path per line)")},
+    SettingLabelEntry{"nfs", "discover_exports", N_("Discover exports")},
+    SettingLabelEntry{"nfs", "namespace_path", N_("Initial v4 namespace path (empty: server root)")},
+    SettingLabelEntry{"nfs", "known_namespace_paths", N_("Known v4 namespace paths (one per line)")},
+    SettingLabelEntry{"nfs", "discover_namespace", N_("Explore v4 public namespace")},
+    SettingLabelEntry{"nfs", "local_directory", N_("Local directory")},
+    SettingLabelEntry{"nfs", "nfs_port", N_("NFS port (0: automatic)")},
+    SettingLabelEntry{"nfs", "mount_port", N_("MOUNT port (0: automatic)")},
+    SettingLabelEntry{"nfs", "require_reserved_port", N_("Require reserved source port")},
+    SettingLabelEntry{"nfs", "uid", N_("User ID (-1: current process)")},
+    SettingLabelEntry{"nfs", "gid", N_("Group ID (-1: current process)")},
+    SettingLabelEntry{"nfs", "supplementary_gids", N_("Additional group IDs (one per line)")},
+    SettingLabelEntry{"nfs", "connect_timeout_seconds", N_("Connection timeout (seconds)")},
+    SettingLabelEntry{"nfs", "request_timeout_seconds", N_("Request timeout (seconds)")},
     SettingLabelEntry{"smb", "port", N_("Port")},
+    SettingLabelEntry{"smb", "version", N_("SMB version")},
+    SettingLabelEntry{"smb", "netbios_name", N_("NetBIOS server name (port 139)")},
     SettingLabelEntry{"smb", "domain", N_("Domain")},
     SettingLabelEntry{"smb", "username", N_("User name")},
     SettingLabelEntry{"smb", "local_directory", N_("Local directory")},
@@ -85,10 +116,12 @@ static constexpr std::array setting_labels{
     SettingLabelEntry{"terminal", "cursor_key_mode", N_("Cursor key mode")},
     SettingLabelEntry{"terminal", "cursor_shape", N_("Cursor shape")},
     SettingLabelEntry{"terminal", "color_filter", N_("Color filter")},
-    SettingLabelEntry{"terminal", "link_decoration", N_("Link decoration")},
+    SettingLabelEntry{"terminal", "regex_link_decoration", N_("Regex link display")},
+    SettingLabelEntry{"terminal", "osc8_link_decoration", N_("OSC 8 link display")},
     SettingLabelEntry{"terminal", "color_vision", N_("Color discrimination")},
     SettingLabelEntry{"terminal", "color_vision_strength", N_("Correction strength (0–100)")},
     SettingLabelEntry{"terminal", "background_mode", N_("Background mode")},
+    SettingLabelEntry{"terminal", "cell_background_mode", N_("Cell background transparency")},
     SettingLabelEntry{"terminal", "background_opacity", N_("Background opacity (%)")},
     SettingLabelEntry{"terminal", "background_tint_color", N_("Background tint")},
     SettingLabelEntry{"terminal", "background_tint_opacity", N_("Tint opacity (%)")},
@@ -104,6 +137,7 @@ static constexpr std::array setting_labels{
     SettingLabelEntry{"terminal", "block_copy_trim_trailing_spaces",
                       N_("Trim trailing spaces in block copies")},
     SettingLabelEntry{"terminal", "font_size_dip", N_("Font size (DIP)")},
+    SettingLabelEntry{"terminal", "font_zoom_mode", N_("Font zoom behavior")},
     SettingLabelEntry{"general", "indicator_color", N_("Active indicator color")},
     SettingLabelEntry{"general", "indicator_off_color", N_("Inactive indicator color")},
     SettingLabelEntry{"terminal", "font_families", N_("Font families")},
@@ -114,6 +148,8 @@ static constexpr std::array setting_labels{
     SettingLabelEntry{"general", "border_width",
                       N_("Window side border width (px)")},
     SettingLabelEntry{"terminal", "bell_sound", N_("BEL sound")},
+    SettingLabelEntry{"terminal", "visual_bell", N_("Visual BEL notification")},
+    SettingLabelEntry{"general", "receive_effect", N_("Titlebar receive effect")},
     SettingLabelEntry{"terminal", "zoom_in_key", N_("Zoom in shortcut")},
     SettingLabelEntry{"terminal", "zoom_out_key", N_("Zoom out shortcut")},
     SettingLabelEntry{"terminal", "send_break_key",
@@ -180,7 +216,21 @@ static constexpr std::array setting_choices{
     SettingChoiceEntry{"general", "type", "sftp", N_("SFTP")},
     SettingChoiceEntry{"general", "type", "ftp", N_("FTP")},
     SettingChoiceEntry{"general", "type", "webdav", N_("WebDAV")},
+    SettingChoiceEntry{"general", "type", "http", N_("HTTP/HTTPS")},
     SettingChoiceEntry{"general", "type", "smb", N_("SMB")},
+    SettingChoiceEntry{"smb", "version", "auto", N_("Automatic — SMB 2/3")},
+    SettingChoiceEntry{"smb", "version", "1", N_("SMB 1")},
+    SettingChoiceEntry{"smb", "version", "2", N_("SMB 2")},
+    SettingChoiceEntry{"smb", "version", "3", N_("SMB 3")},
+    SettingChoiceEntry{"general", "type", "nfs", N_("NFS")},
+    SettingChoiceEntry{"http", "authentication", "auto", N_("Automatic (Basic or Digest)")},
+    SettingChoiceEntry{"http", "authentication", "basic", N_("Basic")},
+    SettingChoiceEntry{"http", "authentication", "digest", N_("Digest")},
+    SettingChoiceEntry{"http", "authentication", "none", N_("None")},
+    SettingChoiceEntry{"http", "ca_file", "default", N_("System CA certificates")},
+    SettingChoiceEntry{"http", "ca_file", "custom", N_("Custom")},
+    SettingChoiceEntry{"http", "certificate_error_action", "reject", N_("Reject connection")},
+    SettingChoiceEntry{"http", "certificate_error_action", "prompt", N_("Confirm in an overlay")},
     SettingChoiceEntry{"webdav", "scheme", "https", N_("HTTPS (encrypted)")},
     SettingChoiceEntry{"webdav", "scheme", "http", N_("HTTP (unencrypted)")},
     SettingChoiceEntry{"webdav", "authentication", "auto", N_("Automatic (Basic or Digest)")},
@@ -219,10 +269,17 @@ static constexpr std::array setting_choices{
     SettingChoiceEntry{"terminal", "ambiguous_width", "wide", N_("2 columns")},
     SettingChoiceEntry{"terminal", "ambiguous_width", "font", N_("Font dependent")},
     SettingChoiceEntry{"terminal", "cursor_shape", "block", N_("Full box")},
+    SettingChoiceEntry{"terminal", "font_zoom_mode", "preserve-grid", N_("Keep rows and columns")},
+    SettingChoiceEntry{"terminal", "font_zoom_mode", "preserve-window", N_("Keep window size")},
     SettingChoiceEntry{"terminal", "color_filter", "none", N_("No correction")},
-    SettingChoiceEntry{"terminal", "link_decoration", "none", N_("No decoration")},
-    SettingChoiceEntry{"terminal", "link_decoration", "underline", N_("Always underline")},
-    SettingChoiceEntry{"terminal", "link_decoration", "validated", N_("Validate links (with dimming)")},
+    SettingChoiceEntry{"terminal", "regex_link_decoration", "none", N_("No decoration")},
+    SettingChoiceEntry{"terminal", "regex_link_decoration", "underline", N_("Always underline")},
+    SettingChoiceEntry{"terminal", "regex_link_decoration", "hover", N_("Underline on hover")},
+    SettingChoiceEntry{"terminal", "regex_link_decoration", "validated", N_("Validate links (with dimming)")},
+    SettingChoiceEntry{"terminal", "osc8_link_decoration", "none", N_("No decoration")},
+    SettingChoiceEntry{"terminal", "osc8_link_decoration", "underline", N_("Always underline")},
+    SettingChoiceEntry{"terminal", "osc8_link_decoration", "hover", N_("Underline on hover")},
+    SettingChoiceEntry{"terminal", "osc8_link_decoration", "validated", N_("Validate links (with dimming)")},
     SettingChoiceEntry{"terminal", "color_filter", "oklch", N_("Improve visibility (Oklch)")},
     SettingChoiceEntry{"terminal", "color_filter", "reverse-palette", N_("Reverse optimized palette (E)")},
     SettingChoiceEntry{"terminal", "color_filter", "reverse-cam16", N_("Reverse appearance (D, CAM16)")},
@@ -236,6 +293,8 @@ static constexpr std::array setting_choices{
     SettingChoiceEntry{"terminal", "background_mode", "opaque", N_("Opaque")},
     SettingChoiceEntry{"terminal", "background_mode", "transparent", N_("Transparent")},
     SettingChoiceEntry{"terminal", "background_mode", "blur", N_("Frosted glass")},
+    SettingChoiceEntry{"terminal", "cell_background_mode", "transparent", N_("Transparent")},
+    SettingChoiceEntry{"terminal", "cell_background_mode", "opaque", N_("Opaque")},
     SettingChoiceEntry{"terminal", "background_image_fit", "cover", N_("Cover")},
     SettingChoiceEntry{"terminal", "background_image_fit", "contain", N_("Contain")},
     SettingChoiceEntry{"terminal", "background_image_fit", "stretch", N_("Stretch")},
@@ -423,6 +482,8 @@ const char *settings_ui_text(SettingsUiText text) {
     return _("WebDAV(80)");
   case SettingsUiText::smb_port_column:
     return _("SMB(445)");
+  case SettingsUiText::nfs_port_column:
+    return _("NFS(2049)");
   case SettingsUiText::ip_scan_description:
     return _("Shows TCP port responses. Service support and authentication are not verified.");
   case SettingsUiText::scanning:
@@ -446,6 +507,13 @@ std::string setting_label(const SettingKey &key) {
 
 std::string setting_choice_label(const SettingKey &key,
                                  const std::string &value) {
+  if ((key.section == "terminal" && key.name == "visual_bell") ||
+      (key.section == "general" && key.name == "receive_effect")) {
+    if (value == "disabled") return _("Disabled");
+    if (value == "weak") return _("Weak");
+    if (value == "medium") return _("Medium");
+    if (value == "strong") return _("Strong");
+  }
   for (const SettingChoiceEntry &entry : setting_choices) {
     if (matches_setting(key, entry.section, entry.name) &&
         value == entry.value) {
@@ -468,6 +536,22 @@ std::string inherited_setting_label(const std::string &value,
   const std::string result = label;
   g_free(label);
   return result;
+}
+
+std::string setting_fallback_label(const SettingsStore &store, const SettingKey &key,
+                                   const std::string &value) {
+  const auto found = std::find_if(store.entries.begin(), store.entries.end(), [&key](const auto &entry) {
+    return entry.definition.key.section == key.section && entry.definition.key.name == key.name;
+  });
+  if (found != store.entries.end() && found->fallback_source == SettingValueSource::theme) {
+    gchar *label = value.empty()
+        ? g_strdup_printf(_("Theme: %s"), found->fallback_theme_name.c_str())
+        : g_strdup_printf(_("%s (theme: %s)"), value.c_str(), found->fallback_theme_name.c_str());
+    const std::string text = label;
+    g_free(label);
+    return text;
+  }
+  return inherited_setting_label(value, setting_fallback_source(store, key));
 }
 
 std::string settings_validation_message(const std::string &reason) {
@@ -580,7 +664,72 @@ std::string settings_validation_message(const std::string &reason) {
   if (reason == "must name a log file") {
     return _("Must name a log file");
   }
-  return _("Invalid value");
+  constexpr const char *messages[] = {
+      N_("A known export path is required when export discovery is disabled"),
+      N_("A known NFS v4 namespace path is required when namespace discovery is disabled"),
+      N_("[ftp] tls_min_version must not exceed tls_max_version"),
+      N_("HTTP or HTTPS URL required"),
+      N_("HTTP base URL must not contain a query or fragment"),
+      N_("HTTP base URL must end in a slash"),
+      N_("Malformed HTTP URL escape"),
+      N_("Ambiguous HTTP URL character"),
+      N_("Ambiguous encoded HTTP path separator"),
+      N_("Invalid HTTP base URL"),
+      N_("Invalid HTTP endpoint"),
+      N_("must be an absolute path without dot segments or control characters"),
+      N_("must be an encoded absolute URL path without a query, fragment, or dot segments"),
+      N_("must not contain control characters"),
+      N_("security levels must be selected with tls_compatibility"),
+      N_("TLS 1.3 cipher suites must encrypt data"),
+      N_("SMB server address is required"),
+      N_("NFS server address is required"),
+      N_("HTTP base URL is required"),
+      N_("HTTP start page is outside the base URL"),
+      N_("[ssh_proxy] address: SSH proxy server address is required"),
+      N_("Enter a valid value"),
+      N_("must contain valid UTF-8 without control characters"),
+      N_("must be a hostname or IP address without a scheme, path, or credentials"),
+      N_("must be an integer between 1 and 65535"),
+      N_("must be between 0 (automatic) and 65535"),
+      N_("must be between 1 and 86400 seconds"),
+      N_("must be an integer between 1 and 86400"),
+      N_("must be auto, 1, 2, or 3"),
+      N_("must be disabled, weak, medium, or strong"),
+      N_("must select NFS version 2, 3 or 4.0"),
+      N_("must be at most 15 ASCII letters, digits, hyphens, or underscores"),
+      N_("must be an absolute path without dot segments, colons, trailing dots or spaces, or control characters"),
+      N_("must be empty or an absolute path without empty, dot, or parent components"),
+      N_("must contain absolute paths without empty, dot, or parent components"),
+      N_("must be -1 (current process) or an unsigned 32-bit ID"),
+      N_("must contain at most 16 unsigned 32-bit group IDs"),
+      N_("must be an available encoding without replacement or ignore modifiers"),
+      N_("must be an absolute PEM CA bundle path or empty"),
+      N_("identifier must not be empty"),
+      N_("identifier may contain only letters, digits, '-' and '_'"),
+      N_("identifier must be unique"),
+      N_("regular expression must not be empty"),
+      N_("command must not be empty"),
+      N_("command must not contain a NUL byte"),
+      N_("send text must not be empty"),
+      N_("path template must not be empty when path validation is enabled"),
+      N_("font family names must be valid UTF-8 without NUL characters"),
+      N_("font family names must not contain commas or control characters"),
+      N_("font family names must be non-empty and unique"),
+      N_("contains an empty capture placeholder"),
+      N_("contains an unmatched capture placeholder"),
+      N_("literal '$' must be written as '$$'"),
+      N_("contains more than one capture transformation"),
+  };
+  for (const auto *message : messages)
+    if (reason == message) return _(message);
+  constexpr char capture_prefix[] = "references an unknown capture: ";
+  if (reason.starts_with(capture_prefix)) {
+    auto *message = g_strdup_printf(_("references an unknown capture: %s"), reason.substr(sizeof(capture_prefix) - 1).c_str());
+    const std::string result = message;
+    g_free(message);
+    return result;
+  }
+  return reason;
 }
 
 } // namespace elder_terms

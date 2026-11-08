@@ -34,25 +34,41 @@ describe('elder-terms shared library', () => {
       'elder-terms-terminal/elder-terms-terminal'
     );
 
-    const [header, dynamic, launcherDynamic, terminalDynamic, symbols] =
-      await Promise.all([
-        inspectElf('readelf', ['--file-header', libraryPath]),
-        inspectElf('readelf', ['--dynamic', libraryPath]),
-        inspectElf('readelf', ['--dynamic', launcherPath]),
-        inspectElf('readelf', ['--dynamic', terminalPath]),
-        inspectElf('nm', [
-          '--dynamic',
-          '--defined-only',
-          '--demangle',
-          libraryPath,
-        ]),
-      ]);
+    const fileTransferPath = buildArtifactPath(
+      'elder-terms-file-transfer/elder-terms-file-transfer'
+    );
+
+    const [
+      header,
+      dynamic,
+      launcherDynamic,
+      terminalDynamic,
+      fileTransferDynamic,
+      symbols,
+    ] = await Promise.all([
+      inspectElf('readelf', ['--file-header', libraryPath]),
+      inspectElf('readelf', ['--dynamic', libraryPath]),
+      inspectElf('readelf', ['--dynamic', launcherPath]),
+      inspectElf('readelf', ['--dynamic', terminalPath]),
+      inspectElf('readelf', ['--dynamic', fileTransferPath]),
+      inspectElf('nm', [
+        '--dynamic',
+        '--defined-only',
+        '--demangle',
+        libraryPath,
+      ]),
+    ]);
 
     expect(header).toMatch(/Type:\s+DYN/);
     expect(dynamic).toContain('Library soname: [libelder-terms.so.0]');
     expect(launcherDynamic).toContain('Shared library: [libelder-terms.so.0]');
     expect(terminalDynamic).toContain('Shared library: [libelder-terms.so.0]');
     expect(terminalDynamic).toContain('Shared library: [libcardio.so.0]');
+    expect(fileTransferDynamic).toContain(
+      'Shared library: [libelder-terms.so.0]'
+    );
+    expect(fileTransferDynamic).toContain('Shared library: [libcardio.so.0]');
+    expect(fileTransferDynamic).not.toContain('Shared library: [libboxrig');
     expect(symbols).toContain('elder_terms::create_settings_widget(');
     expect(symbols).toContain('elder_terms::load_settings(');
     expect(symbols).not.toContain('elder_terms::SettingsWidgetState::');

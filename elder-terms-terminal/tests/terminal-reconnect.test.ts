@@ -8,9 +8,12 @@ import { createConnection, createServer, type Socket } from 'node:net';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { waitForResult } from 'gestament/testing';
-import { expectElementKind } from './test-helpers';
-import { runGtkTest, withTemporaryDirectory } from './gtk-test-helpers';
-import { startSshLatencyFixture } from './performance/ssh-latency-fixture.mjs';
+import {
+  withTemporaryDirectory,
+  expectElementKind,
+} from '../../shared/tests/connection-test-helpers.ts';
+import { runGtkTest } from './gtk-test-helpers';
+import { startSshLatencyFixture } from '../../shared/tests/ssh-latency-fixture.mts';
 
 describe.concurrent('terminal reconnection', () => {
   it('restarts a local command after exit and exchanges new input', async (context) => {
@@ -65,6 +68,12 @@ describe.concurrent('terminal reconnection', () => {
             ).toHaveLength(round);
             expect((await reconnect.info()).states).toContain('showing');
             expect((await reconnect.info()).states).toContain('sensitive');
+            expect(
+              await expectElementKind(
+                await app.getById('disconnected_notice_label'),
+                'label'
+              ).text()
+            ).toBe('Local command exited with status 0.');
           });
           if (round < 3) await reconnect.click();
         }
@@ -226,6 +235,16 @@ describe.concurrent('terminal reconnection', () => {
                   expect((await reconnect.info()).states).toContain(
                     'sensitive'
                   );
+                  const reason = await expectElementKind(
+                    await app.getById('disconnected_notice_label'),
+                    'label'
+                  ).text();
+                  // A peer EOF has no reliable logout/network-loss distinction.
+                  expect(reason).toMatch(
+                    /^SSH (session ended\.|connection failed:)/
+                  );
+                  if (ending === 'logout')
+                    expect(reason).toBe('SSH session ended.');
                 });
                 await evidence.captureEvidence(
                   `ssh-${ending}-${round}`,

@@ -11,12 +11,11 @@ import { fileURLToPath } from 'node:url';
 import { PNG } from 'pngjs';
 import { expect, it } from 'vitest';
 import { waitForResult } from 'gestament/testing';
+import { runGtkTest, readTerminalGridLayout } from './gtk-test-helpers';
 import {
-  runGtkTest,
   withTemporaryDirectory,
-  readTerminalGridLayout,
-} from './gtk-test-helpers';
-import { expectElementKind } from './test-helpers';
+  expectElementKind,
+} from '../../shared/tests/connection-test-helpers.ts';
 
 const exec = promisify(execFile);
 const backdropPath = fileURLToPath(
@@ -187,11 +186,14 @@ process.stdout.write('\\x1b[?25l\\x1b[48;2;0;0;0m\\x1b[38;2;255;255;255m\\x1b[2J
                 'entry'
               ).setText(value);
             };
-            const selectMode = async (index: number): Promise<void> => {
+            const selectMode = async (
+              index: number,
+              id: string
+            ): Promise<void> => {
               // Wait for the popup item before sending native selection input.
               // Key events sent while GTK creates the popup can be lost.
               const combo = expectElementKind(
-                await app.getById('settings_terminal_background_mode_combo'),
+                await app.getById(id),
                 'comboBox'
               );
               const scrollbar = expectElementKind(
@@ -255,6 +257,26 @@ process.stdout.write('\\x1b[?25l\\x1b[48;2;0;0;0m\\x1b[38;2;255;255;255m\\x1b[2J
                 expect(await combo.isChildSelected(index)).toBe(true)
               );
             };
+            for (const [index, rgb] of [
+              [2, [0, 0, 0]],
+              [1, [112, 24, 16]],
+            ] as const) {
+              await openSettings();
+              await selectMode(
+                index,
+                'settings_terminal_cell_background_mode_combo'
+              );
+              await expectElementKind(
+                await app.getById('settings_apply_button'),
+                'button'
+              ).click();
+              await closeAfterApply();
+              await expectBackground([...rgb]);
+              await evidence.captureEvidence(
+                `cell-background-${index}`,
+                async () => app.capture()
+              );
+            }
             for (const step of [
               { opacity: '0', tint: '0', rgb: [224, 48, 32] },
               { opacity: '0', tint: '50', rgb: [112, 24, 144] },
@@ -319,7 +341,7 @@ process.stdout.write('\\x1b[?25l\\x1b[48;2;0;0;0m\\x1b[38;2;255;255;255m\\x1b[2J
             ).click();
             await expectBackground([112, 24, 16]);
             await openSettings();
-            await selectMode(1);
+            await selectMode(1, 'settings_terminal_background_mode_combo');
             await setEntry('opacity', '0');
             await setEntry('tint_opacity', '100');
             await expectElementKind(
@@ -335,7 +357,7 @@ process.stdout.write('\\x1b[?25l\\x1b[48;2;0;0;0m\\x1b[38;2;255;255;255m\\x1b[2J
                 'label'
               ).text()
             ).toBe('Opaque background');
-            await selectMode(2);
+            await selectMode(2, 'settings_terminal_background_mode_combo');
             await expectElementKind(
               await app.getById('settings_save_button'),
               'button'
@@ -380,6 +402,16 @@ process.stdout.write('\\x1b[?25l\\x1b[48;2;0;0;0m\\x1b[38;2;255;255;255m\\x1b[2J
               'button'
             ).click();
             await expectBackground([0, 0, 255]);
+            await openSettings();
+            await selectMode(2, 'settings_terminal_cell_background_mode_combo');
+            await expectElementKind(
+              await app.getById('settings_save_button'),
+              'button'
+            ).click();
+            await expectBackground([0, 0, 0]);
+            expect(await readFile(config, 'utf8')).toContain(
+              'cell_background_mode=opaque'
+            );
           } finally {
             for (const child of processes.reverse()) child.kill('SIGTERM');
             await Promise.all(finished);
@@ -406,7 +438,7 @@ process.stdout.write('\\x1b[?25l\\x1b[48;2;0;0;0m\\x1b[38;2;255;255;255m\\x1b[2J
                 Math.floor(png.width / 2)) *
               4;
             expect([...png.data.subarray(offset, offset + 3)]).toEqual([
-              0, 0, 255,
+              0, 0, 0,
             ]);
           });
           await expectElementKind(

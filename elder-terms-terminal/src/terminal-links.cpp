@@ -36,6 +36,7 @@ struct LinkAnnotation {
   std::shared_ptr<PathCheck> path_check;
   std::uint32_t hyperlink_handle = 0;
   std::string recognized_text{};
+  std::uint64_t match_id = 0;
 };
 
 struct LinkLine {
@@ -52,6 +53,7 @@ struct LinkRule {
   std::uint64_t rescan_revision = 0;
   std::uint64_t generation = 0;
   std::map<LinkLineKey, LinkLine> lines;
+  bool url_boundaries = false;
 };
 
 struct LinkValidationState {
@@ -105,6 +107,18 @@ struct Osc8CacheEntry {
   std::shared_ptr<boxrig_regex_result> result;
 };
 
+struct LinkHover {
+  LinkLineKey line;
+  std::uint64_t revision;
+  std::uint64_t source;
+  std::uint64_t item;
+  std::size_t start;
+  std::size_t end;
+  std::uint32_t hyperlink_handle;
+
+  bool operator==(const LinkHover &) const = default;
+};
+
 struct TerminalLinks {
   boxrig_terminal *terminal = nullptr;
   boxrig_ui_view *view = nullptr;
@@ -114,7 +128,8 @@ struct TerminalLinks {
   std::unordered_map<Osc8CacheKey, std::list<Osc8CacheEntry>::iterator, Osc8CacheHash> osc8_index;
   std::size_t osc8_cache_bytes = 0;
   std::shared_ptr<LinkValidationState> validation;
-  TerminalLinkDecoration decoration = TerminalLinkDecoration::underline;
+  TerminalLinkDecorations decorations;
+  std::optional<LinkHover> hover;
   bool osc8_dirty = true;
   std::uint64_t next_annotation_id = 1;
 #if defined(ELDER_TERMS_CACHE_TESTING)
@@ -258,7 +273,9 @@ static void publish_line_annotations(TerminalLinks *links, const LinkLineKey &ke
     for (auto &item : line->second.items) {
       bool covered = false;
       for (const auto &other : links->rules) {
-        if (&other == &rule) continue;
+        // Presentation between sources is composed by priority below. Never
+        // remove a text action merely because an OSC 8 label overlaps it.
+        if (&other == &rule || other.rule.recognition_source != rule.rule.recognition_source) continue;
         const auto previous = other.lines.find(key);
         if (previous == other.lines.end() || previous->second.event.line_revision != line->second.event.line_revision) continue;
         const auto &items = previous->second.items;
@@ -276,13 +293,21 @@ static void publish_line_annotations(TerminalLinks *links, const LinkLineKey &ke
         ++item.path_check->subscribers[key];
       }
       auto annotation = item.annotation;
-      annotation.priority = -static_cast<std::int32_t>(rule.generation);
+      const bool osc8 = rule.rule.recognition_source == HyperlinkRecognitionSource::osc8;
+      const auto decoration = osc8 ? links->decorations.osc8 : links->decorations.regex;
+      annotation.priority = (osc8 ? INT32_MAX : 0) - static_cast<std::int32_t>(rule.generation);
       annotation.style = {};
-      if (links->decoration != TerminalLinkDecoration::none) {
-        annotation.style.field_mask = BOXRIG_UI_ANNOTATION_UNDERLINE_STYLE | BOXRIG_UI_ANNOTATION_UNDERLINE_FALLBACK;
+      // Explicit NONE clears lower-priority link decoration while FALLBACK
+      // preserves every terminal-provided underline, including double lines.
+      annotation.style.field_mask = BOXRIG_UI_ANNOTATION_UNDERLINE_STYLE |
+          BOXRIG_UI_ANNOTATION_UNDERLINE_FALLBACK | BOXRIG_UI_ANNOTATION_COLOR_TAG;
+      const bool hovered = links->hover == std::optional{LinkHover{key, line->second.event.line_revision,
+          annotation.source_id, annotation.item_id, annotation.range.start.column, annotation.range.end.column, item.hyperlink_handle}};
+      if (decoration == TerminalLinkDecoration::underline || decoration == TerminalLinkDecoration::validated ||
+          (decoration == TerminalLinkDecoration::hover && hovered)) {
         annotation.style.underline_style = BOXRIG_UNDERLINE_SINGLE;
       }
-      if (links->decoration == TerminalLinkDecoration::validated) {
+      if (decoration == TerminalLinkDecoration::validated) {
         // A valid higher-priority match must also clear dimming contributed
         // by a partially overlapping lower-priority path annotation.
         annotation.style.field_mask |= BOXRIG_UI_ANNOTATION_COLOR_TAG;
@@ -305,13 +330,38 @@ static void publish_line_annotations(TerminalLinks *links, const LinkLineKey &ke
   }
 }
 
-void terminal_links_set_decoration(TerminalLinks *links, TerminalLinkDecoration decoration) {
-  if (links->decoration == decoration) return;
-  links->decoration = decoration;
+void terminal_links_set_decorations(TerminalLinks *links, TerminalLinkDecorations decorations) {
+  if (links->decorations == decorations) return;
+  links->decorations = decorations;
   std::set<LinkLineKey> keys;
   for (const auto &rule : links->rules)
     for (const auto &[key, line] : rule.lines) { (void)line; keys.insert(key); }
   for (const auto &key : keys) publish_line_annotations(links, key);
+}
+
+void terminal_links_set_hover(TerminalLinks *links, const boxrig_ui_hit_test_result &hit) {
+  std::optional<LinkHover> hovered;
+  if (links->view && hit.inside_grid && hit.text_position_valid &&
+      !(hit.overlay_roles & (BOXRIG_UI_OVERLAY_IME | BOXRIG_UI_OVERLAY_CANDIDATES))) {
+    std::array<boxrig_ui_text_annotation, 32> annotations{};
+    std::size_t count = 0;
+    if (boxrig_ui_view_query_text_annotation_hits(links->view, &hit, BOXRIG_UI_ANNOTATION_HIT_ALL,
+        annotations.data(), annotations.size(), &count, nullptr) == BOXRIG_UI_OK && count) {
+      const auto &selected = *std::max_element(annotations.begin(), annotations.begin() + count,
+          [](const auto &left, const auto &right) { return left.priority < right.priority; });
+      hovered = LinkHover{line_key(selected.range.start.screen, selected.range.start.line_id),
+          selected.range.start.line_revision, selected.source_id, selected.item_id,
+          selected.range.start.column, selected.range.end.column, hit.hyperlink_handle};
+      // Text links underneath unrelated OSC 8 text retain their own identity.
+      for (const auto &rule : links->rules)
+        if (annotation_source(rule) == selected.source_id && rule.recognizer) hovered->hyperlink_handle = 0;
+    }
+  }
+  if (links->hover == hovered) return;
+  const auto previous = links->hover;
+  links->hover = hovered;
+  if (previous) publish_line_annotations(links, previous->line);
+  if (hovered && (!previous || previous->line != hovered->line)) publish_line_annotations(links, hovered->line);
 }
 
 static void stop_validation(TerminalLinks *links) {
@@ -350,6 +400,7 @@ TerminalLinks *create_terminal_links(boxrig_ui_view *view, std::vector<Hyperlink
   links->terminal = boxrig_ui_view_terminal(view);
   links->view = view;
   const auto limits = boxrig_text_recognizer_limits_default();
+  const auto default_url = default_hyperlink_action_rules()[1];
   for (auto &rule : rules) {
     std::string reason;
     std::shared_ptr<RegularExpressionState> program(create_regular_expression(rule.pattern, &reason), destroy_regular_expression);
@@ -366,13 +417,24 @@ TerminalLinks *create_terminal_links(boxrig_ui_view *view, std::vector<Hyperlink
         continue;
       }
     }
+    // Boundary policy belongs to the built-in recognition expression, not its
+    // editable identifier or launch command. Changed expressions keep their
+    // exact captures, even when they reuse the built-in rule identifier.
+    const bool url_boundaries = rule.recognition_source == HyperlinkRecognitionSource::terminal_text &&
+        !rule.whole_token && rule.pattern == default_url.pattern;
     links->rules.push_back({std::move(rule), std::move(program), recognizer, 0,
-        static_cast<std::uint64_t>(links->rules.size() + 1), {}});
+        static_cast<std::uint64_t>(links->rules.size() + 1), {}, url_boundaries});
   }
+  // Explicit labels remain visible even when no launch rule accepts their URI.
+  // A null program marks this presentation-only source; it grants no action.
+  LinkRule explicit_labels;
+  explicit_labels.generation = links->rules.size() + 1;
+  links->rules.push_back(std::move(explicit_labels));
   return links;
 }
 
 void terminal_links_attach_view(TerminalLinks *links, boxrig_ui_view *view) {
+  links->hover.reset();
   stop_validation(links);
   auto validation = std::make_shared<LinkValidationState>();
   validation->owner = links;
@@ -420,8 +482,59 @@ static bool token_boundary(boxrig_terminal *terminal,
   if (remaining) *remaining -= length;
   if (!length) return true;
   const auto character = g_utf8_get_char(before ? g_utf8_find_prev_char(bytes, bytes + length) : bytes);
-  return g_unichar_isspace(character) || character == 0x85 || character == 0x180e ||
-      character == '\'' || character == '"';
+  if (g_unichar_isspace(character) || character == 0x85 || character == 0x180e ||
+      std::u32string_view(U"\"'`:=;|&<>,、。").find(character) != std::u32string_view::npos) return true;
+  // Prose delimiters apply to all whole-token rules, independently of shells.
+  // Opening and closing brackets delimit only their respective sides. A dollar
+  // sign ends a candidate; slashes, escapes and filename characters never do.
+  const std::u32string_view delimiters = before ? U"([{（「『" : U")]}）」』$";
+  return delimiters.find(character) != std::u32string_view::npos;
+}
+
+static bool url_prefix(std::string_view text, std::size_t offset) {
+  const auto rest = text.substr(offset);
+  return rest.starts_with("https://") || rest.starts_with("http://");
+}
+
+static std::vector<std::pair<std::size_t, std::size_t>> prose_url_ranges(std::string_view text) {
+  std::vector<std::pair<std::size_t, std::size_t>> ranges;
+  // RFC 3986 permits balanced parentheses and query commas. Prose recognition
+  // is intentionally narrower; explicit OSC 8 targets keep every URI byte.
+  // Walk the candidate once, including discarded prose between adjacent URLs.
+  for (std::size_t offset = 0; offset < text.size();) {
+    if (!url_prefix(text, offset)) { ++offset; continue; }
+    const auto start = offset;
+    offset += text.substr(offset).starts_with("https://") ? 8 : 7;
+    const auto authority = offset;
+    std::vector<gunichar> closers;
+    bool query = false;
+    while (offset < text.size()) {
+      const auto character = g_utf8_get_char(text.data() + offset);
+      if (g_unichar_isspace(character) || character == 0x85 || character == 0x180e ||
+          character == '"' || character == '\'' || character == '<' || character == '>' ||
+          character == '`' || character == '{' || character == '}' ||
+          character == 0x3001 || character == 0x3002 ||
+          (character >= 0x3008 && character <= 0x3011) ||
+          (character >= 0x2018 && character <= 0x201f) ||
+          character == 0xff08 || character == 0xff09 || character == 0xff0c ||
+          character == 0xff0e || character == 0xff1b || character == 0xff1a) break;
+      if ((character == ',' || character == ';') && url_prefix(text, offset + 1)) break;
+      if (character == '(' || character == '[') {
+        closers.push_back(character == '(' ? ')' : ']');
+      } else if (character == ')' || character == ']') {
+        if (closers.empty() || closers.back() != character) break;
+        closers.pop_back();
+      }
+      if (character == '?' || character == '#') query = true;
+      offset = static_cast<std::size_t>(g_utf8_next_char(text.data() + offset) - text.data());
+    }
+    auto end = offset;
+    if (!query) while (end > authority && std::string_view(".,;:!").find(text[end - 1]) != std::string_view::npos) --end;
+    // Oversized candidates are rejected as a whole, never activated as a prefix.
+    if (end > authority && end - start <= 8192) ranges.emplace_back(start, end);
+    if (offset < text.size()) ++offset;
+  }
+  return ranges;
 }
 
 static void update_annotations(TerminalLinks *links, const boxrig_text_recognizer_event &event) {
@@ -455,28 +568,54 @@ static void update_annotations(TerminalLinks *links, const boxrig_text_recognize
   line.event = event;
   line.items.clear();
   line.items.reserve(results.size());
+  std::size_t projection_budget = 65536;
   for (const auto &result : results) {
     if (rule->rule.whole_token &&
         (!token_boundary(links->terminal, result.range.start, true) ||
          !token_boundary(links->terminal, result.range.end, false))) continue;
-    boxrig_ui_text_annotation annotation{};
-    annotation.source_id = result.recognizer_id;
-    const auto old = std::lower_bound(previous.begin(), previous.end(), result.range.start.column,
-        [](const LinkAnnotation &item, std::size_t column) { return item.annotation.range.start.column < column; });
-    annotation.item_id = old != previous.end() && old->annotation.range.start.column == result.range.start.column &&
-        old->annotation.range.end.column == result.range.end.column ? old->annotation.item_id : links->next_annotation_id++;
-    annotation.range = result.range;
     boxrig_regex_result *captured = nullptr;
     if (boxrig_terminal_text_recognizer_result(links->terminal, result.recognizer_id,
         result.match_id, result.result_set_revision, &captured) != BOXRIG_STATUS_OK) continue;
     const std::unique_ptr<boxrig_regex_result, decltype(&boxrig_regex_result_destroy)> capture(captured, boxrig_regex_result_destroy);
-    std::string reason;
-    auto candidate = expand_terminal_hyperlink_action(rule->rule,
-        [captured](const std::string &name) { return regular_expression_capture(captured, name); }, &reason);
     auto text = regular_expression_capture(captured, "0").value_or(std::string{});
-    // Very large matches continue through the normal bounded recognizer only.
-    if (text.size() > 65536) text.clear();
-    line.items.push_back({annotation, std::move(candidate), {}, 0, std::move(text)});
+    std::vector<std::pair<boxrig_text_range, std::string>> matches;
+    if (rule->url_boundaries) {
+      if (text.size() > projection_budget) continue;
+      projection_budget -= text.size();
+      const auto ranges = prose_url_ranges(text);
+      if (ranges.size() == 1 && ranges[0].first == 0 && ranges[0].second == text.size()) {
+        matches.emplace_back(result.range, text);
+      } else if (!ranges.empty()) {
+        const boxrig_text_snapshot_options options{event.screen, &result.range, text.size(), 1};
+        boxrig_text_snapshot *snapshot = nullptr;
+        if (boxrig_terminal_create_text_snapshot(links->terminal, &options, &snapshot) != BOXRIG_STATUS_OK) continue;
+        const std::unique_ptr<boxrig_text_snapshot, decltype(&boxrig_text_snapshot_destroy)> owner(snapshot, boxrig_text_snapshot_destroy);
+        for (const auto &[start, end] : ranges) {
+          boxrig_text_range range{};
+          if (boxrig_text_snapshot_position_at_byte_offset(snapshot, start, &range.start) == BOXRIG_STATUS_OK &&
+              boxrig_text_snapshot_position_at_byte_offset(snapshot, end, &range.end) == BOXRIG_STATUS_OK)
+            matches.emplace_back(range, text.substr(start, end - start));
+        }
+      }
+    } else {
+      // Very large custom matches continue through the bounded recognizer only.
+      if (text.size() > 65536) text.clear();
+      matches.emplace_back(result.range, std::move(text));
+    }
+    for (auto &[range, target] : matches) {
+      boxrig_ui_text_annotation annotation{};
+      annotation.source_id = result.recognizer_id;
+      const auto old = std::lower_bound(previous.begin(), previous.end(), range.start.column,
+          [](const LinkAnnotation &item, std::size_t column) { return item.annotation.range.start.column < column; });
+      annotation.item_id = old != previous.end() && old->annotation.range.start.column == range.start.column &&
+          old->annotation.range.end.column == range.end.column ? old->annotation.item_id : links->next_annotation_id++;
+      annotation.range = range;
+      std::string reason;
+      auto candidate = expand_terminal_hyperlink_action(rule->rule,
+          [&](const std::string &name) { return rule->url_boundaries && name == "0" ?
+              std::optional{target} : regular_expression_capture(captured, name); }, &reason);
+      line.items.push_back({annotation, std::move(candidate), {}, 0, std::move(target), result.match_id});
+    }
   }
   publish_line_annotations(links, key);
 }
@@ -694,11 +833,11 @@ void terminal_links_refresh_viewport(TerminalLinks *links) {
         boxrig_ui_hit_test_result target{};
         target.hyperlink_uri = cell.hyperlink_uri;
         target.hyperlink_uri_length = cell.hyperlink_uri_length;
-        const auto match = cached_match_osc8(links, rule, target);
-        if (!match) continue;
+        const auto match = rule.program ? cached_match_osc8(links, rule, target) : nullptr;
+        if (rule.program && !match) continue;
         std::string reason;
-        auto action = expand_terminal_hyperlink_action(rule.rule,
-            [&match](const std::string &name) { return regular_expression_capture(match.get(), name); }, &reason);
+        auto action = match ? expand_terminal_hyperlink_action(rule.rule,
+            [&match](const std::string &name) { return regular_expression_capture(match.get(), name); }, &reason) : std::nullopt;
         line.event.screen = position.fragment.screen;
         line.event.line_id = position.fragment.line_id;
         line.event.line_revision = position.fragment.line_revision;
@@ -748,6 +887,7 @@ void terminal_links_refresh_viewport(TerminalLinks *links) {
 struct ResolvedLink {
   TerminalHyperlinkResolution resolution;
   std::shared_ptr<boxrig_regex_result> match;
+  std::optional<std::string> normalized_target;
 };
 
 static std::optional<ResolvedLink> resolve_link(
@@ -762,7 +902,9 @@ static std::optional<ResolvedLink> resolve_link(
       annotations.data(), annotations.size(), &count, nullptr) != BOXRIG_UI_OK) return std::nullopt;
   std::optional<ResolvedLink> rejection;
   for (const auto &rule : links->rules) {
+    if (!rule.program) continue;
     std::shared_ptr<boxrig_regex_result> result;
+    std::optional<std::string> normalized_target;
     std::uint64_t match_id = 0;
     if (rule.rule.recognition_source == HyperlinkRecognitionSource::osc8) {
       result = cached_match_osc8(links, rule, hit);
@@ -775,8 +917,14 @@ static std::optional<ResolvedLink> resolve_link(
       std::size_t required = 0;
       if (boxrig_terminal_query_recognition_hits(links->terminal, &grapheme, rule.recognizer,
           &current, 1, &required) != BOXRIG_STATUS_OK || required != 1 ||
-          current.range.start.column != annotation->range.start.column ||
-          current.range.end.column != annotation->range.end.column) continue;
+          current.range.start.column > annotation->range.start.column ||
+          current.range.end.column < annotation->range.end.column) continue;
+      const auto line = rule.lines.find(line_key(hit.position.screen, hit.position.line_id));
+      if (line == rule.lines.end()) continue;
+      const auto retained = std::find_if(line->second.items.begin(), line->second.items.end(),
+          [&](const LinkAnnotation &item) { return item.annotation.item_id == annotation->item_id; });
+      if (retained == line->second.items.end() || retained->match_id != current.match_id) continue;
+      if (rule.url_boundaries) normalized_target = retained->recognized_text;
       match_id = current.match_id;
       boxrig_regex_result *captured = nullptr;
       if (boxrig_terminal_text_recognizer_result(links->terminal, current.recognizer_id,
@@ -786,7 +934,8 @@ static std::optional<ResolvedLink> resolve_link(
     if (!result) continue;
     std::string reason;
     auto action = expand_terminal_hyperlink_action(rule.rule,
-        [&result](const std::string &capture) { return regular_expression_capture(result.get(), capture); }, &reason);
+        [&](const std::string &capture) { return normalized_target && capture == "0" ?
+            normalized_target : regular_expression_capture(result.get(), capture); }, &reason);
     const auto hyperlink_handle = rule.recognizer ? 0 : hit.hyperlink_handle;
     const auto candidate = action;
     if (action && action->validation_path) {
@@ -797,7 +946,7 @@ static std::optional<ResolvedLink> resolve_link(
       }
     }
     ResolvedLink resolved{{std::move(action), reason.empty() ? std::string{} : "rule " + rule.rule.id + ": " + reason,
-        rule.recognizer, match_id, hyperlink_handle, candidate}, std::move(result)};
+        rule.recognizer, match_id, hyperlink_handle, candidate}, std::move(result), std::move(normalized_target)};
     // Pending validation must retain priority until its outcome is known.
     if (resolved.resolution.action || (candidate && reason.empty())) return resolved;
     if (!rejection) rejection = std::move(resolved);
@@ -862,9 +1011,9 @@ std::optional<std::string> terminal_links_copy_target(
     TerminalLinks *links, const boxrig_ui_hit_test_result &hit) {
   const auto resolved = resolve_link(links, hit);
   if (!resolved) return std::nullopt;
-  // Group zero owns the full text match or OSC 8 URI. Extract it only for
-  // copying, rather than allocating another string on every hover query.
-  auto target = regular_expression_capture(resolved->match.get(), "0");
+  // Copy the same normalized text target used for activation. Custom rules
+  // and OSC 8 retain their original group-zero text or URI.
+  auto target = resolved->normalized_target ? resolved->normalized_target : regular_expression_capture(resolved->match.get(), "0");
   if (!target || target->empty() || target->find('\0') != std::string::npos) return std::nullopt;
   return target;
 }

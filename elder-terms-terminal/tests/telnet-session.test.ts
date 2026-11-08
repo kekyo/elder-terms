@@ -15,12 +15,16 @@ import { waitForResult, toPass } from 'gestament/testing';
 import { waitForActivityIndicatorImageState } from './activity-indicator-test-helpers';
 import {
   expectMainWindowStatus,
+  pressKeyWithModifiers,
+  readWindowCellLayout,
   runGtkTest,
   telnetLocalhostConfigPath,
-  withTemporaryDirectory,
 } from './gtk-test-helpers';
 import { openTerminalContextMenu } from './clipboard-test-helpers';
-import { expectElementKind } from './test-helpers';
+import {
+  withTemporaryDirectory,
+  expectElementKind,
+} from '../../shared/tests/connection-test-helpers.ts';
 import {
   activateTextSend,
   expectTextSendActive,
@@ -219,6 +223,89 @@ describe.concurrent('elder-terms-terminal TELNET session', () => {
         });
       } finally {
         acceptedSocket?.destroy();
+        await closeServer(server);
+      }
+    });
+  });
+
+  it('reports the preserved-window zoom grid through TELNET NAWS', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const chunks: Buffer[] = [];
+      let connection: Socket | undefined;
+      const server = createServer((socket) => {
+        connection = socket;
+        socket.on('data', (chunk: Buffer) => chunks.push(Buffer.from(chunk)));
+        socket.write(
+          Buffer.from([
+            telnetIac,
+            telnetDo,
+            telnetNaws,
+            telnetIac,
+            telnetDo,
+            telnetBinary,
+            telnetIac,
+            telnetWill,
+            telnetBinary,
+          ])
+        );
+        socket.write('Zoom grid\r\n');
+      });
+      try {
+        const port = await listenOnLocalhost(server);
+        const configPath = join(directory, 'zoom.ini');
+        await writeFile(
+          configPath,
+          `[general]\ntype=telnet\n[terminal]\nfont_zoom_mode=preserve-window\n[telnet]\naddress=127.0.0.1\nport=${port}\n`
+        );
+        await runGtkTest(context, ['-c', configPath], async (app) => {
+          const initial = await waitForResult(async () => {
+            const layout = await readWindowCellLayout(app);
+            expect(
+              hasSubsequence(receivedBytes(chunks), [
+                telnetIac,
+                telnetSb,
+                telnetNaws,
+                0,
+                layout.columns,
+                0,
+                layout.rows,
+                telnetIac,
+                telnetSe,
+              ])
+            ).toBe(true);
+            return layout;
+          });
+          let previous = initial;
+          for (const key of ['equal', 'minus']) {
+            const offset = receivedBytes(chunks).length;
+            await pressKeyWithModifiers(app, ['control'], key);
+            previous = await waitForResult(async () => {
+              const layout = await readWindowCellLayout(app);
+              expect(layout.fontSizeDip).not.toBe(previous.fontSizeDip);
+              expect(layout.mainBounds).toEqual(initial.mainBounds);
+              expect(
+                hasSubsequence(receivedBytes(chunks).slice(offset), [
+                  telnetIac,
+                  telnetSb,
+                  telnetNaws,
+                  0,
+                  layout.columns,
+                  0,
+                  layout.rows,
+                  telnetIac,
+                  telnetSe,
+                ])
+              ).toBe(true);
+              return layout;
+            });
+          }
+          expect([previous.columns, previous.rows]).toEqual([
+            initial.columns,
+            initial.rows,
+          ]);
+        });
+      } finally {
+        connection?.destroy();
         await closeServer(server);
       }
     });

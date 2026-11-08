@@ -1,0 +1,257 @@
+// elder-terms: A terminal application, inspired by personal computing in the 1990s.
+// Copyright (c) Kouji Matsui. (@kekyo@mi.kekyo.net)
+// Under MIT.
+// https://github.com/kekyo/elder-terms/
+
+#pragma once
+
+#include <cstdint>
+#include <functional>
+#include <memory>
+#include <optional>
+#include <stdexcept>
+#include <string>
+#include <utility>
+#include <vector>
+
+#include <cardio.h>
+
+#include "remote-file-client.h"
+
+namespace elder_terms {
+
+/**
+ * Direction of one remote file transfer.
+ */
+enum class FileTransferDirection {
+  send,
+  receive,
+};
+
+/** Filesystem endpoint containing an item operated on by the browser. */
+enum class FileTransferEndpoint {
+  local,
+  remote,
+};
+
+/**
+ * Decision applied to every conflict remaining in one transfer batch.
+ */
+enum class FileTransferConflictAction {
+  overwrite,
+  skip,
+  cancel,
+};
+
+/**
+ * Decision after one filesystem operation fails.
+ */
+enum class FileTransferFailureAction {
+  retry,
+  skip,
+  abort,
+};
+
+/**
+ * One source/destination collision reported by the transfer engine.
+ */
+struct FileTransferConflict {
+  /** Transfer direction. */
+  FileTransferDirection direction = FileTransferDirection::send;
+  /** Selected or recursively discovered source path. */
+  std::string source_path;
+  /** Existing destination path. */
+  std::string destination_path;
+  /** Source item kind. */
+  RemoteFileType source_type = RemoteFileType::other;
+};
+
+/**
+ * One recoverable transfer failure.
+ */
+struct FileTransferFailure {
+  /** Transfer direction. */
+  FileTransferDirection direction = FileTransferDirection::send;
+  /** Source path being processed. */
+  std::string source_path;
+  /** Destination path being processed. */
+  std::string destination_path;
+  /** Human-readable operation failure. */
+  std::string message;
+};
+
+/** An upload failed and its temporary path could not be safely removed. */
+class FileTransferCleanupFailure final : public std::runtime_error {
+public:
+  /** Remote temporary path requiring inspection, not automatic deletion. */
+  const std::string temporary_path;
+  /** True when the initiating transfer was cancelled. */
+  const bool cancelled;
+  /**
+   * Preserves cleanup details even when the transfer is cancelled.
+   * @param message Original failure and cleanup explanation.
+   * @param path Temporary remote path requiring inspection.
+   * @param was_cancelled Whether cancellation caused the transfer to stop.
+   */
+  FileTransferCleanupFailure(std::string message, std::string path, bool was_cancelled)
+      : std::runtime_error(std::move(message)), temporary_path(std::move(path)), cancelled(was_cancelled) {}
+};
+
+/**
+ * Aggregate progress for a remote transfer batch.
+ */
+struct FileTransferProgress {
+  /** Path of the item currently being transferred. */
+  std::string current_path;
+  /** Bytes copied so far. */
+  std::uint64_t transferred_bytes = 0;
+  /** Total discovered bytes, or no value if a size is unknown or overflows. */
+  std::optional<std::uint64_t> total_bytes = 0;
+  /** Successfully completed item count, excluding skipped items. */
+  std::uint64_t completed_items = 0;
+  /** Total discovered item count. */
+  std::uint64_t total_items = 0;
+  /** Items intentionally left unchanged, including skipped subtrees. */
+  std::uint64_t skipped_items = 0;
+  /** True only after recursive discovery has finished. */
+  bool discovery_complete = false;
+};
+
+/** Terminal outcome, published only after transfer cleanup has finished. */
+enum class FileTransferOutcome {
+  completed, /**< Processing finished; skipped items remain separate from copies. */
+  failed,    /**< An unrecovered failure stopped processing. */
+  cancelled, /**< Cancellation and cleanup finished. */
+};
+
+/** Result of one recursive request, including partially completed batches. */
+struct FileTransferResult {
+  /** Overall outcome; skipped items do not count as successful copies. */
+  FileTransferOutcome outcome = FileTransferOutcome::completed;
+  /** Successfully copied files, links, and directories. */
+  std::uint64_t succeeded_items = 0;
+  /** Items skipped by a conflict or failure decision. */
+  std::uint64_t skipped_items = 0;
+  /** Items stopped by an unrecovered failure. */
+  std::uint64_t failed_items = 0;
+  /** Remaining discovered items, or unknown when discovery did not finish. */
+  std::optional<std::uint64_t> unprocessed_items;
+  /** Unrecovered failures and failures explicitly skipped by the user. */
+  std::vector<FileTransferFailure> failures;
+  /** Temporary paths that require inspection after unsuccessful cleanup. */
+  std::vector<std::string> temporary_paths;
+};
+
+/**
+ * UI callbacks used by a remote transfer.
+ */
+struct FileTransferCallbacks {
+  /** Called once at the first destination conflict in a batch. */
+  std::function<cardio::promise<FileTransferConflictAction>(
+      const FileTransferConflict &, cardio::cancellation)>
+      conflict;
+  /** Called whenever a runtime failure needs Retry, Skip, or Abort. */
+  std::function<cardio::promise<FileTransferFailureAction>(
+      const FileTransferFailure &, cardio::cancellation)>
+      failure;
+  /** Called after discovery and after each copied chunk or completed item. */
+  std::function<void(const FileTransferProgress &)> progress;
+  /** Called exactly once after cleanup, including before an exception propagates. */
+  std::function<void(const FileTransferResult &)> finished = {};
+};
+
+/**
+ * One recursive remote send or receive request.
+ */
+struct FileTransferRequest {
+  /** Transfer direction. */
+  FileTransferDirection direction = FileTransferDirection::send;
+  /** Local paths for send, or remote paths for receive. */
+  std::vector<std::string> source_paths;
+  /** Remote directory for send, or local directory for receive. */
+  std::string destination_directory;
+  /** Conflict, failure, and progress callbacks. */
+  FileTransferCallbacks callbacks;
+  /** Save selected HTTP responses verbatim instead of recursively expanding HTML. */
+  bool receive_as_file = false;
+};
+
+/**
+ * Recursively sends or receives selected files, directories, and links.
+ *
+ * @param client Initialized remote file client.
+ * @param request Transfer request.
+ * @param cancellation Operation cancellation signal.
+ * @returns Counts and details after a successful batch, including skipped items.
+ *
+ * @remarks
+ * The first conflict decision is reused for the remainder of the batch.
+ * Symbolic links are recreated without following them. Regular files are
+ * committed from adjacent temporary paths and incomplete temporary files are
+ * removed after failure or cancellation only when ownership is established.
+ * Uncertain ownership or failed cleanup reports the temporary path.
+ */
+cardio::promise<FileTransferResult>
+run_file_transfer_async(std::shared_ptr<RemoteFileClient> client,
+                        FileTransferRequest request,
+                        cardio::cancellation cancellation);
+
+/**
+ * Creates one folder without replacing any existing item.
+ * @param client Initialized client, required for a remote folder.
+ * @param endpoint Filesystem receiving the folder.
+ * @param path New absolute local or remote path.
+ * @param cancellation Operation cancellation signal.
+ */
+cardio::promise<void> create_file_transfer_directory_async(
+    std::shared_ptr<RemoteFileClient> client, FileTransferEndpoint endpoint,
+    std::string path, cardio::cancellation cancellation);
+
+/**
+ * Renames one local or remote browser item without replacing another item.
+ *
+ * @param client Initialized remote file client. Required for a remote item.
+ * @param endpoint Filesystem containing the item.
+ * @param source_path Existing item path.
+ * @param destination_path New sibling path.
+ * @param cancellation Operation cancellation signal.
+ *
+ * @remarks
+ * The destination is checked before the protocol rename operation. Services
+ * that do not provide an atomic no-replace rename can still race with an
+ * independent writer after that check.
+ */
+cardio::promise<void> rename_file_transfer_item_async(
+    std::shared_ptr<RemoteFileClient> client,
+    FileTransferEndpoint endpoint, std::string source_path,
+    std::string destination_path, cardio::cancellation cancellation);
+
+/**
+ * Removes duplicate paths and paths covered by another selected ancestor.
+ *
+ * @param endpoint Filesystem containing the selected paths.
+ * @param paths Selected item paths in display order.
+ * @returns Original path strings reduced to independent deletion roots.
+ */
+std::vector<std::string> normalize_file_transfer_delete_paths(
+    FileTransferEndpoint endpoint, std::vector<std::string> paths);
+
+/**
+ * Recursively deletes selected local or remote items.
+ *
+ * @param client Initialized remote file client. Required for remote items.
+ * @param endpoint Filesystem containing the items.
+ * @param paths Selected item paths. Duplicate descendants are ignored.
+ * @param cancellation Operation cancellation signal.
+ *
+ * @remarks
+ * Symbolic links are deleted without following their stored targets. Empty,
+ * current-directory, parent-directory, and root paths are rejected before any
+ * item is removed.
+ */
+cardio::promise<void> delete_file_transfer_items_async(
+    std::shared_ptr<RemoteFileClient> client,
+    FileTransferEndpoint endpoint, std::vector<std::string> paths,
+    cardio::cancellation cancellation);
+
+} // namespace elder_terms
