@@ -127,6 +127,9 @@ change the name from "New connection" to whatever you like, and click "Save". Th
 ![Local terminal](./images/local-terminal.png)
 
 Open the menu at the top-right of the terminal and select "Settings" to change its settings.
+
+![Settings dialog](./images/settings-dialog.png)
+
 Clicking "Apply" applies the changes only to the currently running terminal.
 Clicking "Save" remembers the settings and uses them the next time the terminal starts.
 In terminal and file transfer windows, the settings dialog stays open after Apply so you can continue editing.
