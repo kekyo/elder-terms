@@ -11,7 +11,7 @@ WebDAVにはHTTP/HTTPSと非同期DNSを有効にしたlibcurl 7.88.1以降、�
 FTPクライアントには、FTPと非同期DNSを有効にした[libcurl](https://curl.se/libcurl/) 7.88.1以降が必要です。FTPSには[TLSを有効にしたlibcurl](https://curl.se/libcurl/c/libcurl-tutorial.html)が必要です。Debian／Ubuntuの配布パッケージはOpenSSL版libcurlを使用し、既定の信頼ストアのために `ca-certificates` に依存します。ソースからビルドする場合はOpenSSLのヘッダーとライブラリも必要です。証明書確認ではlibcurlと同じバージョンのOpenSSLが必要で、接続前にアプリケーションが確認します。
 
 UbuntuまたはDebianでビルドする場合は、C++20対応コンパイラ、Meson、Ninja、gettextと、使用するライブラリの開発パッケージをインストールします。
-描画にはGTK3 3.24以降、Pango 1.50以降、Cairo 1.18以降、IBus 1.5.29以降、Wayland client 1.22以降が必要です。[boxrigのビルド要件](https://github.com/kekyo/boxrig/blob/0.12.0/docs/ja/building.md)も参照してください。
+描画にはGTK3 3.24以降、Pango 1.50以降、Cairo 1.18以降、IBus 1.5.29以降、Wayland client 1.22以降が必要です。[boxrigのビルド要件](https://github.com/kekyo/boxrig/blob/0.13.0/docs/ja/building.md)も参照してください。
 
 ```bash
 sudo apt update

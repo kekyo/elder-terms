@@ -778,7 +778,7 @@ Desktop transparency requires a compositor that combines the windows on your des
 Frosted glass requests a compositor effect that blurs the desktop behind the terminal; text and background images remain sharp.
 The settings panel reports the actual state. Unavailable blur falls back to transparency, and unavailable transparency falls back to an opaque background.
 "Frosted glass requested" means the request was accepted; compositor effect settings still determine whether the blur appears.
-See [boxrig's background effects](https://github.com/kekyo/boxrig/blob/0.12.0/docs/en/background.md) for platform requirements.
+See [boxrig's background effects](https://github.com/kekyo/boxrig/blob/0.13.0/docs/en/background.md) for platform requirements.
 
 ## Improving Text Color Visibility
 
@@ -810,7 +810,7 @@ E's preview uses the standard palette. The actual display can differ when the co
 
 Only one color filter can be selected, so reversal and the existing Oklch filter are mutually exclusive. Color discrimination assistance can be combined with every mode and is applied before reversal. Logical terminal colors, text, communication, copied text, and logs remain unchanged.
 
-Background images, the desktop behind transparent windows, Kitty images, and intrinsic color-emoji pixels are not reversed. Check the actual display when combining reversal with transparency or images. See [boxrig's supported filtering scope](https://github.com/kekyo/boxrig/blob/0.12.0/docs/en/color-filters.md).
+Background images, the desktop behind transparent windows, Kitty images, and intrinsic color-emoji pixels are not reversed. Check the actual display when combining reversal with transparency or images. See [boxrig's supported filtering scope](https://github.com/kekyo/boxrig/blob/0.13.0/docs/en/color-filters.md).
 
 See the [settings reference](./docs/en/configuration.md#background-and-color-correction) for INI syntax.
 
@@ -839,7 +839,7 @@ Oklch remains independent when recoloring strength is zero.
 
 Correction affects display only. Communication, logical terminal colors, copied text, and logs remain unchanged.
 Background images, the desktop behind transparent windows, Kitty images, and intrinsic color-emoji pixels are excluded.
-See [boxrig's display color filters](https://github.com/kekyo/boxrig/blob/0.12.0/docs/en/color-filters.md) for the supported scope.
+See [boxrig's display color filters](https://github.com/kekyo/boxrig/blob/0.13.0/docs/en/color-filters.md) for the supported scope.
 
 ## Ambiguous Character Width
 
@@ -1070,7 +1070,7 @@ elder-terms bundles the following libraries, each covered by its own license.
 
 | Library | Use | License |
 | --- | --- | --- |
-| [boxrig](https://github.com/kekyo/boxrig) | Terminal control sequence parsing and rendering | [MIT](https://github.com/kekyo/boxrig/blob/8ae3e3f8caa5499b20eee7896eaa568bfdfdc9a9/LICENSE) |
+| [boxrig](https://github.com/kekyo/boxrig) | Terminal control sequence parsing and rendering | [MIT](https://github.com/kekyo/boxrig/blob/0.13.0/LICENSE) |
 | [cardio](https://github.com/kekyo/cardio) | Asynchronous I/O | [MIT](https://github.com/kekyo/cardio/blob/31e8149ce52cdfdaaa48838ca9de39288074885c/LICENSE) |
 | [libxyzm](https://github.com/kekyo/libxyzm) | X/Y/ZMODEM file transfers | [MIT](https://github.com/kekyo/libxyzm/blob/b1cd04cfd2769bbd1a5a6bc6990d60338b5a3cf5/LICENSE) |
 | [jemalloc](https://github.com/jemalloc/jemalloc) | Memory allocation and management | [BSD-2-Clause](https://github.com/jemalloc/jemalloc/blob/7a34f18502e7b222724097cdcd499b437d189acc/COPYING) |
@@ -1079,7 +1079,7 @@ elder-terms bundles the following libraries, each covered by its own license.
 
 boxrig also includes utf8proc, libpng, zlib, and data or generated code from
 Unicode, WHATWG Encoding, and Wayland protocols.
-See [boxrig's license list](https://github.com/kekyo/boxrig/blob/8ae3e3f8caa5499b20eee7896eaa568bfdfdc9a9/packaging/licenses/README.md)
+See [boxrig's license list](https://github.com/kekyo/boxrig/blob/0.13.0/packaging/licenses/README.md)
 for each component's license.
 
 Distribution packages include the licenses and notices for boxrig, jemalloc,

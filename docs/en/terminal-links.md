@@ -82,7 +82,7 @@ period. Custom rules can change both the expression and boundary setting.
 ## Regular Expressions and Command Arguments
 
 Received-text macros automate text sending or command execution in response to received text.
-Link rules and received-text macros use [boxrig pattern syntax](https://github.com/kekyo/boxrig/blob/0.12.0/docs/en/regex.md).
+Link rules and received-text macros use [boxrig pattern syntax](https://github.com/kekyo/boxrig/blob/0.13.0/docs/en/regex.md).
 Character classes, groups, alternatives, repetition, and numbered or named captures are supported. Backreferences, lookahead, lookbehind, and expressions matching an empty string are not supported.
 `\d`, `\s`, and `\w` cover ASCII. Use Unicode general categories such as `\p{L}` for letters and `\p{Nd}` for decimal digits.
 `.` also matches newlines, and `^` and `$` anchor the complete input. Matching is case-sensitive and chooses the longest match at the same starting position.
