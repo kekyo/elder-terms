@@ -10,6 +10,7 @@ PACKAGE_NAME=elder-terms
 PACKAGE_DESCRIPTION="GTK terminal for serial, TELNET, local shell, SSH, SFTP, and FTP connections."
 DEFAULT_MAINTAINER="elder-terms packager <packager@localhost>"
 DEFAULT_PARALLEL_JOB_CAP=14
+PREREQ_IMAGE_FINGERPRINT_LABEL=net.kekyo.elder-terms.prereq-fingerprint
 
 LINUX_MATRIX='debian trixie x86_64 linux/amd64
 debian trixie i686 linux/386
@@ -302,10 +303,37 @@ prereq_image_for_target() {
 	printf 'localhost/elder-terms-pack-deb-%s-%s-%s:latest\n' "$1" "$2" "$3"
 }
 
+prereq_image_fingerprint() {
+	# The prerequisite recipe owns the package list and image build options.
+	cksum <"$PROJECT_ROOT/prereq.sh"
+}
+
+prereq_image_is_current() {
+	expected_fingerprint=$(prereq_image_fingerprint) || return 1
+	image_fingerprint=$("$CONTAINER_ENGINE_BIN" image inspect \
+		--format "{{ index .Labels \"$PREREQ_IMAGE_FINGERPRINT_LABEL\" }}" \
+		"$1" 2>/dev/null) || return 1
+	[ "$image_fingerprint" = "$expected_fingerprint" ]
+}
+
 assert_prereq_image() {
 	if ! "$CONTAINER_ENGINE_BIN" image exists "$1" >/dev/null 2>&1; then
 		fail "Missing prerequisite image: $1. Run ./prereq.sh first."
 	fi
+	prereq_image_is_current "$1" ||
+		fail "Outdated prerequisite image: $1. Run ./prereq.sh to rebuild it."
+}
+
+assert_prereq_images() {
+	while IFS=' ' read -r distro release arch platform; do
+		[ -n "$distro" ] || continue
+		matches_filter "$DISTRO_FILTER" "$distro" || continue
+		matches_filter "$RELEASE_FILTER" "$release" || continue
+		matches_filter "$ARCH_FILTER" "$arch" || continue
+		assert_prereq_image "$(prereq_image_for_target "$distro" "$release" "$arch")"
+	done <<EOF
+$LINUX_MATRIX
+EOF
 }
 
 build_deb_package() {
@@ -622,6 +650,12 @@ main() {
 	MAKE_JOBS=$((CPU_COUNT / EFFECTIVE_BUILD_JOBS))
 	[ "$MAKE_JOBS" -ge 1 ] || MAKE_JOBS=1
 
+	require_command dpkg-deb
+	require_command readelf
+	require_command node
+	CONTAINER_ENGINE_BIN=$(choose_container_engine)
+	assert_prereq_images
+
 	RUN_ID="run-$(date +%Y%m%d%H%M%S)-$$"
 	TMP_ROOT="$ARTIFACT_ROOT/.tmp/$RUN_ID"
 	ACTIVE_JOB_PIDS=''
@@ -632,10 +666,6 @@ main() {
 	mkdir -p "$TMP_ROOT"
 
 	printf '%s\n' "Using up to $PARALLEL_JOBS package jobs with meson compile -j $MAKE_JOBS"
-	require_command dpkg-deb
-	require_command readelf
-	require_command node
-	CONTAINER_ENGINE_BIN=$(choose_container_engine)
 	node "$PROJECT_ROOT/scripts/prepare-package-tools.mts" "$TMP_ROOT/tools" "$VERSION"
 	schedule_deb_builds
 	wait_for_all_jobs

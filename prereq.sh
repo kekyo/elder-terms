@@ -111,7 +111,7 @@ build_prereq_image() {
 	containerfile="$work_dir/Containerfile"
 
 	if [ "$FORCE" -eq 0 ] &&
-		"$CONTAINER_ENGINE_BIN" image exists "$prereq_image" >/dev/null 2>&1; then
+		prereq_image_is_current "$prereq_image"; then
 		printf '%s\n' "[prereq:deb] exists $prereq_image"
 		return 0
 	fi
@@ -131,6 +131,7 @@ build_prereq_image() {
 		--platform "$platform" \
 		--pull=missing \
 		--build-arg "BASE_IMAGE=$base_image" \
+		--label "$PREREQ_IMAGE_FINGERPRINT_LABEL=$(prereq_image_fingerprint)" \
 		-t "$prereq_image" \
 		-f "$containerfile" \
 		"$PROJECT_ROOT"

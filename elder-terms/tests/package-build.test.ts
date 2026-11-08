@@ -767,6 +767,7 @@ mkdir -p "$build_dir"
     const dpkgRecords = join(temporaryRoot, 'dpkg-records.txt');
     mkdirSync(fakeProject);
     mkdirSync(binDirectory);
+    copyFileSync(prerequisiteScript, join(fakeProject, 'prereq.sh'));
 
     const containerEngine = join(binDirectory, 'container-engine');
     writeExecutable(
@@ -775,6 +776,10 @@ mkdir -p "$build_dir"
 set -eu
 if [ "\${1:-}" = image ] && [ "\${2:-}" = exists ]; then
   printf 'exists %s\\n' "\${3:-}" >>"$ELDER_TERMS_TEST_CONTAINER_RECORDS"
+  exit 0
+fi
+if [ "\${1:-}" = image ] && [ "\${2:-}" = inspect ]; then
+  cksum <"$ELDER_TERMS_TEST_PREREQUISITE_SCRIPT"
   exit 0
 fi
 [ "\${1:-}" = run ] || exit 2
@@ -821,6 +826,7 @@ build_deb_package debian trixie x86_64 linux/amd64
         PATH: `${binDirectory}:${process.env.PATH}`,
         ELDER_TERMS_TEST_CONTAINER_RECORDS: containerRecords,
         ELDER_TERMS_TEST_DPKG_RECORDS: dpkgRecords,
+        ELDER_TERMS_TEST_PREREQUISITE_SCRIPT: prerequisiteScript,
       }
     );
     expectSuccess(result, 'deb package orchestration failed');
@@ -850,6 +856,7 @@ build_deb_package debian trixie x86_64 linux/amd64
     mkdirSync(fakeProject);
     mkdirSync(binDirectory);
     symlinkSync(packageScript, join(fakeProject, 'build_package.sh'));
+    copyFileSync(prerequisiteScript, join(fakeProject, 'prereq.sh'));
 
     const containerEngine = join(binDirectory, 'prerequisite-engine');
     writeExecutable(
@@ -945,6 +952,158 @@ cp "$containerfile" "$ELDER_TERMS_TEST_PREREQUISITE_RECORDS.containerfile"
     expect(wrapper.stderr).toContain(
       'Run ./prereq.sh --force to rebuild prerequisite images.'
     );
+  });
+
+  it('refreshes cached prerequisite images when their dependencies change', () => {
+    const fakeProject = join(temporaryRoot, 'cached-prerequisite-project');
+    const recordsPath = join(temporaryRoot, 'cached-prerequisite-records.txt');
+    const containerEngine = join(temporaryRoot, 'cached-prerequisite-engine');
+    mkdirSync(fakeProject);
+    symlinkSync(packageScript, join(fakeProject, 'build_package.sh'));
+    const copiedPrerequisite = join(fakeProject, 'prereq.sh');
+    copyFileSync(prerequisiteScript, copiedPrerequisite);
+    writeFileSync(recordsPath, '');
+    writeExecutable(
+      containerEngine,
+      `#!/bin/sh
+set -eu
+case "$1 $2" in
+  'image exists') exit 0 ;;
+  'image inspect')
+    if [ -f "$ELDER_TERMS_TEST_RECORDS.label" ]; then
+      cat "$ELDER_TERMS_TEST_RECORDS.label"
+    fi
+    exit 0
+    ;;
+esac
+[ "$1" = build ] || exit 2
+printf '%s\\n' "$*" >>"$ELDER_TERMS_TEST_RECORDS"
+previous=''
+for argument in "$@"; do
+  if [ "$previous" = --label ]; then
+    printf '%s\\n' "\${argument#*=}" >"$ELDER_TERMS_TEST_RECORDS.label"
+  fi
+  if [ "$previous" = -f ]; then
+    cp "$argument" "$ELDER_TERMS_TEST_RECORDS.containerfile"
+  fi
+  previous=$argument
+done
+`
+    );
+    const arguments_ = [
+      '--distro',
+      'debian',
+      '--release',
+      'trixie',
+      '--arch',
+      'amd64',
+    ];
+    const environment = {
+      ...process.env,
+      CONTAINER_ENGINE: containerEngine,
+      ELDER_TERMS_PREREQ_PROJECT_ROOT: fakeProject,
+      ELDER_TERMS_TEST_RECORDS: recordsPath,
+    };
+
+    expectSuccess(
+      run(copiedPrerequisite, arguments_, environment),
+      'unlabelled prerequisite image refresh failed'
+    );
+    const firstBuild = readFileSync(recordsPath, 'utf8');
+    expect(firstBuild.trim().split('\n')).toHaveLength(1);
+    expect(firstBuild).toContain('build --platform linux/amd64');
+
+    expectSuccess(
+      run(copiedPrerequisite, arguments_, environment),
+      'current prerequisite image reuse failed'
+    );
+    expect(readFileSync(recordsPath, 'utf8')).toBe(firstBuild);
+
+    writeFileSync(
+      copiedPrerequisite,
+      readFileSync(copiedPrerequisite, 'utf8').replace(
+        'libnfs-dev\n',
+        'libnfs-dev\nnew-build-dependency\n'
+      )
+    );
+    expectSuccess(
+      run(copiedPrerequisite, arguments_, environment),
+      'changed prerequisite image refresh failed'
+    );
+    expect(readFileSync(recordsPath, 'utf8').trim().split('\n')).toHaveLength(
+      2
+    );
+    expect(readFileSync(`${recordsPath}.containerfile`, 'utf8')).toContain(
+      'new-build-dependency'
+    );
+
+    expectSuccess(
+      run(copiedPrerequisite, [...arguments_, '--force'], environment),
+      'forced prerequisite image refresh failed'
+    );
+    const forcedBuilds = readFileSync(recordsPath, 'utf8').trim().split('\n');
+    expect(forcedBuilds).toHaveLength(3);
+    expect(forcedBuilds[2]).toContain('build --no-cache');
+  });
+
+  it('rejects outdated prerequisites before preparing tools or replacing artifacts', () => {
+    const fakeProject = join(temporaryRoot, 'outdated-prerequisite-project');
+    const binDirectory = join(temporaryRoot, 'outdated-prerequisite-bin');
+    const recordsPath = join(
+      temporaryRoot,
+      'outdated-prerequisite-records.txt'
+    );
+    const artifactPath = join(fakeProject, 'artifacts/deb/previous.deb');
+    mkdirSync(join(fakeProject, 'artifacts/deb'), { recursive: true });
+    mkdirSync(binDirectory);
+    copyFileSync(prerequisiteScript, join(fakeProject, 'prereq.sh'));
+    writeFileSync(artifactPath, 'previous package\n');
+    writeFileSync(recordsPath, '');
+    const containerEngine = join(binDirectory, 'container-engine');
+    writeExecutable(
+      containerEngine,
+      `#!/bin/sh
+set -eu
+case "$1 $2" in
+  'image exists') exit 0 ;;
+  'image inspect')
+    case "$*" in
+      *debian-trixie-x86_64*) cksum <"$ELDER_TERMS_PACKAGE_PROJECT_ROOT/prereq.sh" ;;
+      *) printf 'outdated\\n' ;;
+    esac
+    exit 0
+    ;;
+esac
+printf 'container started\\n' >>"$ELDER_TERMS_TEST_RECORDS"
+exit 1
+`
+    );
+    writeExecutable(
+      join(binDirectory, 'node'),
+      `#!/bin/sh
+printf 'tool preparation started\\n' >>"$ELDER_TERMS_TEST_RECORDS"
+exit 1
+`
+    );
+
+    const result = run(
+      allPackagesScript,
+      ['--version', '1.2.3-test', '--distro', 'debian', '--arch', 'amd64,i386'],
+      {
+        ...process.env,
+        PATH: `${binDirectory}:${process.env.PATH}`,
+        CONTAINER_ENGINE: containerEngine,
+        ELDER_TERMS_PACKAGE_PROJECT_ROOT: fakeProject,
+        ELDER_TERMS_TEST_RECORDS: recordsPath,
+      }
+    );
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain(
+      'Outdated prerequisite image: localhost/elder-terms-pack-deb-debian-trixie-i686:latest'
+    );
+    expect(result.stderr).toContain('Run ./prereq.sh');
+    expect(readFileSync(recordsPath, 'utf8')).toBe('');
+    expect(readFileSync(artifactPath, 'utf8')).toBe('previous package\n');
   });
 
   it('accepts a complete deb and rejects one missing runtime data', () => {
