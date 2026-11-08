@@ -487,13 +487,24 @@ move_local_async(GFile *source, GFile *destination, GFileCopyFlags flags,
       std::move(cancellation));
 }
 
+static timespec local_link_timestamp(const std::optional<std::int64_t> &seconds) {
+  if (!seconds) return timespec{0, UTIME_OMIT};
+  // Remote timestamps can exceed time_t on 32-bit systems. Reject them before
+  // narrowing so the transfer reports the failure instead of changing the date.
+  if (*seconds < std::numeric_limits<time_t>::min() ||
+      *seconds > std::numeric_limits<time_t>::max()) {
+    throw std::out_of_range("Symbolic link timestamp is out of range for the local system");
+  }
+  return timespec{static_cast<time_t>(*seconds), 0};
+}
+
 static cardio::promise<void>
 set_local_link_times_async(GFile *file, const RemoteFileAttributes &attributes,
                            cardio::cancellation cancellation) {
   if (!attributes.access_time_unix_seconds && !attributes.modification_time_unix_seconds) co_return;
   const std::array<timespec, 2> times{{
-      {attributes.access_time_unix_seconds.value_or(0), attributes.access_time_unix_seconds ? 0 : UTIME_OMIT},
-      {attributes.modification_time_unix_seconds.value_or(0), attributes.modification_time_unix_seconds ? 0 : UTIME_OMIT}}};
+      local_link_timestamp(attributes.access_time_unix_seconds),
+      local_link_timestamp(attributes.modification_time_unix_seconds)}};
   // GIO 2.80 ignores NOFOLLOW_SYMLINKS when setting times:
   // https://github.com/GNOME/glib/blob/2.80.0/gio/glocalfileinfo.c#L2628
   // Use GIO's existing task pool for this missing operation, awaiting its

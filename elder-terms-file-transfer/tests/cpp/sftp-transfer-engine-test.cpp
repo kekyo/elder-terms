@@ -1315,6 +1315,45 @@ static cardio::promise<void> test_link_target_conversion_boundary() {
       "Receiving link timestamps must work for dangling links and preserve the target's timestamps");
 }
 
+static cardio::promise<void> test_receive_link_timestamp_range() {
+  using namespace elder_terms;
+  const auto root = test_root_directory() / "link-times";
+  const TemporaryDirectoryCleanup cleanup{test_root_directory()};
+  std::vector<std::int64_t> timestamps{-1, 2'147'483'647, 2'147'483'648};
+  if (sizeof(std::time_t) == 4) timestamps.push_back(-2'147'483'649);
+  for (const auto seconds : timestamps) {
+    const auto destination = root / std::to_string(seconds);
+    std::filesystem::create_directories(destination);
+    write_file(destination / "target", "unchanged");
+    set_file_times(destination / "target", 1'700'000'000);
+    auto client = std::make_shared<FakeSftpClient>();
+    client->add_link("/link", "target", seconds);
+    FileTransferRequest request;
+    request.direction = FileTransferDirection::receive;
+    request.source_paths = {"/link"};
+    request.destination_directory = destination.string();
+    bool out_of_range = false;
+    try {
+      const auto result = co_await run_file_transfer_async(client, request, {});
+      expect_true(result.succeeded_items == 1,
+          "Representable symbolic link times must allow receiving the link");
+    } catch (const std::out_of_range &) {
+      out_of_range = true;
+    }
+    const bool outside_local_range = sizeof(std::time_t) == 4 &&
+        (seconds < -2'147'483'648 || seconds > 2'147'483'647);
+    expect_true(out_of_range == outside_local_range,
+        "Unrepresentable symbolic link times must report an error instead of wrapping");
+    if (!out_of_range) {
+      const auto attributes = lstat_path(destination / "link");
+      expect_true(attributes.st_atime == seconds && attributes.st_mtime == seconds,
+          "Received symbolic links must preserve representable access and modification times");
+    }
+    expect_true(lstat_path(destination / "target").st_mtime == 1'700'000'000,
+        "Receiving link timestamps must leave the target's timestamp unchanged");
+  }
+}
+
 static cardio::promise<void> test_rejects_parallel_bulk_transfer() {
   auto client = std::make_shared<FakeSftpClient>();
   client->add_directory("/");
@@ -1357,6 +1396,7 @@ int main() {
           {"test_send_uses_client_name_boundary", test_send_uses_client_name_boundary},
           {"test_receive_ambiguous_and_undecodable_names", test_receive_ambiguous_and_undecodable_names},
           {"test_link_target_conversion_boundary", test_link_target_conversion_boundary},
+          {"test_receive_link_timestamp_range", test_receive_link_timestamp_range},
           {"test_delete_preserves_remote_identity", test_delete_preserves_remote_identity},
           {"test_job_results_and_lifecycle", test_job_results_and_lifecycle},
           {"test_job_partial_failure_and_commit_boundary", test_job_partial_failure_and_commit_boundary},
