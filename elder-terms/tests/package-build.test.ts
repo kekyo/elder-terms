@@ -406,11 +406,11 @@ container_image_for_target debian trixie riscv64
     );
     expectSuccess(versions, 'build SDK version lookup failed');
     expect(versions.stdout.trim().split(/\s+/)).toEqual([
-      '0.13.0',
-      '0.13.0',
-      '0.13.0',
-      '0.13.0',
-      '0.13.0',
+      '0.14.0',
+      '0.14.0',
+      '0.14.0',
+      '0.14.0',
+      '0.14.0',
     ]);
   });
 
@@ -543,7 +543,7 @@ int main(void) {
       { ...process.env, PKG_CONFIG_PATH: join(sdk, 'lib/pkgconfig') }
     );
     expectSuccess(versions, 'prepared SDK version lookup failed');
-    expect(versions.stdout.trim().split(/\s+/)).toEqual(['0.13.0', '0.13.0']);
+    expect(versions.stdout.trim().split(/\s+/)).toEqual(['0.14.0', '0.14.0']);
     const consumer = join(temporaryRoot, 'prepared-sdk-consumer');
     expectSuccess(
       run('cc', [
