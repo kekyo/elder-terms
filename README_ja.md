@@ -700,7 +700,7 @@ INIの色指定は[設定リファレンス](./docs/ja/configuration.md#ウイ�
 すりガラスは対応するコンポジターへ要求し、背後のデスクトップをぼかします。端末の文字や背景画像はぼかしません。
 設定画面には実際の利用状態を表示します。すりガラスが使えない場合は単純透過へ、透過自体を使えない場合は不透明へ切り替わります。
 「すりガラスを要求しています」は要求が受け付けられた状態です。ぼかしの表示には、コンポジター側の効果設定も影響します。
-対応条件は[boxrigの背景効果](https://github.com/kekyo/boxrig/blob/0.13.0/docs/ja/background.md#osのすりガラス効果を要求する)を参照してください。
+対応条件は[boxrigの背景効果](https://github.com/kekyo/boxrig/blob/0.14.0/docs/ja/background.md#osのすりガラス効果を要求する)を参照してください。
 
 ## 文字色の視認性を改善する
 
@@ -732,7 +732,7 @@ Eのプレビューは標準パレットを使った見本です。接続先が�
 
 選べる色フィルタは一つです。既存のOklchと反転フィルタを同時に指定することはできません。「色の区別を補助」は各方式と併用でき、その再配色の後に反転します。端末に保存された文字や色、通信内容、コピー、ログは変わりません。
 
-背景画像、透過先のデスクトップ、Kitty画像、カラー絵文字そのものの画素は反転しません。透過や画像を重ねた場合の読みやすさは、実際の表示で確認してください。[boxrigの色補正の対象範囲](https://github.com/kekyo/boxrig/blob/0.13.0/docs/ja/color-filters.md)
+背景画像、透過先のデスクトップ、Kitty画像、カラー絵文字そのものの画素は反転しません。透過や画像を重ねた場合の読みやすさは、実際の表示で確認してください。[boxrigの色補正の対象範囲](https://github.com/kekyo/boxrig/blob/0.14.0/docs/ja/color-filters.md)
 
 INIでの指定は[設定リファレンス](./docs/ja/configuration.md#背景と色補正)を参照してください。
 
@@ -761,7 +761,7 @@ ANSI16色は端末の基本パレット、256色は番号で指定する拡張�
 
 補正は表示だけに適用し、送受信内容、端末が保持する色、コピー、ログは変えません。
 背景画像、透過先のデスクトップ、Kitty画像、カラー絵文字の画素は対象外です。
-対象範囲の詳細は[boxrigの表示色補正](https://github.com/kekyo/boxrig/blob/0.13.0/docs/ja/color-filters.md)を参照してください。
+対象範囲の詳細は[boxrigの表示色補正](https://github.com/kekyo/boxrig/blob/0.14.0/docs/ja/color-filters.md)を参照してください。
 
 ## 曖昧幅文字の幅
 
@@ -976,7 +976,7 @@ elder-termsに同梱しているライブラリと、それぞれに適用され
 
 | ライブラリ | 用途 | ライセンス |
 | --- | --- | --- |
-| [boxrig](https://github.com/kekyo/boxrig) | 端末の制御シーケンスの解釈と画面描画 | [MIT](https://github.com/kekyo/boxrig/blob/0.13.0/LICENSE) |
+| [boxrig](https://github.com/kekyo/boxrig) | 端末の制御シーケンスの解釈と画面描画 | [MIT](https://github.com/kekyo/boxrig/blob/0.14.0/LICENSE) |
 | [cardio](https://github.com/kekyo/cardio) | 非同期I/O | [MIT](https://github.com/kekyo/cardio/blob/31e8149ce52cdfdaaa48838ca9de39288074885c/LICENSE) |
 | [libxyzm](https://github.com/kekyo/libxyzm) | X/Y/ZMODEMによるファイル転送 | [MIT](https://github.com/kekyo/libxyzm/blob/b1cd04cfd2769bbd1a5a6bc6990d60338b5a3cf5/LICENSE) |
 | [jemalloc](https://github.com/jemalloc/jemalloc) | メモリの確保と管理 | [BSD-2-Clause](https://github.com/jemalloc/jemalloc/blob/7a34f18502e7b222724097cdcd499b437d189acc/COPYING) |
@@ -984,7 +984,7 @@ elder-termsに同梱しているライブラリと、それぞれに適用され
 | [libdsm](https://github.com/videolabs/libdsm) | SMB1によるファイル転送と共有一覧の取得 | [LGPL-2.1-or-later](https://github.com/videolabs/libdsm/blob/0f3edc6df6ab5950f2550d453035351440f71e31/COPYING) |
 
 boxrigには、utf8proc、libpng、zlibのほか、Unicode、WHATWG Encoding、Waylandプロトコル由来のデータや生成コードが含まれます。
-各コンポーネントのライセンスは、[boxrigのライセンス一覧](https://github.com/kekyo/boxrig/blob/0.13.0/packaging/licenses/README_ja.md)を参照してください。
+各コンポーネントのライセンスは、[boxrigのライセンス一覧](https://github.com/kekyo/boxrig/blob/0.14.0/packaging/licenses/README_ja.md)を参照してください。
 
 配布パッケージには、boxrig、jemalloc、libsmb2、libdsmのライセンスと通知を、`/usr/share/doc/elder-terms/licenses/`内の各ライブラリ名のディレクトリに同梱します。
 libsmb2とlibdsmのディレクトリには対応するソースも収録し、libdsmには適用した修正パッチを添付します。
