@@ -15,6 +15,8 @@ namespace elder_terms {
 
 static constexpr char local_section[] = "local";
 static constexpr char local_command_line_key[] = "command_line";
+static constexpr char local_terminal_type_key[] = "terminal_type";
+static constexpr char default_local_terminal_type[] = "xterm-256color";
 
 static bool string_is_blank(const std::string &value) {
   return std::all_of(value.begin(), value.end(), [](unsigned char character) {
@@ -75,12 +77,31 @@ SettingKey local_command_line_setting_key() {
   return make_setting_key(local_section, local_command_line_key);
 }
 
+static bool validate_terminal_type(const SettingValue &value,
+                                   std::string *reason) {
+  const auto *text = std::get_if<std::string>(&value);
+  if (text == nullptr || string_is_blank(*text)) {
+    *reason = "must not be blank";
+    return false;
+  }
+  return true;
+}
+
+SettingKey local_terminal_type_setting_key() {
+  return make_setting_key(local_section, local_terminal_type_key);
+}
+
 std::vector<SettingDefinition> local_shell_connection_setting_definitions() {
   return {
       {
           .key = local_command_line_setting_key(),
           .default_value = SettingValue{std::string()},
           .validate = validate_command_line,
+      },
+      {
+          .key = local_terminal_type_setting_key(),
+          .default_value = SettingValue{std::string(default_local_terminal_type)},
+          .validate = validate_terminal_type,
       },
   };
 }
@@ -98,6 +119,8 @@ local_shell_connection_settings(const SettingsStore &store) {
   (void)parse_command_line(command_line, &arguments, nullptr);
   return {
       .argv = std::move(arguments),
+      .terminal_type = setting_string_value_or_default(
+          store, local_terminal_type_setting_key(), default_local_terminal_type),
   };
 }
 

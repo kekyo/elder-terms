@@ -871,6 +871,8 @@ static void print_store(const char *prefix,
             << " send_break_key="
             << elder_terms::terminal_send_break_key(store)
             << " local_command_line=" << local_command_line
+            << " local_terminal_type=" << elder_terms::setting_string_value_or_default(
+                   store, elder_terms::local_terminal_type_setting_key(), "")
             << " telnet_address=" << telnet.address
             << " telnet_port=" << telnet.port
             << " telnet_terminal_type=" << telnet.terminal_type
@@ -990,6 +992,8 @@ static void print_store(const char *prefix,
                          elder_terms::terminal_send_break_key_setting_key());
   print_setting_metadata(store, "local_command_line",
                          elder_terms::local_command_line_setting_key());
+  print_setting_metadata(store, "local_terminal_type",
+                         elder_terms::local_terminal_type_setting_key());
   print_setting_metadata(store, "telnet_address",
                          elder_terms::telnet_address_setting_key());
   print_setting_metadata(store, "telnet_port",

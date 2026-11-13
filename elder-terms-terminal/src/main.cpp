@@ -699,6 +699,7 @@ static bool connect_application_terminal(ApplicationState *state) {
     if constexpr (std::is_same_v<Settings, elder_terms::LocalShellConnectionSettings>) {
       elder_terms::TerminalLocalCommand command;
       command.arguments = settings.argv;
+      command.terminal_type = settings.terminal_type;
       if (command.arguments.empty()) {
         const auto *shell = g_getenv("SHELL");
         command.arguments.push_back(shell && *shell ? shell : "/bin/sh");

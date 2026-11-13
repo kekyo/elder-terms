@@ -16,15 +16,22 @@ import {
 const quote = (value: string): string => `'${value.split("'").join("'\\''")}'`;
 
 for (const mode of ['shell', 'command']) {
-  for (const [name, colorterm, noColor, forceColor] of [
+  for (const [name, colorterm, noColor, forceColor, terminalType] of [
     ['unset', undefined, undefined, undefined],
     ['empty', '', undefined, undefined],
     ['256color', '256color', undefined, undefined],
     ['truecolor', 'truecolor', undefined, undefined],
     ['NO_COLOR', undefined, '1', undefined],
     ['FORCE_COLOR', undefined, undefined, '0'],
+    [
+      'configured terminal type',
+      undefined,
+      undefined,
+      undefined,
+      'xterm-kitty',
+    ],
   ]) {
-    it(`advertises truecolor to a local ${mode} with ${name} inherited`, async (context) => {
+    it(`sets the local ${mode} environment with ${name}`, async (context) => {
       await withTemporaryDirectory(async (directory) => {
         const peer = join(directory, 'environment.mjs');
         const shell = join(directory, 'shell');
@@ -50,7 +57,7 @@ writeFileSync(${JSON.stringify(report)}, JSON.stringify({
         await chmod(shell, 0o755);
         await writeFile(
           config,
-          `[general]\nauto_close=false\n[local]\ncommand_line=${mode === 'command' ? `${quote(process.execPath)} ${quote(peer)}` : ''}\n`
+          `[general]\nauto_close=false\n[local]\ncommand_line=${mode === 'command' ? `${quote(process.execPath)} ${quote(peer)}` : ''}\n${terminalType === undefined ? '' : `terminal_type=${terminalType}\n`}`
         );
         await runGtkTest(
           context,
@@ -60,13 +67,16 @@ writeFileSync(${JSON.stringify(report)}, JSON.stringify({
               JSON.parse(await readFile(report, 'utf8'));
             const actual = await waitForResult(readEnvironment);
             const expected = {
-              term: 'xterm-256color',
+              term: terminalType ?? 'xterm-256color',
               colorterm: 'truecolor',
               noColor: noColor ?? null,
               forceColor: forceColor ?? null,
             };
             expect(actual).toMatchObject(expected);
-            if (name === 'unset' && mode === 'command') {
+            if (
+              (name === 'unset' && mode === 'command') ||
+              terminalType !== undefined
+            ) {
               await app.input.pressKey('x');
               const reconnect = expectElementKind(
                 await app.getById('reconnect_button'),
