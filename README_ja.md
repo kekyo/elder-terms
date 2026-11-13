@@ -443,6 +443,9 @@ Local接続では、Localタブの「起動コマンド」で `elder-terms-termi
 
 INIでの指定は[設定リファレンス](./docs/ja/configuration.md#ローカルの起動コマンド)を参照してください。
 
+親環境の設定にかかわらず、起動するシェルやコマンドには`COLORTERM=truecolor`を渡し、24ビットカラー対応を通知します。
+`NO_COLOR`と`FORCE_COLOR`はそのまま引き継ぎます。
+
 ## シリアルデバイスの選択
 
 ![シリアルデバイスの選択](./images/serial-device-selector.png)

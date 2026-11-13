@@ -31,7 +31,7 @@ for (const backend of ['cairo', 'opengl']) {
       );
       await writeFile(
         config,
-        `[general]\nbackground=#000000\nforeground=#ffffff\n[local]\ncommand_line=${process.execPath} ${peer}\n`
+        `[general]\nbackground=#000000\n[local]\ncommand_line=${process.execPath} ${peer}\n`
       );
       await runGtkTest(
         context,

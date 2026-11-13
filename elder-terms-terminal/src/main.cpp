@@ -9,6 +9,8 @@
 #include <clocale>
 #include <cstdarg>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <exception>
 #include <filesystem>
 #include <functional>
@@ -1852,6 +1854,12 @@ static bool select_new_window_connection(elder_terms::LaunchOptions *options) {
 }
 
 int main(int argc, char **argv) {
+  // Advertise terminal capabilities before GTK or Cardio can start threads.
+  if (setenv("COLORTERM", "truecolor", 1) != 0) {
+    std::perror("Error: failed to set COLORTERM");
+    return 1;
+  }
+
   const elder_terms::ApplicationUiLanguage ui_language =
       elder_terms::load_application_ui_language_preference(
           elder_terms::default_global_config_path());

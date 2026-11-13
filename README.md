@@ -507,6 +507,9 @@ Start a shell explicitly when those features are required, for example:
 
 See the [settings reference](./docs/en/configuration.md#local-startup-command) for the INI form.
 
+Shells and commands receive `COLORTERM=truecolor` to advertise 24-bit color support, regardless of the inherited value.
+`NO_COLOR` and `FORCE_COLOR` are passed through unchanged.
+
 ## Selecting a Serial Device
 
 ![Serial device selector](./images/serial-device-selector.png)
