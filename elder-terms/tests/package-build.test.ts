@@ -406,15 +406,15 @@ container_image_for_target debian trixie riscv64
     );
     expectSuccess(versions, 'build SDK version lookup failed');
     expect(versions.stdout.trim().split(/\s+/)).toEqual([
-      '0.14.0',
-      '0.14.0',
-      '0.14.0',
-      '0.14.0',
-      '0.14.0',
+      '0.15.0',
+      '0.15.0',
+      '0.15.0',
+      '0.15.0',
+      '0.15.0',
     ]);
   });
 
-  it('builds a usable SDK from relocated host-prepared tools without target npm', () => {
+  it('builds a usable SDK from relocated host-prepared tools without target npm or Git', () => {
     const prepared = join(temporaryRoot, 'prepared-tools');
     expectSuccess(
       run(process.execPath, [
@@ -512,16 +512,25 @@ int main(void) {
       join(commands, 'npm'),
       '#!/bin/sh\necho "Target must use host-prepared tools" >&2\nexit 97\n'
     );
+    writeExecutable(
+      join(commands, 'git'),
+      '#!/bin/sh\necho "Target must use the host-prepared version" >&2\nexit 97\n'
+    );
     const build = join(temporaryRoot, 'prepared-sdk-build');
+    // The target has no host node_modules tree. The prepared version must
+    // suffice even when the source checkout is supplied independently.
+    const targetRoot = join(temporaryRoot, 'target-without-host-tools');
+    mkdirSync(targetRoot);
     expectSuccess(
       run(
         process.execPath,
         [
           '--no-experimental-strip-types',
           join(relocated, 'prepare-boxrig.mjs'),
-          projectRoot,
+          targetRoot,
           build,
           relocated,
+          join(projectRoot, 'deps/boxrig'),
         ],
         { ...process.env, PATH: `${commands}:${process.env.PATH}` }
       ),
@@ -543,7 +552,7 @@ int main(void) {
       { ...process.env, PKG_CONFIG_PATH: join(sdk, 'lib/pkgconfig') }
     );
     expectSuccess(versions, 'prepared SDK version lookup failed');
-    expect(versions.stdout.trim().split(/\s+/)).toEqual(['0.14.0', '0.14.0']);
+    expect(versions.stdout.trim().split(/\s+/)).toEqual(['0.15.0', '0.15.0']);
     const consumer = join(temporaryRoot, 'prepared-sdk-consumer');
     expectSuccess(
       run('cc', [
