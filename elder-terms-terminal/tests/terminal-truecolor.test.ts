@@ -3,16 +3,172 @@
 // Under MIT.
 // https://github.com/kekyo/elder-terms/
 
-import { spawn } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { once } from 'node:events';
 import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { promisify } from 'node:util';
+import { PNG } from 'pngjs';
 import { expect, it } from 'vitest';
 import { waitForResult } from 'gestament/testing';
-import { runGtkTest } from './gtk-test-helpers.ts';
-import { withTemporaryDirectory } from '../../shared/tests/connection-test-helpers.ts';
+import {
+  pressKeyWithModifiers,
+  readTerminalGridLayout,
+  runGtkTest,
+} from './gtk-test-helpers.ts';
+import {
+  expectElementKind,
+  withTemporaryDirectory,
+} from '../../shared/tests/connection-test-helpers.ts';
 
 for (const backend of ['cairo', 'opengl']) {
+  it(`fills adjacent block cells and preserves font glyphs, colors and copied text (${backend})`, async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const peer = join(directory, 'blocks.mjs');
+      const config = join(directory, 'connection.ini');
+      const blocks = '██▀▄▌▐▖▗▘▝▚▞';
+      // Occupied quadrants are listed in reading order: top-left to bottom-right.
+      const quadrants = [
+        '1111',
+        '1111',
+        '1100',
+        '0011',
+        '1010',
+        '0101',
+        '0010',
+        '0001',
+        '1000',
+        '0100',
+        '1001',
+        '0110',
+      ];
+      const fontGlyphs = '░▒▓─│█́AZ';
+      const palettes = [
+        ['00ffff', '000000'],
+        ['ff00ff', '000000'],
+        ['00ff00', '0000ff'],
+      ];
+      const outputs = palettes.map(([foreground, background], index) => {
+        const rgb = (hex: string) => [...Buffer.from(hex, 'hex')].join(';');
+        const attributes =
+          index === 2
+            ? `38;2;${rgb(background)};48;2;${rgb(foreground)};7`
+            : `38;2;${rgb(foreground)};48;2;${rgb(background)}`;
+        return `\x1b[H\x1b[${attributes}m${blocks}\x1b[0m\r\n\x1b[38;2;255;255;255m${fontGlyphs}\x1b[0m`;
+      });
+      await writeFile(
+        peer,
+        `process.stdin.setRawMode(true);
+let phase = 0;
+const outputs = ${JSON.stringify(outputs)};
+process.stdin.on('data', bytes => {
+  if (bytes.includes(103)) process.stdout.write(outputs[++phase % outputs.length]);
+});
+process.stdout.write('\\x1b[?25l\\x1b[2J' + outputs[0]);`
+      );
+      await writeFile(
+        config,
+        `[general]\nbackground=#000000\n[terminal]\nambiguous_width=narrow\n[local]\ncommand_line=${process.execPath} ${peer}\n`
+      );
+      await runGtkTest(
+        context,
+        ['-c', config],
+        async (app, evidence) => {
+          const layout = await readTerminalGridLayout(app);
+          const status = expectElementKind(
+            await app.getById('fixture_terminal_state_label'),
+            'label'
+          );
+          expect(await status.text()).toContain(`backend=${backend}`);
+          const { terminal, cellWidth: width, cellHeight: height } = layout;
+          for (const [phase, colors] of palettes.entries()) {
+            if (phase > 0) await app.input.pressKey('g');
+            await waitForResult(async () => {
+              const frame = PNG.sync.read((await terminal.capture()).image);
+              for (const [column, occupied] of quadrants.entries()) {
+                for (let y = 0; y < height; y++) {
+                  for (let x = 0; x < width; x++) {
+                    // Odd cell sizes have a one-pixel rounding boundary. All
+                    // outer edges and the seam between full cells remain exact.
+                    if (
+                      column > 1 &&
+                      (Math.abs(x - width / 2) < 1 ||
+                        Math.abs(y - height / 2) < 1)
+                    )
+                      continue;
+                    const filled =
+                      occupied[
+                        (y >= height / 2 ? 2 : 0) + (x >= width / 2 ? 1 : 0)
+                      ] === '1';
+                    const offset = (y * frame.width + column * width + x) * 4;
+                    expect(
+                      frame.data.readUIntBE(offset, 3),
+                      `phase=${phase}, cell=${column}, pixel=${x},${y}`
+                    ).toBe(Number.parseInt(colors[filled ? 0 : 1], 16));
+                  }
+                }
+              }
+              for (let column = 0; column < 8; column++) {
+                let ink = 0;
+                for (let y = height; y < height * 2; y++)
+                  for (let x = column * width; x < (column + 1) * width; x++)
+                    if (
+                      frame.data.readUIntBE((y * frame.width + x) * 4, 3) !== 0
+                    )
+                      ink++;
+                expect(ink, `font glyph ${column}`).toBeGreaterThan(0);
+                if (column !== 5) expect(ink).toBeLessThan(width * height);
+              }
+            });
+            await evidence.captureEvidence(`blocks-${phase}`, async () =>
+              app.capture()
+            );
+          }
+          const bounds = (await terminal.capture()).bounds;
+          for (const [row, length, expected] of [
+            [0, blocks.length, blocks],
+            [1, 8, fontGlyphs],
+          ] as const) {
+            await app.input.pressKey('Escape');
+            await app.input.moveMouseTo(
+              bounds.x + 1,
+              Math.trunc(bounds.y + height * (row + 0.5))
+            );
+            await app.input.setMouseButton('left', true);
+            await app.input.moveMouseTo(
+              bounds.x + width * length - 1,
+              Math.trunc(bounds.y + height * (row + 0.5))
+            );
+            await app.input.setMouseButton('left', false);
+            await pressKeyWithModifiers(app, ['control', 'shift'], 'c');
+            await waitForResult(async () => {
+              const copied = await promisify(execFile)(
+                fileURLToPath(
+                  new URL(
+                    '../../.build/elder-terms-terminal/clipboard-read-helper',
+                    import.meta.url
+                  )
+                ),
+                [],
+                { env: await app.environment() }
+              );
+              expect(copied.stdout).toBe(expected);
+            });
+          }
+        },
+        {
+          env: {
+            GDK_SCALE: '1',
+            ...(backend === 'cairo'
+              ? { GDK_GL: 'disable' }
+              : { LIBGL_ALWAYS_SOFTWARE: '1' }),
+          },
+        }
+      );
+    });
+  });
+
   it(`answers default-color queries and animates a detected truecolor foreground (${backend})`, async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const peer = join(directory, 'gradient.mjs');
