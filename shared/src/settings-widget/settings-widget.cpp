@@ -155,6 +155,7 @@ struct SettingsWidgetState {
   GtkWidget *general_background_mode_combo = nullptr;
   GtkWidget *general_background_button = nullptr;
   GtkWidget *local_command_line_entry = nullptr;
+  GtkWidget *local_terminal_type_entry = nullptr;
   bool local_command_line_valid = true;
   GtkWidget *terminal_width_entry = nullptr;
   GtkWidget *terminal_height_entry = nullptr;
@@ -1728,6 +1729,26 @@ static void update_local_command_line_from_widget(
   }
 }
 
+static void update_local_terminal_type_from_widget(SettingsWidgetState *state) {
+  const char *text =
+      gtk_entry_get_text(GTK_ENTRY(state->local_terminal_type_entry));
+  const std::string terminal_type = text == nullptr ? "" : text;
+  if (ascii_blank(terminal_type)) {
+    clear_explicit_setting_value(&state->draft_store,
+                                 local_terminal_type_setting_key());
+    sync_cleared_entry(
+        state, state->local_terminal_type_entry,
+        local_terminal_type_setting_key(),
+        local_shell_connection_settings(state->draft_store).terminal_type);
+    return;
+  }
+  gtk_entry_set_placeholder_text(
+      GTK_ENTRY(state->local_terminal_type_entry), nullptr);
+  set_explicit_setting_value(&state->draft_store,
+                             local_terminal_type_setting_key(),
+                             SettingValue{terminal_type});
+}
+
 static void update_telnet_address_from_widget(SettingsWidgetState *state) {
   update_string_entry(state, state->telnet_address_entry,
                       telnet_address_setting_key());
@@ -3150,6 +3171,12 @@ static void sync_key_binding_reset_button(
 static void sync_terminal_type_entries(SettingsWidgetState *state) {
   const bool previous_synchronizing = state->synchronizing;
   state->synchronizing = true;
+  if (state->local_terminal_type_entry != nullptr) {
+    sync_inheritable_entry(
+        state->local_terminal_type_entry, state->draft_store,
+        local_terminal_type_setting_key(),
+        local_shell_connection_settings(state->draft_store).terminal_type);
+  }
   if (state->telnet_terminal_type_entry != nullptr) {
     sync_inheritable_entry(
         state->telnet_terminal_type_entry, state->draft_store,
@@ -4704,6 +4731,34 @@ static void on_local_command_line_changed(GtkEditable *, gpointer data) {
   notify_changed(state);
 }
 
+static void on_local_terminal_type_changed(GtkEditable *, gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  if (state->synchronizing) {
+    return;
+  }
+  update_local_terminal_type_from_widget(state);
+  notify_changed(state);
+}
+
+static gboolean on_local_terminal_type_focus_out(GtkWidget *, GdkEventFocus *,
+                                                 gpointer data) {
+  auto *state = static_cast<SettingsWidgetState *>(data);
+  const char *text =
+      gtk_entry_get_text(GTK_ENTRY(state->local_terminal_type_entry));
+  if (text != nullptr && !ascii_blank(text)) {
+    return FALSE;
+  }
+
+  const bool previous_synchronizing = state->synchronizing;
+  state->synchronizing = true;
+  sync_inheritable_entry(state->local_terminal_type_entry,
+                         state->draft_store,
+                         local_terminal_type_setting_key(),
+                         local_shell_connection_settings(state->draft_store).terminal_type);
+  state->synchronizing = previous_synchronizing;
+  return FALSE;
+}
+
 static void on_telnet_address_changed(GtkEditable *, gpointer data) {
   auto *state = static_cast<SettingsWidgetState *>(data);
   if (state->synchronizing) {
@@ -5664,6 +5719,17 @@ static GtkWidget *create_local_page(SettingsWidgetState *state) {
                    G_CALLBACK(on_local_command_line_changed), state);
   attach_row(page, 0, local_command_line_setting_key(),
              state->local_command_line_entry);
+
+  state->local_terminal_type_entry =
+      create_entry(widget_id(state, "local_terminal_type_entry"));
+  gtk_widget_set_sensitive(state->local_terminal_type_entry,
+                           state->is_runtime ? FALSE : TRUE);
+  g_signal_connect(state->local_terminal_type_entry, "changed",
+                   G_CALLBACK(on_local_terminal_type_changed), state);
+  g_signal_connect(state->local_terminal_type_entry, "focus-out-event",
+                   G_CALLBACK(on_local_terminal_type_focus_out), state);
+  attach_row(page, 1, local_terminal_type_setting_key(),
+             state->local_terminal_type_entry);
 
   return page;
 }

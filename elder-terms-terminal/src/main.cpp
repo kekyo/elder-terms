@@ -9,6 +9,8 @@
 #include <clocale>
 #include <cstdarg>
 #include <cstdint>
+#include <cstdio>
+#include <cstdlib>
 #include <exception>
 #include <filesystem>
 #include <functional>
@@ -697,6 +699,7 @@ static bool connect_application_terminal(ApplicationState *state) {
     if constexpr (std::is_same_v<Settings, elder_terms::LocalShellConnectionSettings>) {
       elder_terms::TerminalLocalCommand command;
       command.arguments = settings.argv;
+      command.terminal_type = settings.terminal_type;
       if (command.arguments.empty()) {
         const auto *shell = g_getenv("SHELL");
         command.arguments.push_back(shell && *shell ? shell : "/bin/sh");
@@ -1852,6 +1855,12 @@ static bool select_new_window_connection(elder_terms::LaunchOptions *options) {
 }
 
 int main(int argc, char **argv) {
+  // Advertise terminal capabilities before GTK or Cardio can start threads.
+  if (setenv("COLORTERM", "truecolor", 1) != 0) {
+    std::perror("Error: failed to set COLORTERM");
+    return 1;
+  }
+
   const elder_terms::ApplicationUiLanguage ui_language =
       elder_terms::load_application_ui_language_preference(
           elder_terms::default_global_config_path());

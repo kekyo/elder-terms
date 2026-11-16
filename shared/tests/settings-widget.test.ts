@@ -83,6 +83,7 @@ interface AppliedStore {
   readonly log_file_name_format: string;
   readonly log_mode: string;
   readonly local_command_line: string;
+  readonly local_terminal_type: string;
   readonly open_application: string;
   readonly open_connection: string;
   readonly ssh_address: string;
@@ -1774,6 +1775,14 @@ describe.concurrent('shared settings widget', () => {
             'Built-in default'
           );
           await expectSensitive(commandLine);
+          await expectInheritedEntry(
+            app,
+            'settings_local_terminal_type_entry',
+            'xterm-256color (built-in default)'
+          );
+          await expectSensitive(
+            await app.getById('settings_local_terminal_type_entry')
+          );
         },
         differsFrom: undefined,
         fixtureName: 'settings-widget-local-page-default-editable',
@@ -1781,7 +1790,11 @@ describe.concurrent('shared settings widget', () => {
         prepare: showLocalPage,
       },
       {
-        args: ['--page=local', '--local-command-line=/bin/bash --noprofile'],
+        args: [
+          '--page=local',
+          '--local-command-line=/bin/bash --noprofile',
+          '--connection=local.terminal_type=xterm-kitty',
+        ],
         assert: async (app) => {
           expect(
             await expectElementKind(
@@ -1789,6 +1802,12 @@ describe.concurrent('shared settings widget', () => {
               'entry'
             ).text()
           ).toBe('/bin/bash --noprofile');
+          expect(
+            await expectElementKind(
+              await app.getById('settings_local_terminal_type_entry'),
+              'entry'
+            ).text()
+          ).toBe('xterm-kitty');
         },
         differsFrom: 'settings-widget-local-page-default-editable',
         fixtureName: 'settings-widget-local-command-bash',
@@ -1800,10 +1819,14 @@ describe.concurrent('shared settings widget', () => {
           '--page=local',
           '--runtime',
           '--local-command-line=/bin/bash --noprofile',
+          '--connection=local.terminal_type=xterm-kitty',
         ],
         assert: async (app) => {
           await expectInsensitive(
             await app.getById('settings_local_command_line_entry')
+          );
+          await expectInsensitive(
+            await app.getById('settings_local_terminal_type_entry')
           );
         },
         differsFrom: 'settings-widget-local-command-bash',
@@ -1824,6 +1847,52 @@ describe.concurrent('shared settings widget', () => {
         }
       );
     }
+  });
+
+  it('edits and restores inheritance for the Local terminal type', async (context) => {
+    await runSharedGtkTest(
+      context,
+      ['--page=local', '--global=local.terminal_type=xterm', '--save'],
+      async ({ app }) => {
+        await showLocalPage(app);
+        const terminalType = expectElementKind(
+          await app.getById('settings_local_terminal_type_entry'),
+          'entry'
+        );
+        const apply = expectElementKind(
+          await app.getById('settings_apply_button'),
+          'button'
+        );
+        await expectInheritedEntry(
+          app,
+          'settings_local_terminal_type_entry',
+          'xterm (global default)'
+        );
+        await terminalType.setText('xterm-kitty');
+        await apply.click();
+        const explicit = await waitForAppliedStore(app);
+        expect(explicit.local_terminal_type).toBe('xterm-kitty');
+        expect(explicit.local_terminal_type_source).toBe('override');
+        expect(explicit.local_terminal_type_explicit).toBe('true');
+
+        for (const blank of ['', '   ']) {
+          await terminalType.setText('xterm-kitty');
+          await terminalType.setText(blank);
+          await apply.click();
+          await expectInheritedEntry(
+            app,
+            'settings_local_terminal_type_entry',
+            'xterm (global default)'
+          );
+          await waitForResult(async () => {
+            const inherited = await waitForAppliedStore(app);
+            expect(inherited.local_terminal_type).toBe('xterm');
+            expect(inherited.local_terminal_type_source).toBe('global');
+            expect(inherited.local_terminal_type_explicit).toBe('false');
+          });
+        }
+      }
+    );
   });
 
   it('edits, validates, and restores inheritance for the Local startup command', async (context) => {
