@@ -1226,7 +1226,10 @@ static bool attach_widget(TerminalRuntime *runtime) {
   g_signal_connect(widget, "size-allocate", G_CALLBACK(terminal_allocated), runtime);
   size_t rows = 0, columns = 0;
   boxrig_terminal_size(runtime->terminal, &rows, &columns);
-  if (!ui_result(boxrig_gtk3_terminal_widget_set_preferred_grid(widget, rows, columns), "preferred grid") ||
+  // Cell-addressed TUIs need the same order for painting, hit tests and copying,
+  // including when a failed widget is replaced while its terminal is retained.
+  if (!ui_result(boxrig_gtk3_terminal_widget_set_text_direction(widget, BOXRIG_TEXT_DIRECTION_LOGICAL), "text direction") ||
+      !ui_result(boxrig_gtk3_terminal_widget_set_preferred_grid(widget, rows, columns), "preferred grid") ||
       !ui_result(boxrig_gtk3_terminal_widget_set_window_state(widget, runtime->window_state), "window state") ||
       !ui_result(boxrig_gtk3_terminal_widget_set_mouse_router(widget, route_mouse, runtime), "mouse router") ||
       !ui_result(boxrig_gtk3_terminal_widget_set_visible(widget, true), "visibility")) return false;
@@ -1246,6 +1249,7 @@ TerminalRuntime *create_terminal_runtime(GtkWindow *window, GtkBox *content, Gtk
   auto config = boxrig_terminal_config_default();
   config.rows = 24;
   config.columns = 80;
+  config.emoji_variation_width = BOXRIG_EMOJI_VARIATION_WIDTH_PRESERVE;
   config.ambiguous_width = ambiguous_width == TerminalAmbiguousWidth::font
       ? BOXRIG_AMBIGUOUS_WIDTH_FONT : ambiguous_width == TerminalAmbiguousWidth::wide
       ? BOXRIG_AMBIGUOUS_WIDTH_WIDE : BOXRIG_AMBIGUOUS_WIDTH_NARROW;

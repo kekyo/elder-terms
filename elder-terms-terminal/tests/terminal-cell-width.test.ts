@@ -15,7 +15,7 @@ import {
   runGtkTest,
   readTerminalGridLayout,
   pressKeyWithModifiers,
-} from './gtk-test-helpers';
+} from './gtk-test-helpers.ts';
 import {
   withTemporaryDirectory,
   expectElementKind,
@@ -37,6 +37,154 @@ interface CursorReport {
 }
 
 for (const backend of ['cairo', 'opengl']) {
+  it(`keeps TUI cell order, Unicode selection and link hit positions through resize (${backend})`, async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const config = join(directory, 'logical.ini');
+      const peer = join(directory, 'logical.mjs');
+      const ready = join(directory, 'ready.txt');
+      const opened = join(directory, 'opened.txt');
+      const colors = ['ff0000', '00ff00', '0000ff'];
+      const letters = ['א', 'ב', 'ג'];
+      const output =
+        '\x1b[?25l\x1b[2J\x1b[HL' +
+        letters
+          .map((letter, index) => {
+            const rgb = Buffer.from(colors[index], 'hex');
+            return `\x1b[48;2;${[...rgb].join(';')}m${letter}`;
+          })
+          .join('') +
+        '\x1b[0mR\r\nA界❤️B\r\nL' +
+        letters
+          .map(
+            (letter, index) =>
+              `\x1b]8;;https://cell-${index}.test/\x1b\\${letter}\x1b]8;;\x1b\\`
+          )
+          .join('') +
+        'R\x1b[6n';
+      await writeFile(
+        peer,
+        `import { writeFileSync } from 'node:fs';
+process.stdin.setRawMode(true);
+process.stdin.once('data', () => writeFileSync(${JSON.stringify(ready)}, 'ready'));
+process.stdin.resume();
+process.stdout.write(${JSON.stringify(output)});`
+      );
+      await writeFile(
+        join(directory, 'xdg-open'),
+        `#!${process.execPath}\nrequire('node:fs').writeFileSync(${JSON.stringify(opened)}, process.argv[2]);\n`,
+        { mode: 0o755 }
+      );
+      await writeFile(
+        config,
+        `[general]\nbackground=#000000\n[terminal]\nambiguous_width=narrow\n[local]\ncommand_line=${process.execPath} ${peer}\n`
+      );
+      await runGtkTest(
+        context,
+        ['-c', config],
+        async (app, evidence) => {
+          await waitForResult(async () =>
+            expect(await readFile(ready, 'utf8')).toBe('ready')
+          );
+          for (const resized of [false, true]) {
+            let layout = await readTerminalGridLayout(app);
+            if (resized) {
+              await layout.mainWindow.resizeTo(
+                layout.mainBounds.width + layout.cellWidth * 8,
+                layout.mainBounds.height + layout.cellHeight * 2
+              );
+              layout = await waitForResult(async () =>
+                readTerminalGridLayout(app)
+              );
+            }
+            const { terminal, cellWidth: width, cellHeight: height } = layout;
+            await waitForResult(async () => {
+              const frame = PNG.sync.read((await terminal.capture()).image);
+              for (const [index, color] of colors.entries()) {
+                let pixels = 0;
+                for (let y = 0; y < height; y++)
+                  for (
+                    let x = (index + 1) * width;
+                    x < (index + 2) * width;
+                    x++
+                  ) {
+                    const offset = (y * frame.width + x) * 4;
+                    if (
+                      frame.data
+                        .subarray(offset, offset + 3)
+                        .toString('hex') === color
+                    )
+                      pixels++;
+                  }
+                expect(pixels, `logical column ${index + 1}`).toBeGreaterThan(
+                  (width * height) / 4
+                );
+              }
+            });
+            const { bounds } = await terminal.capture();
+            for (const [row, left, right, expected] of [
+              [0, 1.1, 3.9, 'אבג'],
+              [1, 2.1, 4.9, '界❤️B'],
+            ] as const) {
+              for (const rectangular of [false, true]) {
+                for (const reverse of [false, true]) {
+                  await app.input.pressKey('Escape');
+                  await app.input.setModifier('control', rectangular);
+                  await app.input.moveMouseTo(
+                    Math.trunc(bounds.x + width * (reverse ? right : left)),
+                    Math.trunc(bounds.y + height * (row + 0.5))
+                  );
+                  await app.input.setMouseButton('left', true);
+                  await app.input.moveMouseTo(
+                    Math.trunc(bounds.x + width * (reverse ? left : right)),
+                    Math.trunc(bounds.y + height * (row + 0.5))
+                  );
+                  await app.input.setMouseButton('left', false);
+                  await app.input.setModifier('control', false);
+                  await pressKeyWithModifiers(app, ['control', 'shift'], 'c');
+                  await waitForResult(async () => {
+                    const copied = await exec(clipboardReader, [], {
+                      env: await app.environment(),
+                    });
+                    expect(copied.stdout).toBe(expected);
+                  });
+                }
+              }
+            }
+            await app.input.pressKey('Escape');
+            for (let index = 0; index < letters.length; index++) {
+              await app.input.moveMouseTo(
+                Math.trunc(bounds.x + width * (index + 1.5)),
+                Math.trunc(bounds.y + height * 2.5)
+              );
+              await app.input.setModifier('control', true);
+              await app.input.setMouseButton('left', true);
+              await app.input.setMouseButton('left', false);
+              await app.input.setModifier('control', false);
+              await waitForResult(async () =>
+                expect(await readFile(opened, 'utf8')).toBe(
+                  `https://cell-${index}.test/`
+                )
+              );
+            }
+            await evidence.captureEvidence(
+              resized ? 'logical-resized' : 'logical-initial',
+              async () => app.capture()
+            );
+          }
+        },
+        {
+          env: {
+            PATH: `${directory}:${process.env.PATH ?? ''}`,
+            GDK_SCALE: '1',
+            ...(backend === 'cairo'
+              ? { GDK_GL: 'disable' }
+              : { LIBGL_ALWAYS_SOFTWARE: '1' }),
+          },
+        }
+      );
+    });
+  });
+
   it(`keeps default-width TUI meters and unchanged text intact during updates (${backend})`, async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const path = join(directory, 'meter.ini');
