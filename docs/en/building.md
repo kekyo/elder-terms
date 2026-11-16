@@ -19,7 +19,7 @@ version as libcurl; the application checks this before connecting.
 To build on Ubuntu or Debian, install a C++20-capable compiler, Meson, Ninja,
 gettext, and the development packages for the libraries used by elder-terms:
 
-Rendering requires GTK3 3.24 or later, Pango 1.50 or later, Cairo 1.18 or later, IBus 1.5.29 or later, and Wayland client 1.22 or later. See the [boxrig build requirements](https://github.com/kekyo/boxrig/blob/0.14.0/docs/en/building.md).
+Rendering requires GTK3 3.24 or later, Pango 1.50 or later, Cairo 1.18 or later, IBus 1.5.29 or later, and Wayland client 1.22 or later. See the [boxrig build requirements](https://github.com/kekyo/boxrig/blob/0.15.0/docs/en/building.md).
 
 ```bash
 sudo apt update
@@ -64,6 +64,11 @@ submodules with:
 ```bash
 git submodule update --init --recursive
 ```
+
+The bundled boxrig submodule is version 0.15.0. Its headers and shared libraries
+are built from the same source. This set is the SDK, and the version management
+tool screw-up supplies its reported version. Host-prepared tools for package builds include this version information,
+so target SDK builds do not need npm or Git to recalculate it.
 
 Install the npm dependencies and build all workspaces:
 
