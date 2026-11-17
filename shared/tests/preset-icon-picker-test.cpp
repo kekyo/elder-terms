@@ -115,9 +115,6 @@ int main(int argc, char **argv) {
   gtk_button_clicked(choose);
   auto *popup = find(window, "settings_general_icon_picker");
   assert(GTK_IS_POPOVER(popup) && gtk_widget_get_visible(popup));
-  // Temporary removal checks; keep the behavioral coverage after migration.
-  assert(find(popup, "settings_general_icon_family") == nullptr);
-  assert(find(popup, "settings_general_icon_color_row") == nullptr);
   const std::array<const char *, 3> ids{"emoji", "material_black", "material_white"};
   const std::array<const char *, 3> titles{"Emoji", "Material (Black)", "Material (White)"};
   std::array<GtkWidget *, 3> grids{};
