@@ -2036,7 +2036,7 @@ describe('SFTP window', () => {
     );
   });
 
-  it('requires one selected destination directory or regular file for sending and receiving', async (context) => {
+  it('uses the current directories when no transfer destination is selected', async (context) => {
     await runSftpFixture(
       context,
       false,
@@ -2049,7 +2049,87 @@ describe('SFTP window', () => {
         const remoteTree = expectTable(
           await app.getById('file_transfer_remote_tree')
         );
-        for (const names of [[], ['latest'], ['archive', 'readme.txt']]) {
+        const remotePath = expectElementKind(
+          await app.getById('file_transfer_remote_path_entry'),
+          'entry'
+        );
+        const localPath = expectElementKind(
+          await app.getById('file_transfer_local_path_entry'),
+          'entry'
+        );
+        const status = expectElementKind(
+          await app.getById('file_transfer_status_label'),
+          'label'
+        );
+        for (const row of await remoteTree.selectedRows())
+          await remoteTree.deselectRow(row);
+        // Editing the address does not navigate or change the transfer target.
+        await remotePath.setText('/not-opened');
+        await openContextMenu(
+          app,
+          localTree,
+          await findRow(localTree, 'hello.txt')
+        );
+        const send = expectElementKind(
+          await app.getById('file_transfer_send_item'),
+          'menuItem'
+        );
+        await expectShowing(send);
+        expect((await send.info()).states).toContain('sensitive');
+        await send.click();
+        await waitForResult(async () => {
+          expect(await status.text()).toBe('Sent 1 item');
+          expect((await remoteTree.info()).states).toContain('sensitive');
+          expect(await remotePath.text()).toBe('/remote');
+        });
+        await findRow(remoteTree, 'hello.txt');
+        expect(await remoteTree.getRowCount()).toBe(4);
+
+        for (const row of await localTree.selectedRows())
+          await localTree.deselectRow(row);
+        await localPath.setText(join(localDirectory, 'not-opened'));
+        await openContextMenu(
+          app,
+          remoteTree,
+          await findRow(remoteTree, 'readme.txt')
+        );
+        const receive = expectElementKind(
+          await app.getById('file_transfer_receive_item'),
+          'menuItem'
+        );
+        await expectShowing(receive);
+        expect((await receive.info()).states).toContain('sensitive');
+        await receive.click();
+        await waitForResult(async () => {
+          expect(await status.text()).toBe('Received 1 item');
+          expect((await localTree.info()).states).toContain('sensitive');
+          expect(await localPath.text()).toBe(localDirectory);
+          expect(
+            await readFile(join(localDirectory, 'readme.txt'), 'utf8')
+          ).toBe('hello from remote\n');
+        });
+        await evidence.captureEvidence(
+          'current-transfer-destinations',
+          async () => app.capture()
+        );
+      }
+    );
+  });
+
+  it('accepts one selected destination directory or regular file for sending and receiving', async (context) => {
+    await runSftpFixture(
+      context,
+      false,
+      [],
+      undefined,
+      async ({ app, localDirectory, evidence }) => {
+        const localTree = expectTable(
+          await app.getById('file_transfer_local_tree')
+        );
+        const remoteTree = expectTable(
+          await app.getById('file_transfer_remote_tree')
+        );
+        for (const names of [['latest'], ['archive', 'readme.txt']]) {
           for (const row of await remoteTree.selectedRows())
             await remoteTree.deselectRow(row);
           for (const name of names)
@@ -2102,7 +2182,7 @@ describe('SFTP window', () => {
           ).text()
         ).toBe('/remote');
 
-        for (const names of [[], ['documents', 'hello.txt']]) {
+        for (const names of [['documents', 'hello.txt']]) {
           for (const row of await localTree.selectedRows())
             await localTree.deselectRow(row);
           for (const name of names)

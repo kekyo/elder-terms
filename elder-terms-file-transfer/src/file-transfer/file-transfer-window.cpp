@@ -660,17 +660,19 @@ selected_file_transfer_items(FileTransferPaneState *pane);
 static std::optional<std::string> selected_file_transfer_destination(
     FileTransferPaneState *pane) {
   const auto items = selected_file_transfer_items(pane);
-  if (items.size() != 1 || (items.front().type != RemoteFileType::directory &&
+  if (items.size() > 1 || (!items.empty() && items.front().type != RemoteFileType::directory &&
       items.front().type != RemoteFileType::regular))
     return std::nullopt;
   if (pane->remote && (!pane->window->connection_available || !pane->window->client))
     return std::nullopt;
   // Derive the destination from the operation identity; display paths can be
   // ambiguous, and a selected file supplies its parent rather than its own path.
-  const auto &item = items.front();
-  const auto destination = item.type == RemoteFileType::directory ? item.path
-      : pane->remote ? pane->window->client->parent_path(item.path)
-                     : local_parent_directory(item.path);
+  // Without a selected row, use the loaded folder, not an uncommitted address edit.
+  const auto destination = items.empty() ? pane->current_directory
+      : items.front().type == RemoteFileType::directory ? items.front().path
+      : pane->remote ? pane->window->client->parent_path(items.front().path)
+                     : local_parent_directory(items.front().path);
+  if (destination.empty()) return std::nullopt;
   if (pane->remote && !pane->window->client->path_capabilities(destination).create_children)
     return std::nullopt;
   return destination;
