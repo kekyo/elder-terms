@@ -17,6 +17,9 @@ Comment: The bundled boxrig runtime includes third-party code and data under
  replacement instructions are in docs/ja/smb.md and docs/en/smb.md within
  this documentation directory.
  See https://github.com/videolabs/libdsm/tree/0f3edc6df6ab5950f2550d453035351440f71e31
+ The bundled Glyphs Poly artwork is provided under MIT. Its complete notice
+ is installed in /usr/share/doc/elder-terms/licenses/connection-icons/GLYPHS-LICENSE.
+ See https://github.com/gorango/glyphs/tree/771993addf00d5a7080fadb763f0da72ddc0f716
 
 Files: *
 Copyright: Kouji Matsui

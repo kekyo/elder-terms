@@ -43,6 +43,10 @@ it('searches all groups and selects black and white icons independently', async 
           await app.getById('settings_general_icon_grid_material_white'),
           'container'
         );
+        const glyphs = expectElementKind(
+          await app.getById('settings_general_icon_grid_glyphs_poly'),
+          'container'
+        );
         const popup = await app.getById('settings_general_icon_picker');
         for (const key of 'folder') await app.input.pressKey(key);
         await waitForResult(async () => {
@@ -50,6 +54,7 @@ it('searches all groups and selects black and white icons independently', async 
           expect(await emoji.getChildCount()).toBe(2);
           expect(await black.getChildCount()).toBe(12);
           expect(await white.getChildCount()).toBe(12);
+          expect(await glyphs.getChildCount()).toBe(4);
         });
         await writeFile(
           join(directory, 'filtered-icons.png'),
@@ -78,9 +83,24 @@ it('searches all groups and selects black and white icons independently', async 
               ++changed;
           expect(changed).toBeGreaterThan(100);
         });
+        await search.setText('folder open');
+        const capture = await popup.capture();
         await writeFile(
           join(directory, 'black-and-white-results.png'),
-          (await popup.capture()).image
+          capture.image
+        );
+        const environment = await app.environment();
+        await writeFile(
+          join(directory, 'picker-capture.json'),
+          JSON.stringify(
+            {
+              capturedAt: new Date().toISOString(),
+              bounds: capture.visibleBounds,
+              display: environment.DISPLAY,
+            },
+            null,
+            2
+          )
         );
         const bounds = (await whiteImage.imageInfo()).bounds;
         await app.input.moveMouseTo(
@@ -181,8 +201,19 @@ it('navigates group boundaries and scrolls the continuous list to its last icon'
     );
     await app.input.pressKey('Down');
     await app.input.pressKey('End');
+    await app.input.pressKey('Down');
+    const glyphs = expectElementKind(
+      await app.getById('settings_general_icon_grid_glyphs_poly'),
+      'container'
+    );
+    await waitForResult(async () =>
+      expect((await (await glyphs.childAt(0))!.info()).states).toContain(
+        'selected'
+      )
+    );
+    await app.input.pressKey('End');
     const last = expectElementKind(
-      await white.childAt((await white.getChildCount()) - 1),
+      await glyphs.childAt((await glyphs.getChildCount()) - 1),
       'image'
     );
     await waitForResult(async () =>
@@ -190,13 +221,31 @@ it('navigates group boundaries and scrolls the continuous list to its last icon'
     );
     const info = await last.info();
     await scroll.setValue(0);
+    await waitForResult(async () => expect(await scroll.value()).toBe(0));
+    const lowerEmoji = expectElementKind(await emoji.childAt(32), 'image');
+    await waitForResult(async () => {
+      const pixels = PNG.sync.read(
+        (await (await lowerEmoji.imageInfo()).capture()).image
+      );
+      let colored = 0;
+      for (let offset = 0; offset < pixels.data.length; offset += 4) {
+        const channels = pixels.data.subarray(offset, offset + 3);
+        if (Math.max(...channels) - Math.min(...channels) > 80) ++colored;
+      }
+      expect(colored).toBeGreaterThan(100);
+    });
     await writeFile(
       join(directory, 'emoji-first.png'),
       (await popup.capture()).image
     );
     await scroll.setValue((await scroll.valueInfo()).maximum);
+    const heading = await app.getById('settings_general_icon_current_group');
+    await waitForResult(async () => {
+      expect((await heading.info()).name).toBe('Glyphs Poly');
+      expect(await scroll.value()).toBeGreaterThan(0);
+    });
     await writeFile(
-      join(directory, 'material-white-last.png'),
+      join(directory, 'glyphs-poly-last.png'),
       (await popup.capture()).image
     );
     // Activate the focused item without depending on GTK3's offscreen ATK extents.
@@ -206,7 +255,7 @@ it('navigates group boundaries and scrolls the continuous list to its last icon'
       'label'
     );
     await waitForResult(async () =>
-      expect(await selection.text()).toBe(`${info.name} (White)`)
+      expect(await selection.text()).toBe(info.name)
     );
     await choose.click();
     await waitForResult(async () =>
@@ -217,6 +266,6 @@ it('navigates group boundaries and scrolls the continuous list to its last icon'
     await waitForResult(async () =>
       expect((await popup.info()).states).not.toContain('showing')
     );
-    expect(await selection.text()).toBe(`${info.name} (White)`);
+    expect(await selection.text()).toBe(info.name);
   });
 });

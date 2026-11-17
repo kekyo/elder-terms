@@ -239,6 +239,7 @@ Description: GTK terminal for serial, TELNET, local shell, SSH, SFTP, and FTP co
     'NOTO-LICENSE',
     'NOTO-FLAGS-NOTICE',
     'MATERIAL-LICENSE',
+    'GLYPHS-LICENSE',
     'UNICODE-LICENSE',
   ]) {
     textFiles.set(
@@ -447,9 +448,10 @@ container_image_for_target debian trixie riscv64
 int main(void) {
   const char *paths[] = {
       "/net/kekyo/elder-terms/presets/material/action/home.png",
-      "/net/kekyo/elder-terms/presets/material-white/action/home.png"
+      "/net/kekyo/elder-terms/presets/material-white/action/home.png",
+      "/net/kekyo/elder-terms/presets/glyphs-poly/folder.png"
   };
-  for (int variant = 0; variant < 2; ++variant) {
+  for (int variant = 0; variant < 3; ++variant) {
     GError *error = NULL;
     GdkPixbuf *image = gdk_pixbuf_new_from_resource(paths[variant], &error);
     if (image == NULL) {
@@ -469,6 +471,13 @@ int main(void) {
     const guchar *center = pixels + 128 * stride + 128 * channels;
     const guchar *padding = pixels + 128 * stride + 32 * channels;
     const guchar *outline = pixels + 190 * stride + 90 * channels;
+    if (variant == 2) {
+      const int valid = center[3] == 255 && pixels[3] == 0 &&
+          (center[0] != center[1] || center[1] != center[2]);
+      g_object_unref(image);
+      if (!valid) return 3;
+      continue;
+    }
     const int foreground = variant == 0 ? 0 : 255;
     const int valid = center[0] == foreground && center[1] == foreground &&
         center[2] == foreground && center[3] == 255 && padding[3] == 0 &&
@@ -496,6 +505,7 @@ int main(void) {
         '-Werror',
         resourceDriver,
         join(relocated, 'elder-terms-material-presets.c'),
+        join(relocated, 'elder-terms-glyphs-presets.c'),
         '-o',
         resourceExecutable,
         ...pixbufFlags.stdout.trim().split(/\s+/u),
@@ -1335,6 +1345,7 @@ exit 1
         'NOTO-LICENSE',
         'NOTO-FLAGS-NOTICE',
         'MATERIAL-LICENSE',
+        'GLYPHS-LICENSE',
         'UNICODE-LICENSE',
       ].map(
         (name) => `usr/share/doc/elder-terms/licenses/connection-icons/${name}`

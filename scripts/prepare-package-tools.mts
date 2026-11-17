@@ -110,3 +110,11 @@ await run(
   root
 );
 await rm(renderedIcons, { recursive: true, force: true });
+const renderedGlyphs = join(output, 'glyphs-presets-rendered');
+await run(process.execPath, [
+  join(root, 'scripts/render-glyphs-connection-icons.mts'),
+  join(root, 'deps/glyphs/packages/svg/core'),
+  join(output, 'elder-terms-glyphs-presets.c'),
+  renderedGlyphs, 'glib-compile-resources', 'gdk-pixbuf-thumbnailer',
+], root);
+await rm(renderedGlyphs, { recursive: true, force: true });

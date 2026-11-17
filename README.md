@@ -241,8 +241,8 @@ See the [INI settings reference](./docs/en/configuration.md) for file syntax and
 
 ![Connection icon picker](./images/connection-icon-picker.png)
 
-Open "Choose icon…" on a connection's "General" tab to select a Noto Color Emoji or Material Icons preset.
-Material Icons offer black or white glyphs. "Choose image file…" lets you select a PNG or JPEG.
+Open "Choose icon…" on a connection's "General" tab to select an Emoji, Material (Black), Material (White), or Glyphs Poly preset.
+Scroll through the grouped list or search all groups in one field. "Choose image file…" lets you select a PNG or JPEG.
 "Default icon" restores the elder-terms image. Presets are bundled and need no download.
 
 The icon appears in the title bar, launcher connection list, and tray connection menu.

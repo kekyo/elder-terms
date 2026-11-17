@@ -24,7 +24,8 @@ sudo apt install build-essential git meson ninja-build pkg-config gettext imagem
 
 このほか、Node.js 22.18以降が必要です。[TypeScriptを直接実行できる版](https://nodejs.org/docs/latest-v22.x/api/typescript.html)を使用します。ディストリビューションのパッケージを使う場合は、インストール後にバージョンを確認してください。
 
-Material IconsのPNG生成には、SVGを読み込める`gdk-pixbuf-thumbnailer`とImageMagickの`convert`を使います。
+Material IconsとGlyphs PolyのPNG生成には、SVGを読み込める`gdk-pixbuf-thumbnailer`を使います。Material Iconsの縁取りにはImageMagickの`convert`も必要です。
+Glyphs Polyの原本は`deps/glyphs`のsubmoduleで参照します。
 生成した画像は配布物に含まれるため、利用者の環境にこれらの生成ツールは不要です。
 
 ```bash

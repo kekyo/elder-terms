@@ -260,6 +260,10 @@ void sync_connection_icon_picker(GtkWidget *popup, const std::string &specificat
   if (!picker) return;
   gtk_entry_set_text(GTK_ENTRY(picker->search), "");
   update_icons(picker);
+  // A file or the default icon has no preset selection to restore.
+  for (const auto &group : picker->groups)
+    gtk_icon_view_unselect_all(GTK_ICON_VIEW(group->grid));
+  gtk_adjustment_set_value(picker->adjustment, 0);
   picker->pending_selection = specification;
   schedule_thumbnails(picker);
 }
@@ -439,6 +443,7 @@ GtkWidget *create_connection_icon_picker(GtkWidget *relative_to,
   add_group(picker, prefix, "emoji", _("Emoji"), ConnectionIconFamily::Noto, false);
   add_group(picker, prefix, "material_black", _("Material (Black)"), ConnectionIconFamily::Material, false);
   add_group(picker, prefix, "material_white", _("Material (White)"), ConnectionIconFamily::Material, true);
+  add_group(picker, prefix, "glyphs_poly", "Glyphs Poly", ConnectionIconFamily::GlyphsPoly, false);
   gtk_widget_set_no_show_all(picker->empty, TRUE);
   gtk_box_pack_start(GTK_BOX(box), picker->empty, FALSE, FALSE, 0);
   auto *file = gtk_button_new_with_label(_("Choose image file…"));

@@ -115,10 +115,10 @@ int main(int argc, char **argv) {
   gtk_button_clicked(choose);
   auto *popup = find(window, "settings_general_icon_picker");
   assert(GTK_IS_POPOVER(popup) && gtk_widget_get_visible(popup));
-  const std::array<const char *, 3> ids{"emoji", "material_black", "material_white"};
-  const std::array<const char *, 3> titles{"Emoji", "Material (Black)", "Material (White)"};
-  std::array<GtkWidget *, 3> grids{};
-  std::array<std::vector<std::string>, 3> all;
+  const std::array<const char *, 4> ids{"emoji", "material_black", "material_white", "glyphs_poly"};
+  const std::array<const char *, 4> titles{"Emoji", "Material (Black)", "Material (White)", "Glyphs Poly"};
+  std::array<GtkWidget *, 4> grids{};
+  std::array<std::vector<std::string>, 4> all;
   int previous_y = -1;
   for (std::size_t i = 0; i < ids.size(); ++i) {
     grids[i] = find(popup, (std::string("settings_general_icon_grid_") + ids[i]).c_str());
@@ -201,7 +201,7 @@ int main(int argc, char **argv) {
   gtk_tree_path_free(first);
   assert(settings_widget_is_dirty(state) == dirty_before_search);
   gtk_entry_set_text(search, "folder");
-  wait_until([&] { return results(grids[0]).size() == 2 && results(grids[1]).size() == 12 && results(grids[2]).size() == 12; });
+  wait_until([&] { return results(grids[0]).size() == 2 && results(grids[1]).size() == 12 && results(grids[2]).size() == 12 && results(grids[3]).size() == 4; });
   gtk_entry_set_text(search, "no such icon 7193");
   auto *empty = find(popup, "settings_general_icon_empty");
   wait_until([&] { return gtk_widget_get_visible(empty); });
@@ -220,6 +220,21 @@ int main(int argc, char **argv) {
   gtk_button_clicked(choose);
   assert(std::string(gtk_entry_get_text(search)).empty());
   for (std::size_t i = 0; i < grids.size(); ++i) assert(results(grids[i]) == all[i]);
+  select_last(grids[3], scroll);
+  assert(general_connection_icon(settings_widget_draft_store(state)) == all[3].back());
+  wait_until([&] { return pixels(preview) != black_pixels && pixels(preview) != noto_pixels; });
+  gtk_button_clicked(GTK_BUTTON(find(root, "settings_save_button")));
+  assert(saved && general_connection_icon(*saved) == all[3].back());
+  assert(save_settings(*saved, path).saved);
+  assert(general_connection_icon(load_settings({.config_path = path, .startup_config_path = std::nullopt,
+      .global_config_path = std::nullopt}, 12).store) == all[3].back());
+  gtk_button_clicked(GTK_BUTTON(find(root, "settings_general_icon_reset")));
+  gtk_button_clicked(choose);
+  for (auto *grid : grids) {
+    auto *selection = gtk_icon_view_get_selected_items(GTK_ICON_VIEW(grid));
+    assert(selection == nullptr && "the default icon must not retain a preset selection");
+  }
+  assert(gtk_adjustment_get_value(adjustment) == 0);
   gtk_widget_destroy(window);
   std::filesystem::remove_all(directory);
   g_free(directory);
