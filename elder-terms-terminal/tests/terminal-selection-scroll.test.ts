@@ -188,7 +188,8 @@ describe.concurrent('terminal selection autoscroll video', () => {
                   Math.trunc(bounds.y + row * layout.cellHeight)
                 );
               };
-              const observe = async (label: string) => {
+              const observe = async (label: string, stableFrames: number) => {
+                const firstFrame = frames.length;
                 const observed = await waitForResult(async () => {
                   expect(failure).toBe('');
                   const current = await state();
@@ -202,7 +203,17 @@ describe.concurrent('terminal selection autoscroll video', () => {
                       image.data.copy(rgb, to, from, from + 3);
                     }
                   const hash = createHash('sha256').update(rgb).digest('hex');
-                  expect(frames[frames.length - 1]?.hash).toBe(hash);
+                  // A settled model can precede the final X11 paint. Require
+                  // fresh recorded frames so a matching buffered image cannot
+                  // become the baseline for the release stability check.
+                  expect(frames.length).toBeGreaterThanOrEqual(
+                    firstFrame + stableFrames
+                  );
+                  expect(
+                    frames
+                      .slice(-stableFrames)
+                      .every((frame) => frame.hash === hash)
+                  ).toBe(true);
                   expect((await state()).position).toBe(current.position);
                   return {
                     label,
@@ -220,7 +231,7 @@ describe.concurrent('terminal selection autoscroll video', () => {
               };
               const modifier = rectangular ? 'control' : 'shift';
               try {
-                const before = await observe('before');
+                const before = await observe('before', 1);
                 await move(7.5, 0.5);
                 await app.input.scrollWheel(0, -2);
                 await waitForResult(async () =>
@@ -229,7 +240,7 @@ describe.concurrent('terminal selection autoscroll video', () => {
                 await waitForResult(async () =>
                   expect(frames[frames.length - 1]?.hash).not.toBe(before.hash)
                 );
-                const scrolled = await observe('wheel-up');
+                const scrolled = await observe('wheel-up', 1);
                 expect(scrolled.hash).not.toBe(before.hash);
                 await app.input.scrollWheel(0, 2);
                 await waitForResult(async () =>
@@ -238,7 +249,7 @@ describe.concurrent('terminal selection autoscroll video', () => {
                 await waitForResult(async () =>
                   expect(frames[frames.length - 1]?.hash).toBe(before.hash)
                 );
-                expect((await observe('wheel-down')).hash).toBe(before.hash);
+                expect((await observe('wheel-down', 1)).hash).toBe(before.hash);
                 // Run the complete product workflow before the video checks:
                 // normal selection, Escape, link click, rectangle from that
                 // link, and a wheel extension with Ctrl still held.
@@ -292,7 +303,7 @@ describe.concurrent('terminal selection autoscroll video', () => {
                   )
                 );
                 await move(3.9, 0.5);
-                const up = await observe('up');
+                const up = await observe('up', 1);
                 expect(frames[up.frame]?.gray).toBeGreaterThan(
                   (width * height) / 10
                 );
@@ -306,7 +317,8 @@ describe.concurrent('terminal selection autoscroll video', () => {
                 });
                 await move(rectangular ? 0.1 : 3.9, 0.5);
                 const more = await observe(
-                  rectangular ? 'zero-width' : 'further-up'
+                  rectangular ? 'zero-width' : 'further-up',
+                  1
                 );
                 expect(more.position).toBeLessThan(up.position - 6);
                 expect(
@@ -330,7 +342,7 @@ describe.concurrent('terminal selection autoscroll video', () => {
                     expect(current.rows).toBeGreaterThan(layout.rows);
                 });
                 await move(3.9, 0.5);
-                const restored = await observe('expanded');
+                const restored = await observe('expanded', 1);
                 expect(frames[restored.frame]?.gray).toBeGreaterThan(
                   (width * height) / 10
                 );
@@ -342,7 +354,7 @@ describe.concurrent('terminal selection autoscroll video', () => {
                 );
                 await app.input.setMouseButton('left', false);
                 await app.input.setModifier(modifier, false);
-                const stopped = await observe('released');
+                const stopped = await observe('released', 10);
                 await waitForResult(async () => {
                   expect(frames.length).toBeGreaterThan(stopped.frame + 10);
                   expect((await state()).position).toBe(stopped.position);
@@ -357,7 +369,7 @@ describe.concurrent('terminal selection autoscroll video', () => {
                 await waitForResult(async () =>
                   expect((await state()).selected).toBe(false)
                 );
-                const cleared = await observe('cleared');
+                const cleared = await observe('cleared', 1);
                 expect(frames[cleared.frame]?.gray).toBeLessThan(
                   (width * height) / 100
                 );
