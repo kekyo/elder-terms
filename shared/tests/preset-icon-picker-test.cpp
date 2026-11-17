@@ -172,6 +172,10 @@ int main(int argc, char **argv) {
   SettingsWidgetOptions restored;
   restored.store = load_settings({.config_path = path, .startup_config_path = std::nullopt,
       .global_config_path = std::nullopt}, 12).store;
+  restored.callbacks.save = [&](const SettingsStore &store, SettingsWidgetAction action) {
+    saved = store;
+    action.complete(true, {});
+  };
   auto *reopened = create_settings_widget(std::move(restored));
   auto *reopened_root = settings_widget_root(reopened);
   auto *reopened_window = gtk_window_new(GTK_WINDOW_TOPLEVEL);
@@ -191,6 +195,63 @@ int main(int argc, char **argv) {
       "settings_general_icon_family"))) == 1);
   assert(gtk_toggle_button_get_active(GTK_TOGGLE_BUTTON(find(reopened_popup,
       "settings_general_icon_color_white"))));
+  auto *search = find(reopened_popup, "settings_general_icon_search");
+  assert(GTK_IS_SEARCH_ENTRY(search));
+  wait_until([&] { return gtk_window_get_focus(GTK_WINDOW(reopened_window)) == search; });
+  auto *searched_grid = GTK_ICON_VIEW(find(reopened_popup, "settings_general_icon_grid"));
+  auto *searched_family = GTK_COMBO_BOX(find(reopened_popup, "settings_general_icon_family"));
+  const auto material_count = gtk_tree_model_iter_n_children(gtk_icon_view_get_model(searched_grid), nullptr);
+  auto results = [&] {
+    std::vector<std::string> specifications;
+    auto *model = gtk_icon_view_get_model(searched_grid);
+    GtkTreeIter row;
+    if (gtk_tree_model_get_iter_first(model, &row)) do {
+      unsigned int index;
+      gtk_tree_model_get(model, &row, 1, &index, -1);
+      specifications.push_back(connection_icon_presets()[index].specification);
+    } while (gtk_tree_model_iter_next(model, &row));
+    return specifications;
+  };
+  for (const char *query : {"FoLdEr_OpEn", "folder open", "FILE/FOLDER_OPEN"}) {
+    gtk_entry_set_text(GTK_ENTRY(search), query);
+    wait_until([&] { return results() == std::vector<std::string>{"material:file/folder_open"}; });
+  }
+  g_signal_emit_by_name(search, "search-changed");
+  auto *first = gtk_tree_path_new_from_indices(0, -1);
+  gtk_icon_view_select_path(searched_grid, first);
+  g_signal_emit_by_name(search, "search-changed");
+  assert(gtk_icon_view_path_is_selected(searched_grid, first));
+  gtk_tree_path_free(first);
+  assert(!settings_widget_is_dirty(reopened));
+  gtk_combo_box_set_active(searched_family, 0);
+  wait_until([&] { return results().empty(); });
+  gtk_entry_set_text(GTK_ENTRY(search), "FACE");
+  wait_until([&] { return !results().empty(); });
+  for (const auto &specification : results()) assert(specification.starts_with("noto:"));
+  gtk_combo_box_set_active(searched_family, 1);
+  wait_until([&] { return !results().empty(); });
+  for (const auto &specification : results()) assert(specification.starts_with("material:"));
+  gtk_entry_set_text(GTK_ENTRY(search), "no such icon 7193");
+  wait_until([&] { return results().empty(); });
+  auto *empty = find(reopened_popup, "settings_general_icon_empty");
+  assert(GTK_IS_LABEL(empty) && gtk_widget_get_visible(empty));
+  gtk_entry_set_text(GTK_ENTRY(search), "");
+  wait_until([&] { return static_cast<int>(results().size()) == material_count; });
+  assert(!gtk_widget_get_visible(empty));
+  // Immediate Enter must use the new text even before delayed filtering runs.
+  gtk_entry_set_text(GTK_ENTRY(search), "folder open");
+  g_signal_emit_by_name(search, "activate");
+  assert(!gtk_widget_get_visible(reopened_popup));
+  const std::string searched_specification = "material:white:file/folder_open";
+  assert(general_connection_icon(settings_widget_draft_store(reopened)) == searched_specification);
+  gtk_button_clicked(GTK_BUTTON(find(reopened_root, "settings_save_button")));
+  assert(saved && general_connection_icon(*saved) == searched_specification);
+  assert(save_settings(*saved, path).saved);
+  assert(general_connection_icon(load_settings({.config_path = path, .startup_config_path = std::nullopt,
+      .global_config_path = std::nullopt}, 12).store) == searched_specification);
+  gtk_button_clicked(GTK_BUTTON(find(reopened_root, "settings_general_icon_choose")));
+  assert(std::string(gtk_entry_get_text(GTK_ENTRY(search))).empty());
+  assert(gtk_tree_model_iter_n_children(gtk_icon_view_get_model(searched_grid), nullptr) == material_count);
   gtk_widget_destroy(reopened_window);
   std::filesystem::remove_all(directory);
   g_free(directory);

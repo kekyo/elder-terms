@@ -2650,3 +2650,9 @@ msgstr "तेज़"
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "must be disabled, weak, medium, or strong"
 msgstr "disabled, weak, medium या strong होना चाहिए"
+
+msgid "Search icons…"
+msgstr "आइकन खोजें…"
+
+msgid "No matching icons"
+msgstr "कोई मेल खाने वाला आइकन नहीं"
