@@ -232,7 +232,7 @@ for (const scheme of ['http', 'https', 'https-prompt', 'https-abort'])
         'file_transfer_receive_item',
         'file_transfer_receive_file_item',
       ])
-        expect((await (await app.getById(id)).info()).states).not.toContain(
+        expect((await (await app.getById(id)).info()).states).toContain(
           'sensitive'
         );
       await app.input.pressKey('Escape');
@@ -242,7 +242,7 @@ for (const scheme of ['http', 'https', 'https-prompt', 'https-abort'])
         await app.getById('file_transfer_local_tree'),
         'table'
       );
-      await localTree.selectRow(0);
+      expect(await localTree.selectedRows()).toEqual([]);
       await clickRow('document.html', 'right');
       for (const id of ['new_directory', 'rename', 'delete'])
         expect(

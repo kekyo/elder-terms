@@ -301,7 +301,7 @@ it.for(['auto', '1'])(
         );
       expect(
         (await (await app.getById('file_transfer_receive_item')).info()).states
-      ).not.toContain('sensitive');
+      ).toContain('sensitive');
       await evidence.captureEvidence('smb-shares', async () => app.capture());
       await app.input.pressKey('Escape');
       const localTree = expectElementKind(
@@ -311,6 +311,7 @@ it.for(['auto', '1'])(
       await waitForResult(async () =>
         expect(await localTree.getRowCount()).toBe(1)
       );
+      expect(await localTree.selectedRows()).toEqual([]);
       const localBounds = (await (await localTree.cellAt(0, 0))!.capture())
         .bounds;
       await app.input.moveMouseTo(
@@ -323,6 +324,16 @@ it.for(['auto', '1'])(
         (await (await app.getById('file_transfer_send_item')).info()).states
       ).toContain('sensitive');
       await app.input.pressKey('Escape');
+      // An unselected virtual share list is still not an upload destination.
+      for (const selected of await tree.selectedRows())
+        await tree.deselectRow(selected);
+      await app.input.setMouseButton('right', true);
+      await app.input.setMouseButton('right', false);
+      expect(
+        (await (await app.getById('file_transfer_send_item')).info()).states
+      ).not.toContain('sensitive');
+      await app.input.pressKey('Escape');
+      await tree.selectRow(shareRow);
       const treeBounds = (await tree.capture()).bounds;
       await app.input.moveMouseTo(
         treeBounds.x + 10,
@@ -392,7 +403,8 @@ it.for(['auto', '1'])(
       expect(await rowFor('single.txt')).toBeGreaterThanOrEqual(0);
       expect(await rowFor('folder')).toBeGreaterThanOrEqual(0);
       for (const name of ['single.txt', 'folder']) {
-        await selectCurrentTransferDirectory(app, false);
+        for (const selected of await localTree.selectedRows())
+          await localTree.deselectRow(selected);
         for (const selected of await tree.selectedRows())
           await tree.deselectRow(selected);
         const row = await rowFor(name);
@@ -414,7 +426,6 @@ it.for(['auto', '1'])(
           expect((await receive.info()).states).toContain('showing');
         });
         await receive.click();
-        await openTransferDirectory(app, false, local);
       }
       await waitForResult(
         async () => {
