@@ -476,6 +476,12 @@ static boxrig_input_mouse_route route_mouse(
   }
   if (runtime->selection_release_pending && event->action == BOXRIG_MOUSE_MOTION)
     return BOXRIG_INPUT_MOUSE_ROUTE_TERMINAL;
+  if (press && event->click_count > 1 && runtime->selection_phase == SelectionPhase::pending) {
+    // GDK sends the ordinary press first. Promote that pending click to the
+    // word/line selection below instead of waiting for drag motion or release.
+    runtime->selection_phase = SelectionPhase::idle;
+    runtime->selection_press = {};
+  }
   if (runtime->selection_phase == SelectionPhase::pending) {
     if (event->action != BOXRIG_MOUSE_MOTION && !release) return BOXRIG_INPUT_MOUSE_ROUTE_APPLICATION;
     const auto &press = runtime->selection_press;

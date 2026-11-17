@@ -45,6 +45,7 @@
 #include "../../../shared/src/connection-runtime/activity-indicator.h"
 #include "../../../shared/src/connection-runtime/compact-header.h"
 #include "../../../shared/src/connection-runtime/titlebar-effects.h"
+#include "../../../shared/src/connection-runtime/window-resize-border.h"
 #include "../../../shared/src/connection-runtime/indicator-color.h"
 #include "local-file-reveal.h"
 #include "../../../shared/src/connection-runtime/widget-background.h"
@@ -93,7 +94,8 @@ enum FileTransferTreeColumn {
   file_transfer_tree_icon_column = 7,
   // A listing identity stays stable even when HTTP expansion follows a redirect.
   file_transfer_tree_identity_column = 8,
-  file_transfer_tree_column_count = 9,
+  file_transfer_tree_loading_column = 9,
+  file_transfer_tree_column_count = 10,
 };
 
 struct FileTransferGObjectDeleter {
@@ -135,6 +137,9 @@ struct FileTransferPaneState {
   GtkWidget *refresh_button = nullptr;
   GtkWidget *tree = nullptr;
   GtkTreeStore *store = nullptr;
+  GtkTreeRowReference *loading_row = nullptr;
+  guint loading_tick = 0;
+  guint loading_pulse = 0;
   GtkWidget *menu = nullptr;
   GtkWidget *transfer_item = nullptr;
   GtkWidget *receive_file_item = nullptr;
@@ -381,7 +386,7 @@ static void set_browser_row(
   gtk_tree_store_set(store, iterator,
       file_transfer_tree_loaded_column,
       attributes.type != RemoteFileType::directory && attributes.type != RemoteFileType::unresolved,
-      file_transfer_tree_dummy_column, FALSE, -1);
+      file_transfer_tree_dummy_column, FALSE, file_transfer_tree_loading_column, FALSE, -1);
   if (attributes.type == RemoteFileType::directory || attributes.type == RemoteFileType::unresolved) {
     append_dummy_row(store, iterator);
   }
@@ -427,6 +432,54 @@ static void replace_dummy_with_browser_entries(
   for (; entry != entries.cend(); ++entry) {
     append_browser_row(store, parent, *entry);
   }
+}
+
+static void stop_file_transfer_loading(FileTransferPaneState *pane) {
+  if (pane->loading_tick) {
+    gtk_widget_remove_tick_callback(pane->tree, pane->loading_tick);
+    pane->loading_tick = 0;
+  }
+  if (!pane->loading_row) return;
+  auto *path = gtk_tree_row_reference_get_path(pane->loading_row);
+  GtkTreeIter row;
+  if (path && !pane->window->destroyed && gtk_tree_model_get_iter(GTK_TREE_MODEL(pane->store), &row, path))
+    gtk_tree_store_set(pane->store, &row, file_transfer_tree_loading_column, FALSE, -1);
+  if (path) gtk_tree_path_free(path);
+  gtk_tree_row_reference_free(pane->loading_row);
+  pane->loading_row = nullptr;
+}
+
+static void start_file_transfer_loading(FileTransferPaneState *pane, GtkTreeIter *parent) {
+  if (!pane->remote) return;
+  stop_file_transfer_loading(pane);
+  GtkTreeIter row;
+  if (!gtk_tree_model_iter_children(GTK_TREE_MODEL(pane->store), &row, parent)) return;
+  auto *path = gtk_tree_model_get_path(GTK_TREE_MODEL(pane->store), &row);
+  pane->loading_row = gtk_tree_row_reference_new(GTK_TREE_MODEL(pane->store), path);
+  gtk_tree_path_free(path);
+  if (!pane->loading_row) return;
+  gtk_tree_store_set(pane->store, &row, file_transfer_tree_loading_column, TRUE, -1);
+  pane->loading_tick = gtk_widget_add_tick_callback(pane->tree,
+      +[](GtkWidget *tree, GdkFrameClock *clock, gpointer data) -> gboolean {
+        auto *pane = static_cast<FileTransferPaneState *>(data);
+        const auto pulse = static_cast<guint>(gdk_frame_clock_get_frame_time(clock) / 100000);
+        if (pulse == pane->loading_pulse) return G_SOURCE_CONTINUE;
+        pane->loading_pulse = pulse;
+        auto *spinner = static_cast<GtkCellRenderer *>(g_object_get_data(G_OBJECT(tree), "loading-spinner"));
+        g_object_set(spinner, "pulse", pulse, nullptr);
+        // Redraw only the loading row. The frame clock pauses with the widget,
+        // and completion removes this callback rather than polling the request.
+        auto *path = gtk_tree_row_reference_get_path(pane->loading_row);
+        if (path) {
+          auto *view = GTK_TREE_VIEW(tree);
+          GdkRectangle area{};
+          gtk_tree_view_get_background_area(view, path, gtk_tree_view_get_column(view, 0), &area);
+          gtk_tree_path_free(path);
+          gtk_tree_view_convert_bin_window_to_widget_coords(view, area.x, area.y, &area.x, &area.y);
+          gtk_widget_queue_draw_area(tree, area.x, area.y, area.width, area.height);
+        }
+        return G_SOURCE_CONTINUE;
+      }, pane, nullptr);
 }
 
 static cardio::promise<GFileEnumerator *>
@@ -608,17 +661,19 @@ selected_file_transfer_items(FileTransferPaneState *pane);
 static std::optional<std::string> selected_file_transfer_destination(
     FileTransferPaneState *pane) {
   const auto items = selected_file_transfer_items(pane);
-  if (items.size() != 1 || (items.front().type != RemoteFileType::directory &&
+  if (items.size() > 1 || (!items.empty() && items.front().type != RemoteFileType::directory &&
       items.front().type != RemoteFileType::regular))
     return std::nullopt;
   if (pane->remote && (!pane->window->connection_available || !pane->window->client))
     return std::nullopt;
   // Derive the destination from the operation identity; display paths can be
   // ambiguous, and a selected file supplies its parent rather than its own path.
-  const auto &item = items.front();
-  const auto destination = item.type == RemoteFileType::directory ? item.path
-      : pane->remote ? pane->window->client->parent_path(item.path)
-                     : local_parent_directory(item.path);
+  // Without a selected row, use the loaded folder, not an uncommitted address edit.
+  const auto destination = items.empty() ? pane->current_directory
+      : items.front().type == RemoteFileType::directory ? items.front().path
+      : pane->remote ? pane->window->client->parent_path(items.front().path)
+                     : local_parent_directory(items.front().path);
+  if (destination.empty()) return std::nullopt;
   if (pane->remote && !pane->window->client->path_capabilities(destination).create_children)
     return std::nullopt;
   return destination;
@@ -688,6 +743,7 @@ static void set_file_transfer_pane_busy(FileTransferPaneState *pane, bool busy) 
   // Transfer completion can precede the directory refresh. Keep stale rows and
   // paths unavailable until the replacement snapshot has been applied.
   pane->busy = busy;
+  if (!busy) stop_file_transfer_loading(pane);
   update_file_transfer_sensitivity(pane->window);
 }
 
@@ -1242,6 +1298,7 @@ static void on_file_transfer_row_expanded(
   }
   pane->task.reset();
   set_file_transfer_pane_busy(pane, true);
+  start_file_transfer_loading(pane, iterator);
   pane->task.emplace(expand_file_transfer_directory_async(
       pane, reference, directory, pane->generation));
 }
@@ -2226,6 +2283,7 @@ static void on_file_transfer_window_destroy(GtkWidget *, gpointer data) {
   if (window == nullptr || window->destroyed) {
     return;
   }
+  stop_file_transfer_loading(&window->remote);
   if (window->settings_close_idle != 0) {
     g_source_remove(window->settings_close_idle);
     window->settings_close_idle = 0;
@@ -2349,12 +2407,20 @@ static void render_file_transfer_tree_cell_text(
       cr, cell_area->x, cell_area->y, cell_area->width,
       cell_area->height);
   cairo_clip(cr);
-  if (auto *icon = static_cast<cairo_surface_t *>(g_object_get_data(G_OBJECT(renderer), "node-icon"))) {
+  auto *icon = static_cast<cairo_surface_t *>(g_object_get_data(G_OBJECT(renderer), "node-icon"));
+  const bool loading = g_object_get_data(G_OBJECT(renderer), "node-loading") != nullptr;
+  if (icon || loading) {
     const bool rtl = gtk_widget_get_direction(widget) == GTK_TEXT_DIR_RTL;
-    cairo_set_source_surface(cr, icon,
+    const GdkRectangle glyph_area{
         rtl ? cell_area->x + cell_area->width - 18 : cell_area->x + 2,
-        cell_area->y + (cell_area->height - 16) / 2);
-    cairo_paint(cr);
+        cell_area->y + (cell_area->height - 16) / 2, 16, 16};
+    if (loading) {
+      auto *spinner = static_cast<GtkCellRenderer *>(g_object_get_data(G_OBJECT(widget), "loading-spinner"));
+      gtk_cell_renderer_render(spinner, cr, widget, &glyph_area, &glyph_area, flags);
+    } else {
+      cairo_set_source_surface(cr, icon, glyph_area.x, glyph_area.y);
+      cairo_paint(cr);
+    }
     if (!rtl) adjusted_cell_area.x += 20;
     adjusted_cell_area.width = std::max(0, adjusted_cell_area.width - 20);
   }
@@ -2493,7 +2559,10 @@ static void render_file_transfer_node_icon(GtkTreeViewColumn *, GtkCellRenderer 
         +[](gpointer value) { delete static_cast<Surfaces *>(value); });
   }
   gchar *name = nullptr;
-  gtk_tree_model_get(model, iterator, file_transfer_tree_icon_column, &name, -1);
+  gboolean loading = FALSE;
+  gtk_tree_model_get(model, iterator, file_transfer_tree_icon_column, &name,
+      file_transfer_tree_loading_column, &loading, -1);
+  g_object_set_data(G_OBJECT(renderer), "node-loading", GINT_TO_POINTER(loading));
   const std::string icon = name ? name : "editor/insert_drive_file";
   g_free(name);
   const int scale = gtk_widget_get_scale_factor(tree);
@@ -2557,9 +2626,13 @@ static GtkWidget *create_file_transfer_tree(FileTransferPaneState *pane,
   pane->store = gtk_tree_store_new(
       file_transfer_tree_column_count, G_TYPE_STRING, G_TYPE_STRING,
       G_TYPE_STRING, G_TYPE_STRING, G_TYPE_INT, G_TYPE_BOOLEAN,
-      G_TYPE_BOOLEAN, G_TYPE_STRING, G_TYPE_STRING);
+      G_TYPE_BOOLEAN, G_TYPE_STRING, G_TYPE_STRING, G_TYPE_BOOLEAN);
   GtkWidget *tree = gtk_tree_view_new_with_model(
       GTK_TREE_MODEL(pane->store));
+  auto *spinner = gtk_cell_renderer_spinner_new();
+  g_object_set(spinner, "active", TRUE, "size", GTK_ICON_SIZE_MENU, nullptr);
+  gtk_cell_renderer_set_padding(spinner, 0, 0);
+  g_object_set_data_full(G_OBJECT(tree), "loading-spinner", g_object_ref_sink(spinner), g_object_unref);
   gestament_gtk_assign_accessible_id(tree, accessible_id);
   gtk_tree_view_set_enable_tree_lines(GTK_TREE_VIEW(tree), TRUE);
   gtk_tree_view_set_rubber_banding(GTK_TREE_VIEW(tree), TRUE);
@@ -3132,9 +3205,9 @@ create_file_transfer_window(FileTransferWindowOptions options) {
                     state->root_overlay);
   GtkWidget *root = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
   gtk_container_add(GTK_CONTAINER(state->root_overlay), root);
-  state->frame_start_border = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-  state->frame_end_border = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-  state->frame_bottom_border = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+  state->frame_start_border = gtk_event_box_new();
+  state->frame_end_border = gtk_event_box_new();
+  state->frame_bottom_border = gtk_event_box_new();
   for (GtkWidget *border : {state->frame_start_border,
                             state->frame_end_border,
                             state->frame_bottom_border}) {
@@ -3203,6 +3276,8 @@ create_file_transfer_window(FileTransferWindowOptions options) {
       GTK_BOX(content), state->status_bar, FALSE, TRUE, 0);
   gtk_box_pack_start(GTK_BOX(content), state->frame_bottom_border,
                      FALSE, TRUE, 0);
+  install_window_resize_borders(GTK_WINDOW(state->window), state->frame_start_border,
+      state->frame_end_border, state->frame_bottom_border);
   state->status_label = gtk_label_new(_("Connecting"));
   gestament_gtk_assign_accessible_id(
       state->status_label, "file_transfer_status_label");
@@ -3509,6 +3584,7 @@ void set_file_transfer_window_connection_available(
                                  ? FileTransferConnectionState::ready
                                  : FileTransferConnectionState::disconnected;
   if (!available) {
+    stop_file_transfer_loading(&window->remote);
     disconnect_file_transfer_queue(window->jobs, false);
     if (window->transfer_cancel_source.has_value()) {
       (void)window->transfer_cancel_source->cancel();

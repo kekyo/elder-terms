@@ -2669,3 +2669,9 @@ msgstr "قوي"
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "must be disabled, weak, medium, or strong"
 msgstr "يجب أن تكون القيمة disabled أو weak أو medium أو strong"
+
+msgid "Search icons…"
+msgstr "ابحث عن الأيقونات…"
+
+msgid "No matching icons"
+msgstr "لا توجد أيقونات مطابقة"

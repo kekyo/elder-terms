@@ -10,7 +10,75 @@ import { PNG } from 'pngjs';
 import { expect, it } from 'vitest';
 import { waitForResult } from 'gestament/testing';
 import type { GtkElementOfKind } from 'gestament';
-import { expectElementKind, runSharedGtkTest } from './test-helpers';
+import { expectElementKind, runSharedGtkTest } from './test-helpers.ts';
+
+it('types an icon name on opening the picker and saves the filtered result', async (context) => {
+  const temporary = await mkdtemp(join(tmpdir(), 'elder-icon-search-'));
+  const configuration = join(temporary, 'connection.ini');
+  try {
+    await runSharedGtkTest(
+      context,
+      [
+        `--save-file=${configuration}`,
+        '--connection=general.icon=material:white:hardware/computer',
+      ],
+      async ({ app, directory }) => {
+        await expectElementKind(
+          await app.getById('settings_general_icon_choose'),
+          'button'
+        ).click();
+        const search = expectElementKind(
+          await app.getById('settings_general_icon_search'),
+          'entry'
+        );
+        const grid = expectElementKind(
+          await app.getById('settings_general_icon_grid'),
+          'container'
+        );
+        const total = await grid.getChildCount();
+        for (const key of 'folder') await app.input.pressKey(key);
+        await waitForResult(async () => {
+          expect(await search.text()).toBe('folder');
+          expect(await grid.getChildCount()).toBeGreaterThan(1);
+          expect(await grid.getChildCount()).toBeLessThan(total);
+        });
+        const popup = await app.getById('settings_general_icon_picker');
+        await writeFile(
+          join(directory, 'filtered-icons.png'),
+          (await popup.capture()).image
+        );
+        await search.setText('FoLdEr_OpEn');
+        await waitForResult(async () => {
+          expect(await grid.getChildCount()).toBe(1);
+          expect((await (await grid.childAt(0))!.info()).name).toBe(
+            'folder open'
+          );
+        });
+        await app.input.pressKey('Return');
+        await waitForResult(async () => {
+          expect((await popup.info()).states).not.toContain('showing');
+          expect(
+            await expectElementKind(
+              await app.getById('settings_general_icon_selection'),
+              'label'
+            ).text()
+          ).toBe('folder open (White)');
+        });
+        await expectElementKind(
+          await app.getById('settings_save_button'),
+          'button'
+        ).click();
+        await waitForResult(async () =>
+          expect(await readFile(configuration, 'utf8')).toContain(
+            'icon=material:white:file/folder_open'
+          )
+        );
+      }
+    );
+  } finally {
+    await rm(temporary, { recursive: true, force: true });
+  }
+});
 
 it('scrolls through both preset families and saves a clicked icon', async (context) => {
   const temporary = await mkdtemp(join(tmpdir(), 'elder-icon-picker-'));

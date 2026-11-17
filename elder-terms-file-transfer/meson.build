@@ -340,6 +340,7 @@ file_transfer_window_lifetime_test = executable(
   'file-transfer-window-lifetime-test',
   [
     '../shared/src/connection-runtime/compact-header.cpp',
+    '../shared/src/connection-runtime/window-resize-border.cpp',
     'tests/cpp/file-transfer-window-lifetime-test.cpp',
     '../shared/src/connection-runtime/titlebar-effect-state.cpp',
     '../shared/src/connection-runtime/titlebar-effects.cpp',

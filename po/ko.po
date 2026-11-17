@@ -2651,3 +2651,9 @@ msgstr "강"
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "must be disabled, weak, medium, or strong"
 msgstr "disabled, weak, medium 또는 strong이어야 합니다"
+
+msgid "Search icons…"
+msgstr "아이콘 검색…"
+
+msgid "No matching icons"
+msgstr "일치하는 아이콘이 없습니다"

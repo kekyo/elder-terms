@@ -234,6 +234,13 @@ it.for([2, 3, 4])(
       };
       if (version === 2) {
         // The common parent only groups exports; it cannot accept uploads.
+        for (const row of await remote.selectedRows())
+          await remote.deselectRow(row);
+        await select(localTree, '送信表', 'right');
+        expect(
+          (await (await app.getById('file_transfer_send_item')).info()).states
+        ).not.toContain('sensitive');
+        await app.input.pressKey('Escape');
         await select(remote, '/srv', 'left');
         await select(localTree, '送信表', 'right');
         expect(
