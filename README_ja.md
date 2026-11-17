@@ -215,8 +215,8 @@ elder-termsの設定値には、次の三種類があります。後に挙げる
 
 ![接続アイコンの選択画面](./images/connection-icon-picker.png)
 
-各接続の「一般」タブにある「アイコンを選択…」から、Noto Color EmojiまたはMaterial Iconsの画像を選べます。
-Material Iconsは黒・白の図柄を選択できます。「画像ファイルを選択…」からPNG・JPEGも指定できます。
+各接続の「一般」タブにある「アイコンを選択…」から、Emoji、Material (Black)、Material (White)、Glyphs Polyの画像を選べます。
+種別ごとに並んだ一覧をスクロールするか、共通の検索欄から探してください。「画像ファイルを選択…」からPNG・JPEGも指定できます。
 「デフォルトアイコン」でelder-terms標準の画像へ戻ります。プリセットは同梱されているため、ダウンロードは不要です。
 
 アイコンはタイトルバー、ランチャーの接続一覧、トレイの接続メニューに表示します。
@@ -287,10 +287,10 @@ FTP、FTPS、SFTP、WebDAV、SMBの転送画面では、左にローカル、右
 名前の前のアイコンで、フォルダー、文書、画像、ソースコード、圧縮ファイル、リンクなどを見分けられます。
 SMB共有のアイコンは通常のフォルダーと異なります。
 
-転送先の一覧でフォルダーか通常のファイルを1つ選んでから、転送元の項目を右クリックし、「送信」または「受信」を選びます。
-送信先は右側のRemote、受信先は左側のLocalで選びます。フォルダーを選ぶとその配下へ、ファイルを選ぶとそのファイルがあるフォルダーへ転送します。
-転送先が未選択の場合、シンボリックリンクを選んだ場合、複数選んだ場合は、送受信を選べません。
-パス欄の場所は転送先として使いません。現在開いているフォルダーへ転送するには、その直下のファイルを選ぶか、「Up」で親へ移動して、そのフォルダーを選んでください。
+転送元の項目を右クリックして「送信」または「受信」を選びます。
+送信先は右側のRemote、受信先は左側のLocalです。転送先の一覧で何も選んでいない場合は、そこで現在開いているフォルダーへ転送します。
+フォルダーを1つ選ぶとその配下へ、通常のファイルを1つ選ぶとそのファイルがあるフォルダーへ転送します。
+パス欄を編集しても、Enterで移動するまでは転送先は変わりません。シンボリックリンクや複数の項目を転送先として選ぶと、送受信を選べません。
 一度の操作で選んだ項目を、一つの転送ジョブとして画面下部の「転送ジョブ」に追加します。
 転送先は指示した時点で確定します。その後に選択を変えても、登録済みのジョブの転送先は変わりません。転送中に追加したジョブは順番に実行します。
 
@@ -442,6 +442,9 @@ Local接続では、Localタブの「起動コマンド」で `elder-terms-termi
 ```
 
 INIでの指定は[設定リファレンス](./docs/ja/configuration.md#ローカルの起動コマンド)を参照してください。
+
+親環境の設定にかかわらず、起動するシェルやコマンドには`COLORTERM=truecolor`を渡し、24ビットカラー対応を通知します。
+`NO_COLOR`と`FORCE_COLOR`はそのまま引き継ぎます。
 
 ## シリアルデバイスの選択
 
@@ -700,7 +703,7 @@ INIの色指定は[設定リファレンス](./docs/ja/configuration.md#ウイ�
 すりガラスは対応するコンポジターへ要求し、背後のデスクトップをぼかします。端末の文字や背景画像はぼかしません。
 設定画面には実際の利用状態を表示します。すりガラスが使えない場合は単純透過へ、透過自体を使えない場合は不透明へ切り替わります。
 「すりガラスを要求しています」は要求が受け付けられた状態です。ぼかしの表示には、コンポジター側の効果設定も影響します。
-対応条件は[boxrigの背景効果](https://github.com/kekyo/boxrig/blob/0.13.0/docs/ja/background.md#osのすりガラス効果を要求する)を参照してください。
+対応条件は[boxrigの背景効果](https://github.com/kekyo/boxrig/blob/0.15.0/docs/ja/background.md#osのすりガラス効果を要求する)を参照してください。
 
 ## 文字色の視認性を改善する
 
@@ -732,7 +735,7 @@ Eのプレビューは標準パレットを使った見本です。接続先が�
 
 選べる色フィルタは一つです。既存のOklchと反転フィルタを同時に指定することはできません。「色の区別を補助」は各方式と併用でき、その再配色の後に反転します。端末に保存された文字や色、通信内容、コピー、ログは変わりません。
 
-背景画像、透過先のデスクトップ、Kitty画像、カラー絵文字そのものの画素は反転しません。透過や画像を重ねた場合の読みやすさは、実際の表示で確認してください。[boxrigの色補正の対象範囲](https://github.com/kekyo/boxrig/blob/0.13.0/docs/ja/color-filters.md)
+背景画像、透過先のデスクトップ、Kitty画像、カラー絵文字そのものの画素は反転しません。透過や画像を重ねた場合の読みやすさは、実際の表示で確認してください。[boxrigの色補正の対象範囲](https://github.com/kekyo/boxrig/blob/0.15.0/docs/ja/color-filters.md)
 
 INIでの指定は[設定リファレンス](./docs/ja/configuration.md#背景と色補正)を参照してください。
 
@@ -761,7 +764,7 @@ ANSI16色は端末の基本パレット、256色は番号で指定する拡張�
 
 補正は表示だけに適用し、送受信内容、端末が保持する色、コピー、ログは変えません。
 背景画像、透過先のデスクトップ、Kitty画像、カラー絵文字の画素は対象外です。
-対象範囲の詳細は[boxrigの表示色補正](https://github.com/kekyo/boxrig/blob/0.13.0/docs/ja/color-filters.md)を参照してください。
+対象範囲の詳細は[boxrigの表示色補正](https://github.com/kekyo/boxrig/blob/0.15.0/docs/ja/color-filters.md)を参照してください。
 
 ## 曖昧幅文字の幅
 
@@ -777,6 +780,21 @@ ANSI16色は端末の基本パレット、256色は番号で指定する拡張�
 
 フォントの幅から、接続先のアプリが想定する列数までは判断できません。
 入力位置や罫線がずれる場合は、接続先に合わせて1列または2列を指定してください。
+
+## 端末の文字配置と画像表示
+
+端末を行と列で区切った1マスをセルと呼びます。行や列を指定して枠や文字を配置する端末内アプリ（TUI）に合わせ、文字は端末が保持するセル順で描きます。
+アラビア文字などの字形をつなぐ処理は使いながら、右から左へ書く文字もセル順を保ちます。ブラウザーの本文のような双方向の並べ替えは行いません。
+選択・コピー・リンクのクリックも、このセル位置に対応します。[boxrigの文字配置](https://github.com/kekyo/boxrig/blob/0.15.0/docs/ja/fonts-and-layout.md)
+
+絵文字表示を指定するVS16（U+FE0F）を追加しても、元の文字の列幅を維持します。例えば、1列の`❤`にVS16を付けた`❤️`も1列です。
+元から幅の広い絵文字、国旗、キーキャップは2列のままで、曖昧幅文字の設定とは別の扱いです。
+
+`█`や`▀`などの塗りつぶしブロックは、セルに沿った矩形で描き、隣り合うブロックの隙間を抑えます。
+網掛け、罫線、結合文字を伴うブロック、IME入力中の文字にはフォントを使います。コピーすると元の文字列が得られます。[boxrigのブロック文字描画](https://github.com/kekyo/boxrig/blob/0.15.0/docs/ja/renderers.md#ブロック文字の描画方式)
+
+Kitty画像プロトコルによる画像表示にも対応しています。接続先のアプリは画像を保存してから配置でき、表示した画像の置換・削除も可能です。
+大きい画像を分割送信する場合も、CairoとOpenGLの両方で表示できます。対応範囲は[boxrigの画像プロトコル](https://github.com/kekyo/boxrig/blob/0.15.0/docs/ja/reference/graphics.md)を参照してください。
 
 ## フォントファミリーの設定
 
@@ -976,7 +994,7 @@ elder-termsに同梱しているライブラリと、それぞれに適用され
 
 | ライブラリ | 用途 | ライセンス |
 | --- | --- | --- |
-| [boxrig](https://github.com/kekyo/boxrig) | 端末の制御シーケンスの解釈と画面描画 | [MIT](https://github.com/kekyo/boxrig/blob/0.13.0/LICENSE) |
+| [boxrig](https://github.com/kekyo/boxrig) | 端末の制御シーケンスの解釈と画面描画 | [MIT](https://github.com/kekyo/boxrig/blob/0.15.0/LICENSE) |
 | [cardio](https://github.com/kekyo/cardio) | 非同期I/O | [MIT](https://github.com/kekyo/cardio/blob/31e8149ce52cdfdaaa48838ca9de39288074885c/LICENSE) |
 | [libxyzm](https://github.com/kekyo/libxyzm) | X/Y/ZMODEMによるファイル転送 | [MIT](https://github.com/kekyo/libxyzm/blob/b1cd04cfd2769bbd1a5a6bc6990d60338b5a3cf5/LICENSE) |
 | [jemalloc](https://github.com/jemalloc/jemalloc) | メモリの確保と管理 | [BSD-2-Clause](https://github.com/jemalloc/jemalloc/blob/7a34f18502e7b222724097cdcd499b437d189acc/COPYING) |
@@ -984,7 +1002,7 @@ elder-termsに同梱しているライブラリと、それぞれに適用され
 | [libdsm](https://github.com/videolabs/libdsm) | SMB1によるファイル転送と共有一覧の取得 | [LGPL-2.1-or-later](https://github.com/videolabs/libdsm/blob/0f3edc6df6ab5950f2550d453035351440f71e31/COPYING) |
 
 boxrigには、utf8proc、libpng、zlibのほか、Unicode、WHATWG Encoding、Waylandプロトコル由来のデータや生成コードが含まれます。
-各コンポーネントのライセンスは、[boxrigのライセンス一覧](https://github.com/kekyo/boxrig/blob/0.13.0/packaging/licenses/README_ja.md)を参照してください。
+各コンポーネントのライセンスは、[boxrigのライセンス一覧](https://github.com/kekyo/boxrig/blob/0.15.0/packaging/licenses/README_ja.md)を参照してください。
 
 配布パッケージには、boxrig、jemalloc、libsmb2、libdsmのライセンスと通知を、`/usr/share/doc/elder-terms/licenses/`内の各ライブラリ名のディレクトリに同梱します。
 libsmb2とlibdsmのディレクトリには対応するソースも収録し、libdsmには適用した修正パッチを添付します。

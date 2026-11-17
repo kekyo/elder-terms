@@ -21,6 +21,7 @@ int main() {
     std::unordered_set<std::string> specifications;
     std::size_t noto_count = 0;
     std::size_t material_count = 0;
+    std::size_t glyphs_count = 0;
     for (const auto &preset : catalog) {
       expect(!preset.name.empty() && !preset.specification.empty(),
              "every preset needs a stable ID and English name");
@@ -30,22 +31,29 @@ int main() {
         ++noto_count;
         expect(preset.specification.starts_with("noto:"),
                "Noto IDs must use their source artwork identifier");
-      } else {
+      } else if (preset.family == elder_terms::ConnectionIconFamily::Material) {
         ++material_count;
         expect(preset.specification.starts_with("material:"),
                "Material IDs must use their source category and icon name");
+      } else {
+        ++glyphs_count;
+        expect(preset.specification.starts_with("glyphs-poly:"),
+               "Glyphs Poly IDs must use their source component name");
+        expect(elder_terms::connection_icon_preset_thumbnail(preset.specification, 32) != nullptr,
+               "every Glyphs Poly selection must resolve to a bundled image");
       }
     }
-    expect(noto_count > 0 && material_count > 0,
-           "both preset families must offer selectable icons");
+    expect(noto_count > 0 && material_count > 0 && glyphs_count > 0,
+           "all preset families must offer selectable icons");
     for (const char *specification : {
-             "noto:emoji_u1f44d", "material:action/home", "material:white:action/home"}) {
+             "noto:emoji_u1f44d", "material:action/home", "material:white:action/home",
+             "glyphs-poly:folder"}) {
       const auto image = elder_terms::connection_icon_preset_thumbnail(
           specification, 64);
       expect(image != nullptr && gdk_pixbuf_get_width(image.get()) == 64 &&
                  gdk_pixbuf_get_height(image.get()) == 64 &&
                  gdk_pixbuf_get_has_alpha(image.get()),
-             "both preset families must resolve to square RGBA thumbnails");
+             "all preset families must resolve to square RGBA thumbnails");
     }
     const auto black = elder_terms::connection_icon_preset_thumbnail("material:action/home", 256);
     const auto white = elder_terms::connection_icon_preset_thumbnail("material:white:action/home", 256);

@@ -467,7 +467,15 @@ static cardio::promise<void> click_scenarios(Fixture *fixture) {
   expect((co_await clipboard(GDK_SELECTION_PRIMARY)).starts_with("alpha"), "drag starts at the original press");
 
   for (const auto type : {GDK_2BUTTON_PRESS, GDK_3BUTTON_PRESS}) {
-    mouse(fixture, type, 1.1, 0.5, 0);
+    // GDK emits an ordinary press before each double/triple-click notification.
+    const unsigned int clicks = type == GDK_2BUTTON_PRESS ? 2 : 3;
+    for (unsigned int click = 1; click <= clicks; ++click) {
+      mouse(fixture, GDK_BUTTON_PRESS, 1.1, 0.5, 0);
+      if (click > 1)
+        mouse(fixture, click == 2 ? GDK_2BUTTON_PRESS : GDK_3BUTTON_PRESS, 1.1, 0.5, 0);
+      if (click < clicks)
+        mouse(fixture, GDK_BUTTON_RELEASE, 1.1, 0.5, GDK_BUTTON1_MASK);
+    }
     co_await barrier(fixture, false);
     boxrig_ui_selection selection{};
     expect(boxrig_ui_view_get_selection(view(fixture), &selection) && selection.kind ==
@@ -1086,7 +1094,8 @@ static cardio::promise<void> copy_scenarios(Fixture *fixture, bool trim) {
   std::string history = "\033[3J\033[2J\033[H\033[?25l0123456789";
   std::string expected = "234";
   const std::string lines[] = {"A界é👩‍💻z  ", "AאבגדZ  ", ""};
-  const std::string slices[] = {"界é👩‍💻", "אבג", trim ? "" : "   "};
+  // The rectangle spans logical columns 2..4 even on right-to-left rows.
+  const std::string slices[] = {"界é👩‍💻", "בגד", trim ? "" : "   "};
   for (int row = 0; row != 90; ++row) {
     history += "\r\n" + lines[row % 3];
     expected += "\n" + slices[row % 3];

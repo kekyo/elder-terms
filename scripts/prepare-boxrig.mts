@@ -3,7 +3,7 @@
 // Under MIT.
 // https://github.com/kekyo/elder-terms/
 
-import { spawn } from "node:child_process";
+import { execFileSync, spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import {
   access,
@@ -126,11 +126,21 @@ if (prepared === undefined) {
 }
 
 // The gitlink records the exact source; pkg-config carries its release version.
+// Package builds retain the host's version so targets need neither npm nor Git.
+const version =
+  prepared === undefined
+    ? execFileSync(
+        join(root, "node_modules/.bin/screw-up"),
+        ["format", "-e", "{version}", "-f"],
+        { cwd: upstream, encoding: "utf8" },
+      ).trim()
+    : (await readFile(join(prepared, "version.txt"), "utf8")).trim();
+if (!version) throw new Error("The boxrig release version is empty");
 const makeArgs = [
   `-j${Math.min(availableParallelism(), 8)}`,
   `BUILD_DIR=${build}`,
   "GTK_OPENGL=1",
-  "BOXRIG_VERSION=0.13.0",
+  `BOXRIG_VERSION=${version}`,
   `PREFIX=${sdk}`,
   ...(prepared === undefined
     ? []

@@ -2673,3 +2673,9 @@ msgstr "Сильная"
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "must be disabled, weak, medium, or strong"
 msgstr "должно быть disabled, weak, medium или strong"
+
+msgid "Search icons…"
+msgstr "Поиск значков…"
+
+msgid "No matching icons"
+msgstr "Подходящие значки не найдены"

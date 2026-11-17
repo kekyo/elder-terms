@@ -480,6 +480,7 @@ validate_deb_package() {
 		usr/share/doc/elder-terms/licenses/connection-icons/NOTO-LICENSE \
 		usr/share/doc/elder-terms/licenses/connection-icons/NOTO-FLAGS-NOTICE \
 		usr/share/doc/elder-terms/licenses/connection-icons/MATERIAL-LICENSE \
+		usr/share/doc/elder-terms/licenses/connection-icons/GLYPHS-LICENSE \
 		usr/share/doc/elder-terms/licenses/connection-icons/UNICODE-LICENSE \
 		usr/share/doc/elder-terms/copyright; do
 		assert_file "$tmp_dir/$required_file"

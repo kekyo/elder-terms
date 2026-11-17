@@ -28,7 +28,9 @@ Responses with `text/html` or `application/xhtml+xml` are normally expanded. Att
 
 ## Receive files and directories
 
-Select one folder or regular file in Local, then select one or more items in Remote and choose the receive mode from the context menu. Selecting a folder saves into that folder; selecting a file saves into its containing folder. Both receive modes are unavailable when no destination is selected, a symbolic link is selected, or multiple destination items are selected. The Local path field is not used as the destination.
+Select one or more items in Remote and choose the receive mode from the context menu.
+When nothing is selected in Local, files are saved in its currently open folder. Selecting one folder saves into that folder; selecting one regular file saves into its containing folder.
+Editing the Local path field does not change the destination until you press Enter to navigate. Both receive modes are unavailable when a symbolic link or multiple destination items are selected in Local.
 
 ![Context menu offering Receive as directory and Receive as file](../../images/http-receive-menu.png)
 

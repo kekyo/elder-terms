@@ -410,6 +410,63 @@ static void test_default_settings() {
               "default local cursor keys should use normal sequences");
 }
 
+static void test_local_terminal_type_round_trip_and_layering() {
+  const auto key = elder_terms::make_setting_key("local", "terminal_type");
+  const auto defaults = create_default_settings(
+      default_terminal_display_settings(1.0), "elder-terms");
+  expect_true(elder_terms::setting_string_value_or_default(
+                  defaults, key, "missing") == "xterm-256color",
+              "the local terminal type should default to xterm-256color");
+
+  const auto global_path = temporary_config_path("global-local-terminal-type");
+  const auto connection_path = temporary_config_path("connection-local-terminal-type");
+  const auto saved_path = temporary_config_path("saved-local-terminal-type");
+  write_config(global_path, "[local]\nterminal_type=xterm\n");
+  write_config(connection_path, "[local]\nterminal_type=xterm-kitty\n");
+  const SettingsLoadOptions options{
+      .config_path = connection_path,
+      .startup_config_path = std::nullopt,
+      .global_config_path = global_path,
+  };
+  auto loaded = load_settings(options, 1.0);
+  expect_true(loaded.loaded && loaded.warnings.empty(),
+              "a configured local terminal type should load without warnings");
+  expect_true(elder_terms::setting_string_value_or_default(
+                  loaded.store, key, "missing") == "xterm-kitty",
+              "the connection terminal type should override the global value");
+  expect_true(save_settings(loaded.store, saved_path).saved,
+              "the local terminal type should save");
+  expect_true(read_config(saved_path).find("terminal_type=xterm-kitty") != std::string::npos,
+              "the saved connection should retain its local terminal type");
+  const auto reloaded = load_settings(SettingsLoadOptions{
+      .config_path = saved_path,
+      .startup_config_path = std::nullopt,
+      .global_config_path = global_path,
+  }, 1.0);
+  expect_true(elder_terms::setting_string_value_or_default(
+                  reloaded.store, key, "missing") == "xterm-kitty",
+              "the saved local terminal type should reload");
+
+  clear_explicit_setting_value(&loaded.store, key);
+  expect_true(elder_terms::setting_string_value_or_default(
+                  loaded.store, key, "missing") == "xterm" &&
+                  setting_value_source(loaded.store, key) == SettingValueSource::global,
+              "clearing the local terminal type should restore global inheritance");
+  for (const auto &invalid : {"", "   "}) {
+    write_config(connection_path, std::string("[local]\nterminal_type=") + invalid + "\n");
+    const auto invalid_loaded = load_settings(options, 1.0);
+    expect_true(warnings_contain(invalid_loaded.warnings,
+                    "invalid configuration value [local] terminal_type"),
+                "an empty local terminal type should report a validation warning");
+    expect_true(elder_terms::setting_string_value_or_default(
+                    invalid_loaded.store, key, "missing") == "xterm",
+                "an invalid local terminal type should use the global fallback");
+  }
+  remove_config(global_path);
+  remove_config(connection_path);
+  remove_config(saved_path);
+}
+
 static void test_local_command_line_setting_round_trip_and_layering() {
   const elder_terms::SettingKey command_line_key =
       elder_terms::local_command_line_setting_key();
@@ -5102,6 +5159,7 @@ int main() {
     elder_terms_settings_test::test_terminal_font_zoom_mode();
     elder_terms_settings_test::test_terminal_font_list_round_trip_and_validation();
     elder_terms_settings_test::test_default_settings();
+    elder_terms_settings_test::test_local_terminal_type_round_trip_and_layering();
     elder_terms_settings_test::test_general_indicator_color_round_trip_and_layering();
     elder_terms_settings_test::
         test_local_command_line_setting_round_trip_and_layering();

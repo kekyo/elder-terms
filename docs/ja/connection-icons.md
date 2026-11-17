@@ -3,6 +3,13 @@
 接続の「一般」タブで「アイコンを選択…」を開き、プリセットまたはPNG・JPEG画像を選びます。
 アイコンは接続ごとの指定で、「接続の既定値」からは継承しません。
 
+プリセットはEmoji、Material (Black)、Material (White)、Glyphs Polyの順に並びます。
+一覧をスクロールして選ぶか、上部の検索欄で全種別から探してください。
+検索結果も種別ごとに表示され、Materialの黒と白はそれぞれの一覧から選べます。
+検索は英語名とプリセットIDに対応し、大文字・小文字を区別しません。
+名前の区切りは空白、ハイフン、アンダースコアのどれでも検索できます。
+再び選択画面を開くと、選択中のアイコンの位置へ移動します。
+
 ![プリセットと画像ファイルを選べる接続アイコンの選択画面](../../images/connection-icon-picker.png)
 
 ## 画像ファイルの条件
@@ -39,6 +46,7 @@ GNOMEでは、[キャッシュの更新](https://github.com/GNOME/gnome-shell/bl
 | `noto:emoji_u1f44d` | Noto Color Emojiのプリセット例 |
 | `material:action/home` | 黒い図柄と白い縁取りのMaterial Icons |
 | `material:white:action/home` | 白い図柄と黒い縁取りのMaterial Icons |
+| `glyphs-poly:folder` | Glyphs Polyのフォルダー |
 | `file:/home/user/Pictures/server.png` | 絶対パスで指定したPNGまたはJPEG |
 
 素材の出典は[素材とライセンス](connection-icon-artwork.md)を参照してください。

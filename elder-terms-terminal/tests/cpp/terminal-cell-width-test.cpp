@@ -49,6 +49,8 @@ static boxrig_terminal *core(Fixture *fixture) {
 
 static void check_text(Fixture *fixture) {
   auto *terminal = core(fixture);
+  expect(boxrig_gtk3_terminal_widget_text_direction(terminal_runtime_widget(fixture->window->runtime)) ==
+      BOXRIG_TEXT_DIRECTION_LOGICAL, "retain logical cell order after settings and native widget replacement");
   // Inspect both offscreen history and the current viewport without scrolling.
   for (const bool history : {true, false}) {
     boxrig_cell_view digit{}, following{};
@@ -62,6 +64,19 @@ static void check_text(Fixture *fixture) {
         ? boxrig_terminal_get_text_fragment_cell(terminal, BOXRIG_TEXT_SCREEN_PRIMARY, 0, 1 + fixture->width, &following)
         : boxrig_terminal_get_cell(terminal, 0, 1 + fixture->width, &following)) == BOXRIG_STATUS_OK &&
         std::string_view(following.text, following.text_length) == "B", "following text keeps its assigned column");
+    size_t column = 2 + fixture->width;
+    const struct { const char *text; unsigned width; } samples[] = {
+        {"❤️", 1}, {"X", 1}, {"😀", 2}, {"🇯🇵", 2}, {"1️⃣", 2}, {"Z", 1}};
+    for (const auto &sample : samples) {
+      boxrig_cell_view cell{};
+      expect((history
+          ? boxrig_terminal_get_text_fragment_cell(terminal, BOXRIG_TEXT_SCREEN_PRIMARY, 0, column, &cell)
+          : boxrig_terminal_get_cell(terminal, 0, column, &cell)) == BOXRIG_STATUS_OK &&
+          !cell.continuation && cell.column_width == sample.width &&
+          std::string_view(cell.text, cell.text_length) == sample.text,
+          "VS16 preserves its base width without narrowing emoji, flags or keycaps");
+      column += sample.width;
+    }
   }
 }
 
@@ -69,6 +84,23 @@ static cardio::promise<void> scenarios(Fixture *fixture) {
   auto *runtime = fixture->window->runtime;
   expect(apply_terminal_presentation(fixture->presentation, fixture->settings, nullptr), "apply initial settings");
   while (!terminal_runtime_is_settled(runtime)) co_await fixture->changed.wait();
+  const std::string heart = "❤️";
+  boxrig_text_cluster_measurement heart_width{};
+  expect(boxrig_terminal_measure_text_cluster(core(fixture),
+      reinterpret_cast<const uint8_t *>(heart.data()), heart.size(), &heart_width) == BOXRIG_STATUS_OK &&
+      heart_width.column_width == 1, "VS16 measurement preserves the single-column heart");
+  size_t rows = 0, columns = 0;
+  boxrig_terminal_size(core(fixture), &rows, &columns);
+  expect(terminal_runtime_feed(runtime, "\033[?25l\033[H\033[" + std::to_string(columns) + "G❤"),
+      "feed the base character in the last column");
+  expect(terminal_runtime_feed(runtime, "\xef") && terminal_runtime_feed(runtime, "\xb8\x8fZ"),
+      "split VS16 across receive buffers before wrapping");
+  while (!terminal_runtime_is_settled(runtime)) co_await fixture->changed.wait();
+  boxrig_cell_view last{}, wrapped{};
+  expect(boxrig_terminal_get_cell(core(fixture), 0, columns - 1, &last) == BOXRIG_STATUS_OK &&
+      last.column_width == 1 && std::string_view(last.text, last.text_length) == heart &&
+      boxrig_terminal_get_cell(core(fixture), 1, 0, &wrapped) == BOXRIG_STATUS_OK &&
+      std::string_view(wrapped.text, wrapped.text_length) == "Z", "split VS16 keeps the last cell and wraps only the following character");
   if (fixture->width == 3) {
     const struct { const char *text; unsigned width; } samples[] = {
         {"④", 1}, {"②", 2}, {"③", 2}, {"①", 3}, {"⑤", 5}};
@@ -80,7 +112,7 @@ static cardio::promise<void> scenarios(Fixture *fixture) {
     }
   }
   std::string history = "\033[3J\033[2J\033[H";
-  for (int row = 0; row != 100; ++row) history += "A①B" + std::string(row == 99 ? "" : "\r\n");
+  for (int row = 0; row != 100; ++row) history += "A①B❤️X😀🇯🇵1️⃣Z" + std::string(row == 99 ? "" : "\r\n");
   expect(terminal_runtime_feed(runtime, history), "feed visible and offscreen ambiguous text");
   while (!terminal_runtime_is_settled(runtime)) co_await fixture->changed.wait();
   auto *terminal = core(fixture);
@@ -117,7 +149,7 @@ static cardio::promise<void> scenarios(Fixture *fixture) {
         boxrig_terminal_text_fragment_count(terminal, BOXRIG_TEXT_SCREEN_PRIMARY) == fragments,
         "reconnection and widget replacement preserve the terminal and history");
     check_text(fixture);
-    expect(terminal_runtime_feed(runtime, "\033[H\033[2KA①B"), "write fresh text after reconnection");
+    expect(terminal_runtime_feed(runtime, "\033[H\033[2KA①B❤️X😀🇯🇵1️⃣Z"), "write fresh text after reconnection");
     while (!terminal_runtime_is_settled(runtime)) co_await fixture->changed.wait();
     check_text(fixture);
   }

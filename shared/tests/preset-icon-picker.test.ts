@@ -9,191 +9,263 @@ import { tmpdir } from 'node:os';
 import { PNG } from 'pngjs';
 import { expect, it } from 'vitest';
 import { waitForResult } from 'gestament/testing';
-import type { GtkElementOfKind } from 'gestament';
-import { expectElementKind, runSharedGtkTest } from './test-helpers';
+import { expectElementKind, runSharedGtkTest } from './test-helpers.ts';
 
-it('scrolls through both preset families and saves a clicked icon', async (context) => {
-  const temporary = await mkdtemp(join(tmpdir(), 'elder-icon-picker-'));
+it('searches all groups and selects black and white icons independently', async (context) => {
+  const temporary = await mkdtemp(join(tmpdir(), 'elder-icon-search-'));
   const configuration = join(temporary, 'connection.ini');
   try {
     await runSharedGtkTest(
       context,
-      [`--save-file=${configuration}`],
+      [
+        `--save-file=${configuration}`,
+        '--connection=general.icon=material:white:hardware/computer',
+      ],
       async ({ app, directory }) => {
         const choose = expectElementKind(
           await app.getById('settings_general_icon_choose'),
           'button'
         );
+        await choose.click();
+        const search = expectElementKind(
+          await app.getById('settings_general_icon_search'),
+          'entry'
+        );
+        const emoji = expectElementKind(
+          await app.getById('settings_general_icon_grid_emoji'),
+          'container'
+        );
+        const black = expectElementKind(
+          await app.getById('settings_general_icon_grid_material_black'),
+          'container'
+        );
+        const white = expectElementKind(
+          await app.getById('settings_general_icon_grid_material_white'),
+          'container'
+        );
+        const glyphs = expectElementKind(
+          await app.getById('settings_general_icon_grid_glyphs_poly'),
+          'container'
+        );
+        const popup = await app.getById('settings_general_icon_picker');
+        for (const key of 'folder') await app.input.pressKey(key);
+        await waitForResult(async () => {
+          expect(await search.text()).toBe('folder');
+          expect(await emoji.getChildCount()).toBe(2);
+          expect(await black.getChildCount()).toBe(12);
+          expect(await white.getChildCount()).toBe(12);
+          expect(await glyphs.getChildCount()).toBe(4);
+        });
+        await writeFile(
+          join(directory, 'filtered-icons.png'),
+          (await popup.capture()).image
+        );
+        await search.setText('FoLdEr_OpEn');
+        await waitForResult(async () => {
+          expect(await black.getChildCount()).toBe(1);
+          expect(await white.getChildCount()).toBe(1);
+          expect((await (await black.childAt(0))!.info()).name).toBe(
+            'folder open'
+          );
+        });
+        const blackImage = expectElementKind(await black.childAt(0), 'image');
+        const whiteImage = expectElementKind(await white.childAt(0), 'image');
+        await waitForResult(async () => {
+          const left = PNG.sync.read(
+            (await (await blackImage.imageInfo()).capture()).image
+          );
+          const right = PNG.sync.read(
+            (await (await whiteImage.imageInfo()).capture()).image
+          );
+          let changed = 0;
+          for (let offset = 0; offset < left.data.length; offset += 4)
+            if (Math.abs(left.data[offset] - right.data[offset]) > 100)
+              ++changed;
+          expect(changed).toBeGreaterThan(100);
+        });
+        await search.setText('folder open');
+        const capture = await popup.capture();
+        await writeFile(
+          join(directory, 'black-and-white-results.png'),
+          capture.image
+        );
+        const environment = await app.environment();
+        await writeFile(
+          join(directory, 'picker-capture.json'),
+          JSON.stringify(
+            {
+              capturedAt: new Date().toISOString(),
+              bounds: capture.visibleBounds,
+              display: environment.DISPLAY,
+            },
+            null,
+            2
+          )
+        );
+        const bounds = (await whiteImage.imageInfo()).bounds;
+        await app.input.moveMouseTo(
+          bounds.x + bounds.width / 2,
+          bounds.y + bounds.height / 2
+        );
+        await app.input.setMouseButton('left', true);
+        await app.input.setMouseButton('left', false);
         const selection = expectElementKind(
           await app.getById('settings_general_icon_selection'),
           'label'
         );
-        await choose.click();
-        const popup = await app.getById('settings_general_icon_picker');
-        const family = expectElementKind(
-          await app.getById('settings_general_icon_family'),
-          'comboBox'
-        );
-        const grid = expectElementKind(
-          await app.getById('settings_general_icon_grid'),
-          'container'
-        );
-        const scroll = expectElementKind(
-          await app.getById('settings_general_icon_scrollbar'),
-          'scrollbar'
-        );
-        let white: GtkElementOfKind<'radio'> | undefined;
-        for (const [index, name] of ['noto', 'material'].entries()) {
-          if (index > 0) await choose.click();
-          await family.selectChildAt(index);
-          if (name === 'material') {
-            const colorRow = await app.getById(
-              'settings_general_icon_color_row'
-            );
-            expect((await colorRow.info()).states).toContain('showing');
-            white = expectElementKind(
-              await app.getById('settings_general_icon_color_white'),
-              'radio'
-            );
-          }
-          await waitForResult(async () => {
-            const pixels = PNG.sync.read((await grid.capture()).image);
-            let dark = 0;
-            for (let offset = 0; offset < pixels.data.length; offset += 4)
-              if (
-                pixels.data[offset] < 100 &&
-                pixels.data[offset + 1] < 100 &&
-                pixels.data[offset + 2] < 100
-              )
-                dark++;
-            expect(dark).toBeGreaterThan(400);
-          });
-          await writeFile(
-            join(directory, `${name}-first.png`),
-            (await popup.capture()).image
-          );
-          const count = await grid.getChildCount();
-          expect(count).toBeGreaterThan(100);
-          const last = await grid.childAt(count - 1);
-          expect(last).toBeDefined();
-          await scroll.setValue((await scroll.valueInfo()).maximum);
-          await waitForResult(async () => {
-            const info = await last!.info();
-            expect(info.states).toContain('showing');
-            expect(info.name.length).toBeGreaterThan(0);
-          });
-          await writeFile(
-            join(directory, `${name}-last.png`),
-            (await popup.capture()).image
-          );
-          const info = await last!.info();
-          if (name === 'material') {
-            const gridViewport = (await grid.capture()).visibleBounds;
-            await app.input.moveMouseTo(
-              gridViewport.x + 10,
-              gridViewport.y - 55
-            );
-            const black = expectElementKind(
-              await app.getById('settings_general_icon_color_black'),
-              'radio'
-            );
-            expect(await black.isChecked()).toBe(true);
-            const previous = await selection.text();
-            const position = await scroll.value();
-            const previousThumbnails = PNG.sync.read(
-              (await grid.capture()).image
-            );
-            await white!.click();
-            expect(await white!.isChecked()).toBe(true);
-            expect(await scroll.value()).toBe(position);
-            expect((await popup.info()).states).toContain('showing');
-            expect(await selection.text()).toBe(previous);
-            await waitForResult(async () => {
-              const changedThumbnails = PNG.sync.read(
-                (await grid.capture()).image
-              );
-              expect(changedThumbnails.width).toBe(previousThumbnails.width);
-              let changed = 0;
-              for (
-                let offset = 0;
-                offset < changedThumbnails.data.length;
-                offset += 4
-              )
-                if (
-                  changedThumbnails.data[offset] !==
-                    previousThumbnails.data[offset] ||
-                  changedThumbnails.data[offset + 1] !==
-                    previousThumbnails.data[offset + 1] ||
-                  changedThumbnails.data[offset + 2] !==
-                    previousThumbnails.data[offset + 2]
-                )
-                  changed++;
-              expect(changed).toBeGreaterThan(200);
-            });
-            await writeFile(
-              join(directory, 'material-white-last.png'),
-              (await popup.capture()).image
-            );
-          }
-          const bounds = (await expectElementKind(last, 'image').imageInfo())
-            .bounds;
-          // GTK3's IconView item extents omit the vertical scroll offset.
-          // Use the exposed adjustment to map its image into the viewport.
-          const y = bounds.y - (await scroll.value()) + bounds.height / 2;
-          const viewport = (await grid.capture()).visibleBounds;
-          expect(y).toBeGreaterThanOrEqual(viewport.y);
-          expect(y).toBeLessThan(viewport.y + viewport.height);
-          await app.input.moveMouseTo(bounds.x + bounds.width / 2, y);
-          await app.input.setMouseButton('left', true);
-          await app.input.setMouseButton('left', false);
-          await waitForResult(async () =>
-            expect(await selection.text()).toBe(
-              name === 'material' ? `${info.name} (White)` : info.name
-            )
-          );
-          await expectElementKind(
-            await app.getById('settings_save_button'),
-            'button'
-          ).click();
-          await waitForResult(async () =>
-            expect(await readFile(configuration, 'utf8')).toMatch(
-              new RegExp(
-                `icon=${name === 'material' ? 'material:white' : name}:`
-              )
-            )
-          );
-        }
-        await choose.click();
-        expect(await white!.isChecked()).toBe(true);
-        const selected = await selection.text();
-        await app.input.pressKey('Escape');
         await waitForResult(async () =>
-          expect((await popup.info()).states).not.toContain('showing')
+          expect(await selection.text()).toBe('folder open (White)')
         );
-        expect(await selection.text()).toBe(selected);
-        await choose.click();
+        await expectElementKind(
+          await app.getById('settings_save_button'),
+          'button'
+        ).click();
         await waitForResult(async () =>
-          expect((await popup.info()).states).toContain('showing')
+          expect(await readFile(configuration, 'utf8')).toContain(
+            'icon=material:white:file/folder_open'
+          )
         );
-        await family.selectChildAt(0);
-        const gridBounds = (await grid.capture()).visibleBounds;
-        await app.input.moveMouseTo(gridBounds.x + 1, gridBounds.y + 1);
-        await app.input.setMouseButton('left', true);
-        await app.input.setMouseButton('left', false);
-        await app.input.pressKey('End');
-        const last = await grid.childAt((await grid.getChildCount()) - 1);
-        await waitForResult(async () => {
-          expect((await last!.info()).states).toContain('selected');
-          expect((await last!.info()).name.length).toBeGreaterThan(0);
-        });
-        const name = (await last!.info()).name;
+        await choose.click();
+        await search.setText('file/folder-open');
         await app.input.pressKey('Return');
         await waitForResult(async () =>
-          expect(await selection.text()).toBe(name)
+          expect(await selection.text()).toBe('folder open (Black)')
+        );
+        await expectElementKind(
+          await app.getById('settings_save_button'),
+          'button'
+        ).click();
+        await waitForResult(async () =>
+          expect(await readFile(configuration, 'utf8')).toContain(
+            'icon=material:file/folder_open'
+          )
         );
       }
     );
   } finally {
     await rm(temporary, { recursive: true, force: true });
   }
+});
+
+it('navigates group boundaries and scrolls the continuous list to its last icon', async (context) => {
+  await runSharedGtkTest(context, [], async ({ app, directory }) => {
+    const choose = expectElementKind(
+      await app.getById('settings_general_icon_choose'),
+      'button'
+    );
+    await choose.click();
+    const popup = await app.getById('settings_general_icon_picker');
+    const emoji = expectElementKind(
+      await app.getById('settings_general_icon_grid_emoji'),
+      'container'
+    );
+    const black = expectElementKind(
+      await app.getById('settings_general_icon_grid_material_black'),
+      'container'
+    );
+    const white = expectElementKind(
+      await app.getById('settings_general_icon_grid_material_white'),
+      'container'
+    );
+    const scroll = expectElementKind(
+      await app.getById('settings_general_icon_scrollbar'),
+      'scrollbar'
+    );
+    await app.input.pressKey('Tab');
+    await app.input.pressKey('End');
+    const lastEmoji = (await emoji.childAt((await emoji.getChildCount()) - 1))!;
+    await waitForResult(async () =>
+      expect((await lastEmoji.info()).states).toContain('selected')
+    );
+    await app.input.pressKey('Down');
+    await waitForResult(async () =>
+      expect((await (await black.childAt(0))!.info()).states).toContain(
+        'selected'
+      )
+    );
+    await writeFile(
+      join(directory, 'emoji-material-boundary.png'),
+      (await popup.capture()).image
+    );
+    await app.input.pressKey('End');
+    await app.input.pressKey('Down');
+    await waitForResult(async () =>
+      expect((await (await white.childAt(0))!.info()).states).toContain(
+        'selected'
+      )
+    );
+    await app.input.pressKey('Up');
+    const lastBlack = (await black.childAt((await black.getChildCount()) - 1))!;
+    await waitForResult(async () =>
+      expect((await lastBlack.info()).states).toContain('selected')
+    );
+    await app.input.pressKey('Down');
+    await app.input.pressKey('End');
+    await app.input.pressKey('Down');
+    const glyphs = expectElementKind(
+      await app.getById('settings_general_icon_grid_glyphs_poly'),
+      'container'
+    );
+    await waitForResult(async () =>
+      expect((await (await glyphs.childAt(0))!.info()).states).toContain(
+        'selected'
+      )
+    );
+    await app.input.pressKey('End');
+    const last = expectElementKind(
+      await glyphs.childAt((await glyphs.getChildCount()) - 1),
+      'image'
+    );
+    await waitForResult(async () =>
+      expect((await last.info()).states).toContain('selected')
+    );
+    const info = await last.info();
+    await scroll.setValue(0);
+    await waitForResult(async () => expect(await scroll.value()).toBe(0));
+    const lowerEmoji = expectElementKind(await emoji.childAt(32), 'image');
+    await waitForResult(async () => {
+      const pixels = PNG.sync.read(
+        (await (await lowerEmoji.imageInfo()).capture()).image
+      );
+      let colored = 0;
+      for (let offset = 0; offset < pixels.data.length; offset += 4) {
+        const channels = pixels.data.subarray(offset, offset + 3);
+        if (Math.max(...channels) - Math.min(...channels) > 80) ++colored;
+      }
+      expect(colored).toBeGreaterThan(100);
+    });
+    await writeFile(
+      join(directory, 'emoji-first.png'),
+      (await popup.capture()).image
+    );
+    await scroll.setValue((await scroll.valueInfo()).maximum);
+    const heading = await app.getById('settings_general_icon_current_group');
+    await waitForResult(async () => {
+      expect((await heading.info()).name).toBe('Glyphs Poly');
+      expect(await scroll.value()).toBeGreaterThan(0);
+    });
+    await writeFile(
+      join(directory, 'glyphs-poly-last.png'),
+      (await popup.capture()).image
+    );
+    // Activate the focused item without depending on GTK3's offscreen ATK extents.
+    await app.input.pressKey('Return');
+    const selection = expectElementKind(
+      await app.getById('settings_general_icon_selection'),
+      'label'
+    );
+    await waitForResult(async () =>
+      expect(await selection.text()).toBe(info.name)
+    );
+    await choose.click();
+    await waitForResult(async () =>
+      expect((await last.info()).states).toContain('selected')
+    );
+    expect(await scroll.value()).toBeGreaterThan(0);
+    await app.input.pressKey('Escape');
+    await waitForResult(async () =>
+      expect((await popup.info()).states).not.toContain('showing')
+    );
+    expect(await selection.text()).toBe(info.name);
+  });
 });

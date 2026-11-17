@@ -146,6 +146,7 @@ await writeFile(join(outputRoot, 'SOURCES.md'), [
   `- Classic Material Icons filled: [google/material-design-icons](https://github.com/google/material-design-icons/tree/${materialRevision}/src), revision \`${materialRevision}\`, original \`src/*/*/materialicons/24px.svg\` files. The build renders transparent 256-pixel PNG images with black or white glyphs and an 8-pixel outline in the opposite color. See [MATERIAL-LICENSE](MATERIAL-LICENSE).`,
   `- Emoji names: [Unicode Emoji 18.0 emoji-test.txt](https://www.unicode.org/Public/18.0.0/emoji/emoji-test.txt), SHA-256 \`${emojiTestSha256}\`. See [UNICODE-LICENSE](UNICODE-LICENSE).`,
   '- Japanese source documentation: [接続アイコンの素材とライセンス](../../docs/ja/connection-icon-artwork.md).',
+  '- Glyphs Poly: [gorango/glyphs](https://github.com/gorango/glyphs/tree/771993addf00d5a7080fadb763f0da72ddc0f716/packages/svg/core), pinned by the `deps/glyphs` submodule. The build renders its 860 Poly variants as transparent 256-pixel PNG images with their original colors and padding. See the [MIT license](https://github.com/gorango/glyphs/blob/771993addf00d5a7080fadb763f0da72ddc0f716/license).',
   '',
 ].join('\n'));
 console.log(`Prepared ${entries.length} presets (${entries.length - materialSources.length} Noto, ${materialSources.length} Material)`);

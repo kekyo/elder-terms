@@ -3,6 +3,13 @@
 Open "Choose icon…" on a connection's "General" tab to select a preset or a PNG/JPEG file.
 Icons are specific to each connection and do not inherit from "Connection defaults".
 
+Presets appear in one continuous list in this order: Emoji, Material (Black),
+Material (White), and Glyphs Poly. Scroll to browse or use the search field to
+search all groups. Results remain grouped, with black and white Material icons
+available as separate choices. Search matches English names and preset IDs,
+ignores letter case, and treats spaces, hyphens, and underscores as equivalent
+word separators. Reopening the picker scrolls to the selected icon.
+
 ![Connection icon picker with presets and an image file option](../../images/connection-icon-picker.png)
 
 ## Image File Requirements
@@ -39,6 +46,7 @@ Set `icon` in the connection INI file's `[general]` section.
 | `noto:emoji_u1f44d` | Example Noto Color Emoji preset |
 | `material:action/home` | Black Material Icons glyph with a white outline |
 | `material:white:action/home` | White Material Icons glyph with a black outline |
+| `glyphs-poly:folder` | Glyphs Poly folder icon |
 | `file:/home/user/Pictures/server.png` | PNG or JPEG specified by absolute path |
 
 See [artwork sources and licenses](../ja/connection-icon-artwork.md) for attribution.

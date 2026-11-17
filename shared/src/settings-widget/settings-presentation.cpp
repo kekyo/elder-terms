@@ -110,6 +110,7 @@ static constexpr std::array setting_labels{
                       N_("Close window when session ends")},
     SettingLabelEntry{"general", "compact_mode", N_("Compact mode")},
     SettingLabelEntry{"local", "command_line", N_("Startup command")},
+    SettingLabelEntry{"local", "terminal_type", N_("Terminal type")},
     SettingLabelEntry{"terminal", "encoding", N_("Character encoding")},
     SettingLabelEntry{"terminal", "ambiguous_width", N_("Ambiguous character width")},
     SettingLabelEntry{"terminal", "backspace_code", N_("Backspace code")},

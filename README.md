@@ -241,8 +241,8 @@ See the [INI settings reference](./docs/en/configuration.md) for file syntax and
 
 ![Connection icon picker](./images/connection-icon-picker.png)
 
-Open "Choose icon…" on a connection's "General" tab to select a Noto Color Emoji or Material Icons preset.
-Material Icons offer black or white glyphs. "Choose image file…" lets you select a PNG or JPEG.
+Open "Choose icon…" on a connection's "General" tab to select an Emoji, Material (Black), Material (White), or Glyphs Poly preset.
+Scroll through the grouped list or search all groups in one field. "Choose image file…" lets you select a PNG or JPEG.
 "Default icon" restores the elder-terms image. Presets are bundled and need no download.
 
 The icon appears in the title bar, launcher connection list, and tray connection menu.
@@ -325,10 +325,10 @@ The FTP, FTPS, SFTP, WebDAV, and SMB windows show local files on the left and re
 Icons beside names distinguish folders, documents, images, source code, archives, links, and other file types.
 SMB shares have a different icon from ordinary folders.
 
-Select one folder or regular file in the opposite pane, then right-click the source items and choose "Send" or "Receive".
-Choose the destination in Remote on the right for Send, or Local on the left for Receive. Selecting a folder transfers into that folder; selecting a file transfers into its containing folder.
-These actions are unavailable when no destination is selected, a symbolic link is selected, or multiple items are selected.
-The path field is not used as the destination. To transfer into the folder currently open, select a file directly inside it, or use "Up" to open its parent and select that folder.
+Right-click the source items and choose "Send" or "Receive".
+The destination pane is Remote on the right for Send, or Local on the left for Receive. When nothing is selected in that pane, transfers use its currently open folder.
+Selecting one folder transfers into that folder; selecting one regular file transfers into its containing folder.
+Editing the path field does not change the destination until you press Enter to navigate. Send and Receive are unavailable when a symbolic link or multiple destination items are selected.
 Each selection becomes one transfer job in the "Transfers" list at the bottom of the window.
 The destination is fixed when you submit the request. Changing the selection later does not change an existing job's destination. Additional jobs run in order.
 
@@ -506,6 +506,9 @@ Start a shell explicitly when those features are required, for example:
 ```
 
 See the [settings reference](./docs/en/configuration.md#local-startup-command) for the INI form.
+
+Shells and commands receive `COLORTERM=truecolor` to advertise 24-bit color support, regardless of the inherited value.
+`NO_COLOR` and `FORCE_COLOR` are passed through unchanged.
 
 ## Selecting a Serial Device
 
@@ -782,7 +785,7 @@ Desktop transparency requires a compositor that combines the windows on your des
 Frosted glass requests a compositor effect that blurs the desktop behind the terminal; text and background images remain sharp.
 The settings panel reports the actual state. Unavailable blur falls back to transparency, and unavailable transparency falls back to an opaque background.
 "Frosted glass requested" means the request was accepted; compositor effect settings still determine whether the blur appears.
-See [boxrig's background effects](https://github.com/kekyo/boxrig/blob/0.13.0/docs/en/background.md) for platform requirements.
+See [boxrig's background effects](https://github.com/kekyo/boxrig/blob/0.15.0/docs/en/background.md) for platform requirements.
 
 ## Improving Text Color Visibility
 
@@ -814,7 +817,7 @@ E's preview uses the standard palette. The actual display can differ when the co
 
 Only one color filter can be selected, so reversal and the existing Oklch filter are mutually exclusive. Color discrimination assistance can be combined with every mode and is applied before reversal. Logical terminal colors, text, communication, copied text, and logs remain unchanged.
 
-Background images, the desktop behind transparent windows, Kitty images, and intrinsic color-emoji pixels are not reversed. Check the actual display when combining reversal with transparency or images. See [boxrig's supported filtering scope](https://github.com/kekyo/boxrig/blob/0.13.0/docs/en/color-filters.md).
+Background images, the desktop behind transparent windows, Kitty images, and intrinsic color-emoji pixels are not reversed. Check the actual display when combining reversal with transparency or images. See [boxrig's supported filtering scope](https://github.com/kekyo/boxrig/blob/0.15.0/docs/en/color-filters.md).
 
 See the [settings reference](./docs/en/configuration.md#background-and-color-correction) for INI syntax.
 
@@ -843,7 +846,7 @@ Oklch remains independent when recoloring strength is zero.
 
 Correction affects display only. Communication, logical terminal colors, copied text, and logs remain unchanged.
 Background images, the desktop behind transparent windows, Kitty images, and intrinsic color-emoji pixels are excluded.
-See [boxrig's display color filters](https://github.com/kekyo/boxrig/blob/0.13.0/docs/en/color-filters.md) for the supported scope.
+See [boxrig's display color filters](https://github.com/kekyo/boxrig/blob/0.15.0/docs/en/color-filters.md) for the supported scope.
 
 ## Ambiguous Character Width
 
@@ -859,6 +862,21 @@ Changing the font in a font-dependent terminal also changes text placement.
 
 A font's width cannot determine the column count expected by the remote application.
 If input positions or borders become misaligned, select one or two columns to match that application.
+
+## Terminal Text Layout and Images
+
+A cell is a position at one terminal row and column. Text is drawn in the terminal's cell order to support terminal applications that place borders and text at specific rows and columns (TUIs).
+Contextual shaping, such as joining Arabic letters, is retained while right-to-left text keeps its cell order. Text is not reordered bidirectionally as it would be in a browser paragraph.
+Selection, copying, and link clicks use the same cell positions. See [boxrig's text layout](https://github.com/kekyo/boxrig/blob/0.15.0/docs/en/fonts-and-layout.md).
+
+Adding the emoji presentation selector VS16 (U+FE0F) preserves the base character's column width. For example, adding VS16 to a one-column `❤` produces a one-column `❤️`.
+Emoji that are already wide, flags, and keycaps remain two columns. This policy is separate from the ambiguous character width setting.
+
+Solid block characters such as `█` and `▀` are drawn as cell-aligned rectangles to avoid gaps between adjacent blocks.
+Shading, box-drawing characters, blocks with combining characters, and IME preedit text use the font. Copying returns the original text. See [boxrig's block rendering](https://github.com/kekyo/boxrig/blob/0.15.0/docs/en/renderers.md).
+
+The Kitty graphics protocol is also supported. Applications can store images before placing them, then replace or delete displayed images.
+Large images sent in chunks work with both Cairo and OpenGL. See [boxrig's graphics protocol reference](https://github.com/kekyo/boxrig/blob/0.15.0/docs/en/reference/graphics.md) for the supported scope.
 
 ## Configuring Font Families
 
@@ -1076,7 +1094,7 @@ elder-terms bundles the following libraries, each covered by its own license.
 
 | Library | Use | License |
 | --- | --- | --- |
-| [boxrig](https://github.com/kekyo/boxrig) | Terminal control sequence parsing and rendering | [MIT](https://github.com/kekyo/boxrig/blob/0.13.0/LICENSE) |
+| [boxrig](https://github.com/kekyo/boxrig) | Terminal control sequence parsing and rendering | [MIT](https://github.com/kekyo/boxrig/blob/0.15.0/LICENSE) |
 | [cardio](https://github.com/kekyo/cardio) | Asynchronous I/O | [MIT](https://github.com/kekyo/cardio/blob/31e8149ce52cdfdaaa48838ca9de39288074885c/LICENSE) |
 | [libxyzm](https://github.com/kekyo/libxyzm) | X/Y/ZMODEM file transfers | [MIT](https://github.com/kekyo/libxyzm/blob/b1cd04cfd2769bbd1a5a6bc6990d60338b5a3cf5/LICENSE) |
 | [jemalloc](https://github.com/jemalloc/jemalloc) | Memory allocation and management | [BSD-2-Clause](https://github.com/jemalloc/jemalloc/blob/7a34f18502e7b222724097cdcd499b437d189acc/COPYING) |
@@ -1085,7 +1103,7 @@ elder-terms bundles the following libraries, each covered by its own license.
 
 boxrig also includes utf8proc, libpng, zlib, and data or generated code from
 Unicode, WHATWG Encoding, and Wayland protocols.
-See [boxrig's license list](https://github.com/kekyo/boxrig/blob/0.13.0/packaging/licenses/README.md)
+See [boxrig's license list](https://github.com/kekyo/boxrig/blob/0.15.0/packaging/licenses/README.md)
 for each component's license.
 
 Distribution packages include the licenses and notices for boxrig, jemalloc,

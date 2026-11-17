@@ -19,6 +19,8 @@ namespace elder_terms {
 struct LocalShellConnectionSettings {
   /** Parsed process argument vector, or empty to select the user's shell. */
   std::vector<std::string> argv;
+  /** TERM value supplied to the local shell or command. */
+  std::string terminal_type;
 };
 
 /**
@@ -35,6 +37,13 @@ local_shell_connection_setting_definitions();
  * @returns Setting key for the local startup command line.
  */
 ELDER_TERMS_API SettingKey local_command_line_setting_key();
+
+/**
+ * Returns the setting key for [local] terminal_type.
+ *
+ * @returns Setting key for the local child process's TERM value.
+ */
+ELDER_TERMS_API SettingKey local_terminal_type_setting_key();
 
 /**
  * Checks whether a local startup command line has valid shell-style quoting.

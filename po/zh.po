@@ -2643,3 +2643,9 @@ msgstr "强"
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "must be disabled, weak, medium, or strong"
 msgstr "必须是 disabled、weak、medium 或 strong"
+
+msgid "Search icons…"
+msgstr "搜索图标…"
+
+msgid "No matching icons"
+msgstr "没有匹配的图标"

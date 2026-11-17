@@ -36,6 +36,8 @@ install_data(
   '../data/connection-icons/UNICODE-LICENSE',
   install_dir: get_option('datadir') / 'doc/elder-terms/licenses/connection-icons',
 )
+install_data('../deps/glyphs/license', rename: 'GLYPHS-LICENSE',
+  install_dir: get_option('datadir') / 'doc/elder-terms/licenses/connection-icons')
 
 elder_terms_shared_resources = elder_terms_gnome.compile_resources(
   'elder-terms-resources',
@@ -70,8 +72,17 @@ if package_build_tools == ''
     ],
     depend_files: material_icon_svg_sources,
   )
+  elder_terms_glyphs_preset_resources = custom_target('elder-terms-glyphs-presets',
+    input: files('../deps/glyphs/packages/svg/core/components.json', '../deps/glyphs/packages/svg/core/map.json'),
+    output: 'elder-terms-glyphs-presets.c',
+    command: [find_program('node'), files('../scripts/render-glyphs-connection-icons.mts'),
+      meson.project_source_root() / 'deps/glyphs/packages/svg/core', '@OUTPUT@',
+      meson.current_build_dir() / 'glyphs-presets-rendered',
+      elder_terms_material_resource_compiler, elder_terms_material_thumbnailer],
+  )
 else
   elder_terms_material_preset_resources = package_build_tools / 'elder-terms-material-presets.c'
+  elder_terms_glyphs_preset_resources = package_build_tools / 'elder-terms-glyphs-presets.c'
 endif
 
 elder_terms_localization_configuration = configuration_data()
@@ -108,7 +119,7 @@ configure_file(
   configuration: elder_terms_application_version_configuration,
 )
 
-elder_terms_shared_sources = elder_terms_shared_resources + elder_terms_noto_preset_resources + [elder_terms_material_preset_resources] + [
+elder_terms_shared_sources = elder_terms_shared_resources + elder_terms_noto_preset_resources + [elder_terms_material_preset_resources, elder_terms_glyphs_preset_resources] + [
   'src/connection-identity.cpp',
   'src/connection-desktop.cpp',
   'src/connection-desktop-session.cpp',
@@ -238,6 +249,7 @@ connection_ui_library = static_library('elder-terms-connection-ui',
    'src/connection-runtime/titlebar-effect-state.cpp',
    'src/connection-runtime/titlebar-effects.cpp',
    'src/connection-runtime/compact-header.cpp',
+   'src/connection-runtime/window-resize-border.cpp',
    'src/connection-runtime/indicator-color.cpp',
    'src/connection-runtime/inline-prompt.cpp',
    'src/connection-runtime/launch-options.cpp',

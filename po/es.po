@@ -2673,3 +2673,9 @@ msgstr "Fuerte"
 #: shared/src/settings-widget/settings-presentation.cpp
 msgid "must be disabled, weak, medium, or strong"
 msgstr "debe ser disabled, weak, medium o strong"
+
+msgid "Search icons…"
+msgstr "Buscar iconos…"
+
+msgid "No matching icons"
+msgstr "No hay iconos coincidentes"

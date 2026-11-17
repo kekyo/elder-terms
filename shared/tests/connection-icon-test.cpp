@@ -128,7 +128,8 @@ static cardio::promise<void> test_loading_async(
            "default image should be directly available");
 
     for (const char *specification : {
-             "noto:emoji_u1f44d", "material:action/home", "material:white:action/home"}) {
+             "noto:emoji_u1f44d", "material:action/home", "material:white:action/home",
+             "glyphs-poly:folder"}) {
       auto preset = co_await elder_terms::load_connection_icon_async(
           specification, {});
       expect_square(preset);
@@ -190,7 +191,7 @@ static cardio::promise<void> test_loading_async(
 
     for (const char *request : {
              "file:/missing/elder-terms-icon.png", "noto:future-emoji",
-             "material:future-icon", "file:relative.png", "unknown:value"}) {
+             "material:future-icon", "glyphs-poly:unknown", "file:relative.png", "unknown:value"}) {
       auto fallback = co_await elder_terms::load_connection_icon_async(request, {});
       expect_square(fallback);
       expect(fallback.fallback && !fallback.error.empty(),

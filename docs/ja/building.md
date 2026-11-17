@@ -11,7 +11,7 @@ WebDAVにはHTTP/HTTPSと非同期DNSを有効にしたlibcurl 7.88.1以降、�
 FTPクライアントには、FTPと非同期DNSを有効にした[libcurl](https://curl.se/libcurl/) 7.88.1以降が必要です。FTPSには[TLSを有効にしたlibcurl](https://curl.se/libcurl/c/libcurl-tutorial.html)が必要です。Debian／Ubuntuの配布パッケージはOpenSSL版libcurlを使用し、既定の信頼ストアのために `ca-certificates` に依存します。ソースからビルドする場合はOpenSSLのヘッダーとライブラリも必要です。証明書確認ではlibcurlと同じバージョンのOpenSSLが必要で、接続前にアプリケーションが確認します。
 
 UbuntuまたはDebianでビルドする場合は、C++20対応コンパイラ、Meson、Ninja、gettextと、使用するライブラリの開発パッケージをインストールします。
-描画にはGTK3 3.24以降、Pango 1.50以降、Cairo 1.18以降、IBus 1.5.29以降、Wayland client 1.22以降が必要です。[boxrigのビルド要件](https://github.com/kekyo/boxrig/blob/0.13.0/docs/ja/building.md)も参照してください。
+描画にはGTK3 3.24以降、Pango 1.50以降、Cairo 1.18以降、IBus 1.5.29以降、Wayland client 1.22以降が必要です。[boxrigのビルド要件](https://github.com/kekyo/boxrig/blob/0.15.0/docs/ja/building.md)も参照してください。
 
 ```bash
 sudo apt update
@@ -24,7 +24,8 @@ sudo apt install build-essential git meson ninja-build pkg-config gettext imagem
 
 このほか、Node.js 22.18以降が必要です。[TypeScriptを直接実行できる版](https://nodejs.org/docs/latest-v22.x/api/typescript.html)を使用します。ディストリビューションのパッケージを使う場合は、インストール後にバージョンを確認してください。
 
-Material IconsのPNG生成には、SVGを読み込める`gdk-pixbuf-thumbnailer`とImageMagickの`convert`を使います。
+Material IconsとGlyphs PolyのPNG生成には、SVGを読み込める`gdk-pixbuf-thumbnailer`を使います。Material Iconsの縁取りにはImageMagickの`convert`も必要です。
+Glyphs Polyの原本は`deps/glyphs`のsubmoduleで参照します。
 生成した画像は配布物に含まれるため、利用者の環境にこれらの生成ツールは不要です。
 
 ```bash
@@ -46,6 +47,9 @@ cd elder-terms
 ```bash
 git submodule update --init --recursive
 ```
+
+boxrigは同梱サブモジュールの0.15.0を使い、ヘッダーと共有ライブラリーを同じソースから構築します。この一式をSDKと呼び、報告するバージョンの取得にはバージョン管理ツールのscrew-upを使う構成です。
+配布ビルド用の生成済みツールには、そのバージョン情報も含まれます。これを使うターゲット側のSDK構築では、npmやGitによるバージョンの再計算は不要です。
 
 npm依存パッケージを取得して、全ワークスペースをビルドします。
 
