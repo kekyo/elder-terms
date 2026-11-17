@@ -4,7 +4,7 @@
 // https://github.com/kekyo/elder-terms/
 
 import { execFileSync, spawn } from 'node:child_process';
-import { cp, mkdir, rm } from 'node:fs/promises';
+import { cp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -69,6 +69,12 @@ await run(
   root
 );
 await run('npm', ['ci', '--prefix', 'tools/codegen'], upstream);
+const boxrigVersion = execFileSync(
+  join(root, 'node_modules/.bin/screw-up'),
+  ['format', '-e', '{version}', '-f'],
+  { cwd: upstream, encoding: 'utf8' }
+).trim();
+if (!boxrigVersion) throw new Error('The boxrig release version is empty');
 await run(
   'make',
   [
@@ -76,10 +82,11 @@ await run(
     'tools/codegen/rules.mk',
     'package-codegen',
     `BUILD_DIR=${join(output, 'boxrig')}`,
-    'BOXRIG_VERSION=0.14.0',
+    `BOXRIG_VERSION=${boxrigVersion}`,
   ],
   upstream
 );
+await writeFile(join(output, 'boxrig/version.txt'), `${boxrigVersion}\n`);
 const includeDirectory = execFileSync(
   join(root, 'node_modules/.bin/gestament-config'),
   ['--includedir'],

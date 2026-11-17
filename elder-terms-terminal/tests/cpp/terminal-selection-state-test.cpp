@@ -1086,7 +1086,8 @@ static cardio::promise<void> copy_scenarios(Fixture *fixture, bool trim) {
   std::string history = "\033[3J\033[2J\033[H\033[?25l0123456789";
   std::string expected = "234";
   const std::string lines[] = {"A界é👩‍💻z  ", "AאבגדZ  ", ""};
-  const std::string slices[] = {"界é👩‍💻", "אבג", trim ? "" : "   "};
+  // The rectangle spans logical columns 2..4 even on right-to-left rows.
+  const std::string slices[] = {"界é👩‍💻", "בגד", trim ? "" : "   "};
   for (int row = 0; row != 90; ++row) {
     history += "\r\n" + lines[row % 3];
     expected += "\n" + slices[row % 3];
