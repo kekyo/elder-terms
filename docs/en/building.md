@@ -33,8 +33,9 @@ sudo apt install build-essential git meson ninja-build pkg-config gettext imagem
 Node.js 22.18 or later is also required for
 [direct TypeScript execution](https://nodejs.org/docs/latest-v22.x/api/typescript.html).
 
-Material Icons are rendered to PNG using `gdk-pixbuf-thumbnailer` with SVG support
-and ImageMagick's `convert` during the build.
+Material Icons and Glyphs Poly are rendered to PNG using `gdk-pixbuf-thumbnailer`
+with SVG support during the build. Material Icons also need ImageMagick's `convert`
+for their outlines. Glyphs Poly sources come from the `deps/glyphs` submodule.
 The generated images are included in the distribution; these generation tools
 are not needed at runtime.
 

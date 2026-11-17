@@ -95,15 +95,36 @@ exec /bin/sh
             'button'
           ).click();
           const popup = await app.getById('settings_general_icon_picker');
-          const family = expectElementKind(
-            await app.getById('settings_general_icon_family'),
-            'comboBox'
+          const scroll = expectElementKind(
+            await app.getById('settings_general_icon_scrollbar'),
+            'scrollbar'
+          );
+          const search = expectElementKind(
+            await app.getById('settings_general_icon_search'),
+            'entry'
           );
           for (const [index, marker] of [
-            'NOTO_OUTPUT',
-            'MATERIAL_OUTPUT',
+            'BROWSE_OUTPUT',
+            'SEARCH_OUTPUT',
           ].entries()) {
-            await family.selectChildAt(index);
+            if (index === 0) {
+              await scroll.setValue((await scroll.valueInfo()).maximum);
+              const heading = await app.getById(
+                'settings_general_icon_current_group'
+              );
+              await waitForResult(async () =>
+                expect((await heading.info()).name).toBe('Glyphs Poly')
+              );
+            } else {
+              await search.setText('folder');
+              const glyphs = expectElementKind(
+                await app.getById('settings_general_icon_grid_glyphs_poly'),
+                'container'
+              );
+              await waitForResult(async () =>
+                expect(await glyphs.getChildCount()).toBe(4)
+              );
+            }
             await output.write(`${marker}\n`);
             await waitForResult(async () => {
               expect((await popup.info()).states).toContain('showing');
@@ -248,6 +269,17 @@ for (const preset of [
       expect(red).toBeGreaterThan(230);
       expect(green).toBeGreaterThan(230);
       expect(blue).toBeGreaterThan(230);
+    },
+    sample: [0.5, 0.5] as const,
+    transparent: true,
+  },
+  {
+    name: 'Glyphs Poly',
+    specification: 'glyphs-poly:folder',
+    expected: ([red, green, blue]: ReturnType<typeof capturePixel>) => {
+      expect(red).toBeGreaterThan(200);
+      expect(green).toBeGreaterThan(150);
+      expect(blue).toBeLessThan(120);
     },
     sample: [0.5, 0.5] as const,
     transparent: true,

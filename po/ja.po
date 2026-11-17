@@ -618,9 +618,6 @@ msgstr "デフォルトアイコン"
 msgid "Choose icon…"
 msgstr "アイコンを選択…"
 
-msgid "Glyph color"
-msgstr "図柄の色"
-
 msgid "Black"
 msgstr "黒"
 
@@ -3395,3 +3392,12 @@ msgstr "アイコンを検索…"
 
 msgid "No matching icons"
 msgstr "一致するアイコンがありません"
+
+msgid "Emoji"
+msgstr "絵文字"
+
+msgid "Material (Black)"
+msgstr "Material (黒)"
+
+msgid "Material (White)"
+msgstr "Material (白)"

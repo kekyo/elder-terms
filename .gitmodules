@@ -16,3 +16,6 @@
 [submodule "deps/libdsm"]
 	path = deps/libdsm
 	url = https://github.com/videolabs/libdsm.git
+[submodule "deps/glyphs"]
+	path = deps/glyphs
+	url = https://github.com/gorango/glyphs.git

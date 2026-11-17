@@ -265,15 +265,38 @@
     {
       "file": "connection-icon-picker.png",
       "scope": "detail",
-      "capturedAt": "2026-10-23T00:54:12.760Z",
+      "capturedAt": "2026-11-17T08:37:48.536Z",
       "bounds": {
-        "x": 5397,
-        "y": 1539,
-        "width": 452,
-        "height": 404
+        "x": 242,
+        "y": 126,
+        "width": 478,
+        "height": 430
       },
-      "description": "Noto Color Emoji picker and custom image selection",
-      "sha256": "cc5db60ad4befbb994814ce3d3b0e5bb3eed9c9eb4699eb863b2f9e7073fde8d"
+      "description": "Shared folder open search showing Material (Black), Material (White), and Glyphs Poly groups.",
+      "sha256": "9ab92d7d207b9a14e1ce6dd5b3c4aac4a8ff85f0641853792efe9344679d164b",
+      "application": {
+        "version": "1.13.25",
+        "sourceCommit": "10ba0a2eee1270444bb19a85366257921e9d6c0b",
+        "sourceDirty": true,
+        "buildCommand": "make test"
+      },
+      "environment": {
+        "session": "X11 (gestament Xvfb)",
+        "display": ":611",
+        "screen": "1280x720x24",
+        "scale": 1,
+        "gtkTheme": "Adwaita",
+        "uiLanguage": "en",
+        "locale": "C.UTF-8",
+        "isolatedDBus": true
+      },
+      "capture": {
+        "method": "gestament root-screen capture",
+        "mousePointer": false,
+        "resized": false,
+        "composited": false,
+        "conditionsDocument": "../docs/ja/screenshot-capture.md"
+      }
     },
     {
       "file": "ip-scan-results.png",

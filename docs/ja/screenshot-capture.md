@@ -62,6 +62,13 @@ SMB共有は撮影専用のSambaコンテナーに`archive`、`public`、`team`�
 
 文字選択の2枚は、同じ端末に同じ4行の表を表示し、同じ開始点と終了点でドラッグしました。通常選択は行をまたぐ範囲、ブロック選択はSTATE列の`ready`3件です。コピーした文字列も照合しました。表示倍率と切り出し範囲は共通です。
 
+## 2026年11月17日の接続アイコン画像の更新
+
+`connection-icon-picker.png`を、種別ごとの連続一覧と共通検索を備えた画面で再撮影しました。
+検索語は`folder open`で、Material (Black)、Material (White)、Glyphs Polyの候補を表示しています。該当する絵文字はないため、Emojiのグループは表示されません。
+
+撮影には`shared/tests/preset-icon-picker.test.ts`の実際のGTK操作を使いました。表示先はgestamentが用意したXvfb（1280×720、24 bit）、テーマはAdwaita、表示倍率1、言語は英語です。画面取得後に目視で確認し、合成やリサイズは行っていません。対象ソース、バージョン、座標、日時とハッシュは[画像の記録](../../images/capture-manifest.json)の個別項目に保存しています。
+
 ## 画像ごとの条件
 
 | 用途 | 画像 | 再撮影する状態 |
@@ -79,7 +86,7 @@ SMB共有は撮影専用のSambaコンテナーに`archive`、`public`、`team`�
 | 基本操作 | `serial-indicator.png` | シリアル端末の接続・通信インジケーター。PTYには物理モデムラインがないため、実機の信号状態として説明しない |
 | 接続設定 | `configuration-structure.png` | 「General」で「Blue theme」を選択。配色のテーマ継承と組み込み既定値の出所を表示 |
 | 接続設定 | `named-themes.png` | 「Application settings」の「Themes」で「Blue theme」の配色とプレビューを表示 |
-| 接続設定 | `connection-icon-picker.png` | Noto Color Emojiの選択ポップアップを開き、絵文字の候補と画像ファイル選択を表示 |
+| 接続設定 | `connection-icon-picker.png` | 共通検索に`folder open`を入力し、黒・白のMaterialとGlyphs Polyの候補、画像ファイル選択を表示 |
 | 接続設定 | `ip-scan-results.png` | 実際のIPスキャンで得たlocalhostの行と、NFS(2049)を含む10列の見出しを切り出す |
 | 接続設定 | `ssh-sftp-settings.png` | 「SSH」タブのアドレス、ユーザー名、秘密鍵、端末種別。SFTPも共有する設定 |
 | 接続設定 | `ssh-telnet-reconnect.png` | ループバックのTELNET接続を切断し、再接続ボタンが使える状態 |
