@@ -25,6 +25,7 @@
 
 #include "main-window.h"
 #include "../../shared/src/connection-runtime/titlebar-effects.h"
+#include "../../shared/src/connection-runtime/window-resize-border.h"
 #include "../../shared/src/connection-runtime/compact-header.h"
 #include "../../shared/src/connection-runtime/indicator-color.h"
 #include "../../shared/src/connection-runtime/inline-prompt.h"
@@ -1130,6 +1131,8 @@ std::optional<MainWindow> load_main_window(TerminalAmbiguousWidth ambiguous_widt
   }
   gtk_widget_set_vexpand(main_window.frame_start_border, TRUE);
   gtk_widget_set_vexpand(main_window.frame_end_border, TRUE);
+  install_window_resize_borders(GTK_WINDOW(main_window.window), main_window.frame_start_border,
+      main_window.frame_end_border, main_window.frame_bottom_border);
   PangoAttrList *status_attributes = pango_attr_list_new();
   pango_attr_list_insert(status_attributes,
                          pango_attr_font_features_new("tnum=1"));

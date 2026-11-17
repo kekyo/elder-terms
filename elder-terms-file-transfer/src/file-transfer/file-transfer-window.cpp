@@ -45,6 +45,7 @@
 #include "../../../shared/src/connection-runtime/activity-indicator.h"
 #include "../../../shared/src/connection-runtime/compact-header.h"
 #include "../../../shared/src/connection-runtime/titlebar-effects.h"
+#include "../../../shared/src/connection-runtime/window-resize-border.h"
 #include "../../../shared/src/connection-runtime/indicator-color.h"
 #include "local-file-reveal.h"
 #include "../../../shared/src/connection-runtime/widget-background.h"
@@ -3204,9 +3205,9 @@ create_file_transfer_window(FileTransferWindowOptions options) {
                     state->root_overlay);
   GtkWidget *root = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
   gtk_container_add(GTK_CONTAINER(state->root_overlay), root);
-  state->frame_start_border = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-  state->frame_end_border = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-  state->frame_bottom_border = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+  state->frame_start_border = gtk_event_box_new();
+  state->frame_end_border = gtk_event_box_new();
+  state->frame_bottom_border = gtk_event_box_new();
   for (GtkWidget *border : {state->frame_start_border,
                             state->frame_end_border,
                             state->frame_bottom_border}) {
@@ -3275,6 +3276,8 @@ create_file_transfer_window(FileTransferWindowOptions options) {
       GTK_BOX(content), state->status_bar, FALSE, TRUE, 0);
   gtk_box_pack_start(GTK_BOX(content), state->frame_bottom_border,
                      FALSE, TRUE, 0);
+  install_window_resize_borders(GTK_WINDOW(state->window), state->frame_start_border,
+      state->frame_end_border, state->frame_bottom_border);
   state->status_label = gtk_label_new(_("Connecting"));
   gestament_gtk_assign_accessible_id(
       state->status_label, "file_transfer_status_label");
