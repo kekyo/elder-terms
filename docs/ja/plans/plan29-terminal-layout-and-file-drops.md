@@ -2,7 +2,7 @@
 
 2026年11月23日作成。elder-termsの基準は1.14.0の`254bddc8`です。タイトルバーの操作、通信インジケーター、テキスト送信速度、端末とファイル転送ウインドウへのドラッグアンドドロップを扱います。端末セルの余白にはboxrigの新しい配置機能を使います。
 
-boxrigの調査には、同日にリモートと照合した`origin/develop`の`0fb7d5f`を使いました。elder-termsが現在固定している`deps/boxrig`は0.15.0の`ee66910`です。上流の計画はboxrigリポジトリの`docs/ja/plans/plan30-text-defaults-and-grid-placement.md`にあります。29.1〜29.6は現在の依存で実装でき、29.7でplan30の検証済みコミットを取り込みます。[boxrigの調査基準](https://github.com/kekyo/boxrig/commit/0fb7d5fcccd7490b390e55e2c6ac1a604683c1d4)・[現在の依存を取り込んだ経緯](plan28-boxrig-015-followup.md)
+boxrigの調査には、同日にリモートと照合した`origin/develop`の`0fb7d5f`を使いました。計画時にelder-termsが固定していた`deps/boxrig`は0.15.0の`ee66910`です。上流の計画はboxrigリポジトリの`docs/ja/plans/plan30-text-defaults-and-grid-placement.md`にあります。29.1〜29.6は現在の依存で実装でき、29.7でplan30の検証済みコミットを取り込みます。[boxrigの調査基準](https://github.com/kekyo/boxrig/commit/0fb7d5fcccd7490b390e55e2c6ac1a604683c1d4)・[計画時の依存を取り込んだ経緯](plan28-boxrig-015-followup.md)
 
 ## 29.1 タイトルバーの縁でウインドウをリサイズする
 
@@ -79,7 +79,7 @@ X11とWaylandで実際のファイルマネージャーに落とし、使った�
 
 ## 実装と検証の記録
 
-boxrigの`42c3974`を取り込み、通常ビルドと配布用SDKで端末を起動しました。端末の文字方向とVS16の幅はboxrigの既定値に従います。
+boxrigは`40b8332`に固定しました。通常ビルドと配布用SDKの両方で、端末の起動とグリッドの配置を確認しました。端末の文字方向とVS16の幅はboxrigの既定値に従います。
 
 | 段階 | 確認した操作 |
 | --- | --- |
