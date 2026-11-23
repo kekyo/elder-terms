@@ -5208,30 +5208,10 @@ static void on_theme_changed(GtkComboBox *, gpointer data) {
   }
 }
 
-static GtkWidget *create_scrolled_page(SettingsWidgetState *state, const char *suffix, GtkWidget **grid, GtkWidget **surface) {
-  const std::string prefix = std::string(suffix) + "_page";
-  *grid = create_page_grid(widget_id(state, (prefix + "_contents").c_str()).c_str());
-  gtk_grid_set_row_spacing(GTK_GRID(*grid), 6);
-  GtkWidget *scroller = gtk_scrolled_window_new(nullptr, nullptr);
-  assign_accessible_id(scroller, widget_id(state, prefix.c_str()).c_str());
-  gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroller),
-                                 GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
-  gtk_scrolled_window_set_overlay_scrolling(GTK_SCROLLED_WINDOW(scroller), FALSE);
-  gtk_scrolled_window_set_propagate_natural_height(GTK_SCROLLED_WINDOW(scroller), FALSE);
-  assign_accessible_id(
-      gtk_scrolled_window_get_vscrollbar(GTK_SCROLLED_WINDOW(scroller)),
-      widget_id(state, (prefix + "_scrollbar").c_str()).c_str());
-  // Keep the grid margins inside a painted surface instead of exposing the
-  // implicit GtkViewport window around the direct scroll child.
-  *surface = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
-  gtk_container_add(GTK_CONTAINER(*surface), *grid);
-  gtk_container_add(GTK_CONTAINER(scroller), *surface);
-  return scroller;
-}
-
 static GtkWidget *create_general_page(SettingsWidgetState *state) {
-  GtkWidget *page, *surface;
-  auto *scroller = create_scrolled_page(state, "general", &page, &surface);
+  const std::string page_id = widget_id(state, "general_page");
+  GtkWidget *page = create_page_grid(page_id.c_str());
+  gtk_grid_set_row_spacing(GTK_GRID(page), 5);
   int row = 0;
   if (state->mode == SettingsWidgetMode::connection) {
     state->general_name_entry =
@@ -5435,18 +5415,38 @@ static GtkWidget *create_general_page(SettingsWidgetState *state) {
   attach_row(page, row++, general_border_width_setting_key(),
              state->general_border_width_entry);
 
-  gtk_widget_show_all(surface);
-  return scroller;
+  return page;
 }
 
 static std::pair<GtkWidget *, GtkWidget *>
 create_terminal_pages(SettingsWidgetState *state) {
+  auto create_scrolled_page = [state](const char *suffix, GtkWidget **grid,
+                                      GtkWidget **surface) {
+    const std::string prefix = std::string(suffix) + "_page";
+    *grid = create_page_grid(widget_id(state, (prefix + "_contents").c_str()).c_str());
+    gtk_grid_set_row_spacing(GTK_GRID(*grid), 6);
+    GtkWidget *scroller = gtk_scrolled_window_new(nullptr, nullptr);
+    assign_accessible_id(scroller, widget_id(state, prefix.c_str()).c_str());
+    gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(scroller),
+                                   GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
+    gtk_scrolled_window_set_overlay_scrolling(GTK_SCROLLED_WINDOW(scroller), FALSE);
+    gtk_scrolled_window_set_propagate_natural_height(GTK_SCROLLED_WINDOW(scroller), FALSE);
+    assign_accessible_id(
+        gtk_scrolled_window_get_vscrollbar(GTK_SCROLLED_WINDOW(scroller)),
+        widget_id(state, (prefix + "_scrollbar").c_str()).c_str());
+    // Keep the grid margins inside a painted surface instead of exposing the
+    // implicit GtkViewport window around the direct scroll child.
+    *surface = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+    gtk_container_add(GTK_CONTAINER(*surface), *grid);
+    gtk_container_add(GTK_CONTAINER(scroller), *surface);
+    return scroller;
+  };
   GtkWidget *page = nullptr;
   GtkWidget *behavior_surface = nullptr;
-  GtkWidget *scroller = create_scrolled_page(state, "terminal", &page, &behavior_surface);
+  GtkWidget *scroller = create_scrolled_page("terminal", &page, &behavior_surface);
   GtkWidget *appearance_page = nullptr;
   GtkWidget *appearance_surface = nullptr;
-  GtkWidget *appearance_scroller = create_scrolled_page(state,
+  GtkWidget *appearance_scroller = create_scrolled_page(
       "terminal_appearance", &appearance_page, &appearance_surface);
   state->terminal_appearance_page_surface = appearance_surface;
   g_signal_connect_after(appearance_scroller, "size-allocate",

@@ -2686,8 +2686,8 @@ describe.concurrent('elder-terms-terminal settings', () => {
         const pageCenterX =
           topCapture.bounds.x + Math.trunc(topCapture.bounds.width / 2);
 
-        expect
-          .soft([
+        context
+          .expect([
             capturePixelAtScreenPosition(
               topCapture,
               topCapture.bounds.x + 6,
