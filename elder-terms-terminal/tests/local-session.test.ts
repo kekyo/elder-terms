@@ -13,6 +13,7 @@ import { promisify } from 'node:util';
 import type { GtkApp, GtkCapture } from 'gestament';
 import { describe, expect, it } from 'vitest';
 import { waitForResult, toPass } from 'gestament/testing';
+import { dropTerminalFiles } from './terminal-file-drop.ts';
 import { waitForActivityIndicatorImageState } from './activity-indicator-test-helpers';
 import {
   activateTerminalPaste,
@@ -1117,74 +1118,16 @@ mode=cooked
         [],
         async (app) => {
           await waitForFileText(shell.readyPath, 'ready');
-          const env = await app.environment();
-          // This independent GTK window offers exactly the URI target used by file managers.
-          const source = spawn(
-            'gjs',
-            [
-              '-c',
-              `
-          imports.gi.versions.Gtk = '3.0';
-          const {Gtk, Gdk} = imports.gi;
-          Gtk.init(null);
-          const w = new Gtk.Window({type:Gtk.WindowType.POPUP, title:'URI drop test', default_width:110, default_height:65});
-          const box = new Gtk.EventBox();
-          box.add(new Gtk.Label({label:'Drag file'}));
-          box.drag_source_set(Gdk.ModifierType.BUTTON1_MASK, [], Gdk.DragAction.COPY);
-          box.drag_source_add_uri_targets();
-          box.connect('drag-begin', (_box, context) => {
-            print('begin');
-            context.connect('action-changed', (_ctx, action) => print('action ' + action));
-          });
-          box.connect('drag-data-get', (_box, _context, data) => data.set_uris(ARGV));
-          w.add(box); w.move(5, 5); w.show_all(); Gtk.main();
-        `,
-              pathToFileURL(path).href,
-            ],
-            { env }
-          );
-          let signals = '';
-          source.stdout.on('data', (bytes) => {
-            signals += bytes.toString();
-          });
-          source.stderr.on('data', (bytes) => {
-            signals += bytes.toString();
-          });
-          try {
-            await toPass(async () => {
-              await execFileAsync('xwininfo', ['-name', 'URI drop test'], {
-                env,
-              });
-            });
-            const terminal = (
-              await (await app.getById('terminal_view')).capture()
-            ).bounds;
-            const drop = async () => {
-              signals = '';
-              await app.input.moveMouseTo(40, 30);
-              await app.input.setMouseButton('left', true);
-              await app.input.moveMouseTo(65, 32);
-              await toPass(async () => expect(signals).toContain('begin'));
-              await app.input.moveMouseTo(
-                terminal.x + terminal.width / 2,
-                terminal.y + terminal.height / 2
-              );
-              await toPass(async () => expect(signals).toContain('action 2'));
-              await app.input.setMouseButton('left', false);
-              return expectElementKind(
-                await app.getById('drop_text_send_item'),
-                'menuItem'
-              );
-            };
-            await drop();
-            await app.input.pressKey('Escape');
-            expect(await readFile(shell.markerPath, 'utf8')).toBe('');
-            const item = await drop();
-            await item.click();
-            await waitForFileText(shell.markerPath, 'Q');
-          } finally {
-            source.kill();
-          }
+          const files = [pathToFileURL(path).href];
+          await dropTerminalFiles(app, files);
+          await app.input.pressKey('Escape');
+          expect(await readFile(shell.markerPath, 'utf8')).toBe('');
+          await dropTerminalFiles(app, files);
+          await expectElementKind(
+            await app.getById('drop_text_send_item'),
+            'menuItem'
+          ).click();
+          await waitForFileText(shell.markerPath, 'Q');
         },
         { env: { SHELL: shell.shellPath } }
       );
