@@ -3410,3 +3410,6 @@ msgstr "送信するファイルをドロップしてください"
 
 msgid "Drop one file for text send"
 msgstr "テキスト送信ではファイルを1つドロップしてください"
+
+msgid "Could not create the temporary download folder"
+msgstr "受信用の一時フォルダーを作成できませんでした"

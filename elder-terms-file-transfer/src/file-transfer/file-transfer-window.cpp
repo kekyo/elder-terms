@@ -211,6 +211,7 @@ struct FileTransferWindow {
   FileTransferPaneState remote;
   std::shared_ptr<RemoteFileClient> client;
   std::shared_ptr<FileTransferQueue> jobs;
+  std::map<std::uint64_t, GMainLoop *> export_waiters;
   std::shared_ptr<FileTransferJobView> job_view;
   GtkWidget *vertical_paned = nullptr;
   std::string protocol_name;
@@ -2181,18 +2182,24 @@ static cardio::promise<void> run_file_transfer_window_transfer_async(
   refresh_file_transfer_panes(window);
 }
 
-static void submit_file_transfer_request(FileTransferWindow *window, FileTransferRequest request) {
-  if (window->destroyed || !window->connection_available || window->reconnecting || window->browser_action_active) return;
-  enqueue_file_transfer_job(window->jobs, request);
-  if (window->transfer_active) return;
+static std::shared_ptr<FileTransferJob> submit_file_transfer_request(FileTransferWindow *window, FileTransferRequest request) {
+  if (window->destroyed || !window->connection_available || window->reconnecting || window->browser_action_active) return {};
+  auto job = enqueue_file_transfer_job(window->jobs, request);
+  if (window->transfer_active) return job;
   window->transfer_task.reset();
   window->transfer_active = true;
   update_file_transfer_sensitivity(window);
   window->transfer_task.emplace(run_file_transfer_window_transfer_async(window));
+  return job;
 }
 
 static void file_transfer_job_changed(FileTransferWindow *window, const FileTransferJobSnapshot &snapshot) {
-  if (!window || window->destroyed) return;
+  if (!window) return;
+  if (snapshot.result) {
+    const auto waiter = window->export_waiters.find(snapshot.id);
+    if (waiter != window->export_waiters.end()) g_main_loop_quit(waiter->second);
+  }
+  if (window->destroyed) return;
   update_file_transfer_job_view(window->job_view, file_transfer_jobs(window->jobs), window->connection_available);
   if (!snapshot.result) return;
   const auto &result = *snapshot.result;
@@ -2241,10 +2248,29 @@ static void start_file_transfer_transfer(
 
 enum PaneDragTarget : guint { pane_items, local_uris };
 
+struct PaneExport {
+  std::shared_ptr<FileTransferJob> job;
+  std::string directory;
+  std::vector<std::string> paths;
+  bool delivered = false;
+  bool cancelled = false;
+
+  ~PaneExport() {
+    // A file manager may start copying after acknowledging the URI list.
+    // Completed exports therefore live in the user's login-session directory.
+    if (!directory.empty() && (!delivered || cancelled)) {
+      std::error_code error;
+      std::filesystem::remove_all(directory, error);
+      if (error) g_warning("Cannot retire drag export: %s", error.message().c_str());
+    }
+  }
+};
+
 struct PaneDrag {
   FileTransferPaneState *source;
   std::weak_ptr<RemoteFileClient> client;
   std::vector<std::string> paths;
+  std::shared_ptr<PaneExport> remote_export = std::make_shared<PaneExport>();
 };
 
 static bool pane_can_transfer(FileTransferWindow *window) {
@@ -2304,6 +2330,58 @@ static bool receive_pane_drop(FileTransferPaneState *pane, GdkDragContext *conte
   return true;
 }
 
+// GTK requests selection bytes synchronously. While the normal receive job
+// runs, the same GLib context dispatches its I/O, progress and cancellation.
+static void provide_pane_uris(const PaneDrag &drag, GtkSelectionData *data) {
+  const auto owner = drag.source->window->self.lock();
+  if (!owner || owner->destroyed) return;
+  auto prepared = drag.remote_export;
+  if (drag.source->remote) {
+    if (!owner->connection_available || drag.client.lock() != owner->client || prepared->cancelled) return;
+    if (prepared->directory.empty()) {
+      auto directory = (std::filesystem::path(g_get_user_runtime_dir()) / "elder-terms-drop-XXXXXX").string();
+      if (!g_mkdtemp(directory.data())) {
+        set_file_transfer_status(owner.get(), _("Could not create the temporary download folder"));
+        return;
+      }
+      prepared->directory = directory;
+      FileTransferRequest request;
+      request.direction = FileTransferDirection::receive;
+      request.source_paths = drag.paths;
+      request.destination_directory = directory;
+      auto job = submit_file_transfer_request(owner.get(), std::move(request));
+      if (!job) return;
+      prepared->job = job;
+      const auto &snapshot = file_transfer_job_snapshot(job);
+      if (!snapshot.result) {
+        auto *loop = g_main_loop_new(nullptr, FALSE);
+        owner->export_waiters.emplace(snapshot.id, loop);
+        g_main_loop_run(loop);
+        owner->export_waiters.erase(snapshot.id);
+        g_main_loop_unref(loop);
+      }
+      if (owner->destroyed || !owner->connection_available || drag.client.lock() != owner->client ||
+          prepared->cancelled || !snapshot.result || snapshot.result->outcome != FileTransferOutcome::completed ||
+          snapshot.result->skipped_items || snapshot.result->failed_items) return;
+      std::error_code error;
+      std::vector<std::string> paths;
+      for (std::filesystem::directory_iterator entry(directory, error), end; !error && entry != end; entry.increment(error))
+        paths.push_back(entry->path().string());
+      if (error || paths.size() != drag.paths.size()) return;
+      prepared->paths = std::move(paths);
+    }
+  }
+  const auto &paths = drag.source->remote ? prepared->paths : drag.paths;
+  if (paths.empty()) return;
+  std::vector<gchar *> uris;
+  for (const auto &path : paths) {
+    if (auto *uri = g_filename_to_uri(path.c_str(), nullptr, nullptr)) uris.push_back(uri);
+  }
+  uris.push_back(nullptr);
+  if (uris.size() == paths.size() + 1 && gtk_selection_data_set_uris(data, uris.data())) prepared->delivered = true;
+  for (auto *uri : uris) g_free(uri);
+}
+
 static void install_pane_drag(GtkWidget *tree, FileTransferPaneState *pane) {
   // The private target is preferred for drags between panes. Only the source
   // process has access to the remote operation identities and connection.
@@ -2311,7 +2389,7 @@ static void install_pane_drag(GtkWidget *tree, FileTransferPaneState *pane) {
     {const_cast<gchar *>("application/x-elder-terms-pane-items"), GTK_TARGET_SAME_APP, pane_items},
     {const_cast<gchar *>("text/uri-list"), 0, local_uris},
   };
-  gtk_drag_source_set(tree, GDK_BUTTON1_MASK, targets, pane->remote ? 1 : 2, GDK_ACTION_COPY);
+  gtk_drag_source_set(tree, GDK_BUTTON1_MASK, targets, G_N_ELEMENTS(targets), GDK_ACTION_COPY);
   gtk_drag_dest_set(tree, static_cast<GtkDestDefaults>(GTK_DEST_DEFAULT_MOTION | GTK_DEST_DEFAULT_HIGHLIGHT),
       targets, pane->remote ? 2 : 1, GDK_ACTION_COPY);
   g_signal_connect(tree, "drag-begin", G_CALLBACK(+[](GtkWidget *widget, GdkDragContext *, gpointer data) {
@@ -2320,6 +2398,14 @@ static void install_pane_drag(GtkWidget *tree, FileTransferPaneState *pane) {
     g_object_set_data_full(G_OBJECT(widget), "file-transfer-drag", drag,
         +[](gpointer data) { delete static_cast<PaneDrag *>(data); });
   }), pane);
+  g_signal_connect(tree, "drag-failed", G_CALLBACK(+[](GtkWidget *widget, GdkDragContext *, GtkDragResult, gpointer) -> gboolean {
+    auto *drag = static_cast<PaneDrag *>(g_object_get_data(G_OBJECT(widget), "file-transfer-drag"));
+    if (drag) {
+      drag->remote_export->cancelled = true;
+      if (drag->remote_export->job) cancel_file_transfer_job(drag->remote_export->job);
+    }
+    return FALSE;
+  }), nullptr);
   g_signal_connect(tree, "drag-end", G_CALLBACK(+[](GtkWidget *widget, GdkDragContext *, gpointer) {
     g_object_set_data(G_OBJECT(widget), "file-transfer-drag", nullptr);
   }), nullptr);
@@ -2330,12 +2416,10 @@ static void install_pane_drag(GtkWidget *tree, FileTransferPaneState *pane) {
     if (info == pane_items) {
       const guchar marker = 1;
       gtk_selection_data_set(data, gtk_selection_data_get_target(data), 8, &marker, 1);
-    } else if (info == local_uris && !drag->source->remote) {
-      std::vector<gchar *> uris;
-      for (const auto &path : drag->paths) uris.push_back(g_filename_to_uri(path.c_str(), nullptr, nullptr));
-      uris.push_back(nullptr);
-      gtk_selection_data_set_uris(data, uris.data());
-      for (auto *uri : uris) g_free(uri);
+    } else if (info == local_uris) {
+      // A nested GTK dispatch may end the drag and release the widget data.
+      const auto selection = *drag;
+      provide_pane_uris(selection, data);
     }
   }), nullptr);
   g_signal_connect(tree, "drag-drop", G_CALLBACK(+[](GtkWidget *widget, GdkDragContext *context,

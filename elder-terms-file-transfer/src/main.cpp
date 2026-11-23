@@ -356,7 +356,7 @@ static int run_sftp_application(
     const elder_terms::SettingsLoadResult &settings_result,
     elder_terms::LaunchOptions launch_options) {
   cardio::dispatcher_group_glib dispatcher_group;
-  cardio::dispatcher_host_glib dispatcher(dispatcher_group);
+  cardio::dispatcher_host_glib_auto dispatcher(dispatcher_group);
   SftpApplicationState state;
   state.dispatcher_group = &dispatcher_group;
   state.launch_options = std::move(launch_options);
