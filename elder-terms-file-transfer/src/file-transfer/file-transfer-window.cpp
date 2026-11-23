@@ -658,9 +658,8 @@ static void set_file_transfer_status(FileTransferWindow *window,
 static std::vector<FileTransferSelectedItem>
 selected_file_transfer_items(FileTransferPaneState *pane);
 
-static std::optional<std::string> selected_file_transfer_destination(
-    FileTransferPaneState *pane) {
-  const auto items = selected_file_transfer_items(pane);
+static std::optional<std::string> file_transfer_destination(
+    FileTransferPaneState *pane, const std::vector<FileTransferSelectedItem> &items) {
   if (items.size() > 1 || (!items.empty() && items.front().type != RemoteFileType::directory &&
       items.front().type != RemoteFileType::regular))
     return std::nullopt;
@@ -677,6 +676,10 @@ static std::optional<std::string> selected_file_transfer_destination(
   if (pane->remote && !pane->window->client->path_capabilities(destination).create_children)
     return std::nullopt;
   return destination;
+}
+
+static std::optional<std::string> selected_file_transfer_destination(FileTransferPaneState *pane) {
+  return file_transfer_destination(pane, selected_file_transfer_items(pane));
 }
 
 static bool can_create_remote_children(const FileTransferWindow *window) {
@@ -2236,6 +2239,120 @@ static void start_file_transfer_transfer(
   submit_file_transfer_request(window, std::move(request));
 }
 
+enum PaneDragTarget : guint { pane_items, local_uris };
+
+struct PaneDrag {
+  FileTransferPaneState *source;
+  std::weak_ptr<RemoteFileClient> client;
+  std::vector<std::string> paths;
+};
+
+static bool pane_can_transfer(FileTransferWindow *window) {
+  return !window->destroyed && window->connection_available && window->client &&
+      !window->reconnecting && !window->browser_action_active && !window->certificate_confirmation &&
+      !window->local.busy && !window->remote.busy;
+}
+
+static std::optional<std::string> pane_drop_destination(FileTransferPaneState *pane, int x, int y) {
+  auto *tree = GTK_TREE_VIEW(pane->tree);
+  gtk_tree_view_convert_widget_to_bin_window_coords(tree, x, y, &x, &y);
+  GtkTreePath *row = nullptr;
+  if (!gtk_tree_view_get_path_at_pos(tree, x, y, &row, nullptr, nullptr, nullptr))
+    return file_transfer_destination(pane, {});
+  GtkTreeIter iter;
+  auto *model = GTK_TREE_MODEL(pane->store);
+  const bool found = gtk_tree_model_get_iter(model, &iter, row);
+  gtk_tree_path_free(row);
+  if (!found) return std::nullopt;
+  gchar *path = nullptr;
+  gint type;
+  gboolean dummy;
+  gtk_tree_model_get(model, &iter, file_transfer_tree_path_column, &path, file_transfer_tree_type_column, &type,
+      file_transfer_tree_dummy_column, &dummy, -1);
+  FileTransferGCharPtr owner(path);
+  if (dummy || !path || !*path) return std::nullopt;
+  return file_transfer_destination(pane, {FileTransferSelectedItem{"", path, static_cast<RemoteFileType>(type)}});
+}
+
+static bool receive_pane_drop(FileTransferPaneState *pane, GdkDragContext *context,
+    gint x, gint y, GtkSelectionData *data, guint info) {
+  auto *window = pane->window;
+  if (!pane_can_transfer(window)) return false;
+  const auto destination = pane_drop_destination(pane, x, y);
+  if (!destination) return false;
+  FileTransferRequest request;
+  request.direction = pane->remote ? FileTransferDirection::send : FileTransferDirection::receive;
+  request.destination_directory = *destination;
+  if (info == pane_items) {
+    GtkWidget *source = gtk_drag_get_source_widget(context);
+    auto *other = pane->remote ? &window->local : &window->remote;
+    if (source != other->tree) return false;
+    auto *drag = static_cast<PaneDrag *>(g_object_get_data(G_OBJECT(source), "file-transfer-drag"));
+    if (!drag || drag->source != other || drag->client.lock() != window->client) return false;
+    request.source_paths = drag->paths;
+  } else if (info == local_uris && pane->remote) {
+    std::unique_ptr<gchar *, decltype(&g_strfreev)> uris(gtk_selection_data_get_uris(data), g_strfreev);
+    for (gchar **uri = uris.get(); uri && *uri; ++uri) {
+      std::unique_ptr<GFile, decltype(&g_object_unref)> file(g_file_new_for_uri(*uri), g_object_unref);
+      FileTransferGCharPtr path(g_file_get_path(file.get()));
+      if (!path) return false;
+      request.source_paths.emplace_back(path.get());
+    }
+  }
+  if (request.source_paths.empty()) return false;
+  submit_file_transfer_request(window, std::move(request));
+  return true;
+}
+
+static void install_pane_drag(GtkWidget *tree, FileTransferPaneState *pane) {
+  // The private target is preferred for drags between panes. Only the source
+  // process has access to the remote operation identities and connection.
+  static GtkTargetEntry targets[] = {
+    {const_cast<gchar *>("application/x-elder-terms-pane-items"), GTK_TARGET_SAME_APP, pane_items},
+    {const_cast<gchar *>("text/uri-list"), 0, local_uris},
+  };
+  gtk_drag_source_set(tree, GDK_BUTTON1_MASK, targets, pane->remote ? 1 : 2, GDK_ACTION_COPY);
+  gtk_drag_dest_set(tree, static_cast<GtkDestDefaults>(GTK_DEST_DEFAULT_MOTION | GTK_DEST_DEFAULT_HIGHLIGHT),
+      targets, pane->remote ? 2 : 1, GDK_ACTION_COPY);
+  g_signal_connect(tree, "drag-begin", G_CALLBACK(+[](GtkWidget *widget, GdkDragContext *, gpointer data) {
+    auto *pane = static_cast<FileTransferPaneState *>(data);
+    auto *drag = new PaneDrag(pane, pane->window->client, selected_file_transfer_paths(pane));
+    g_object_set_data_full(G_OBJECT(widget), "file-transfer-drag", drag,
+        +[](gpointer data) { delete static_cast<PaneDrag *>(data); });
+  }), pane);
+  g_signal_connect(tree, "drag-end", G_CALLBACK(+[](GtkWidget *widget, GdkDragContext *, gpointer) {
+    g_object_set_data(G_OBJECT(widget), "file-transfer-drag", nullptr);
+  }), nullptr);
+  g_signal_connect(tree, "drag-data-get", G_CALLBACK(+[](GtkWidget *widget, GdkDragContext *,
+      GtkSelectionData *data, guint info, guint, gpointer) {
+    auto *drag = static_cast<PaneDrag *>(g_object_get_data(G_OBJECT(widget), "file-transfer-drag"));
+    if (!drag || drag->paths.empty()) return;
+    if (info == pane_items) {
+      const guchar marker = 1;
+      gtk_selection_data_set(data, gtk_selection_data_get_target(data), 8, &marker, 1);
+    } else if (info == local_uris && !drag->source->remote) {
+      std::vector<gchar *> uris;
+      for (const auto &path : drag->paths) uris.push_back(g_filename_to_uri(path.c_str(), nullptr, nullptr));
+      uris.push_back(nullptr);
+      gtk_selection_data_set_uris(data, uris.data());
+      for (auto *uri : uris) g_free(uri);
+    }
+  }), nullptr);
+  g_signal_connect(tree, "drag-drop", G_CALLBACK(+[](GtkWidget *widget, GdkDragContext *context,
+      gint, gint, guint time, gpointer) -> gboolean {
+    auto target = gtk_drag_dest_find_target(widget, context, nullptr);
+    if (target == GDK_NONE) return FALSE;
+    gtk_drag_get_data(widget, context, target, time);
+    return TRUE;
+  }), nullptr);
+  g_signal_connect(tree, "drag-data-received", G_CALLBACK(+[](GtkWidget *, GdkDragContext *context,
+      gint x, gint y, GtkSelectionData *data, guint info, guint time, gpointer user) {
+    bool accepted = gtk_selection_data_get_length(data) > 0 &&
+        receive_pane_drop(static_cast<FileTransferPaneState *>(user), context, x, y, data, info);
+    gtk_drag_finish(context, accepted, FALSE, time);
+  }), pane);
+}
+
 static void on_file_transfer_item_activate(
     GtkMenuItem *, gpointer data) {
   auto *pane = static_cast<FileTransferPaneState *>(data);
@@ -2636,6 +2753,7 @@ static GtkWidget *create_file_transfer_tree(FileTransferPaneState *pane,
   gestament_gtk_assign_accessible_id(tree, accessible_id);
   gtk_tree_view_set_enable_tree_lines(GTK_TREE_VIEW(tree), TRUE);
   gtk_tree_view_set_rubber_banding(GTK_TREE_VIEW(tree), TRUE);
+  install_pane_drag(tree, pane);
   gtk_tree_view_set_search_column(
       GTK_TREE_VIEW(tree), file_transfer_tree_name_column);
   const FileTransferTreeRowMetrics row_metrics =
