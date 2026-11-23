@@ -841,18 +841,26 @@ export const assertTerminalTextGridMatches = async (
  * @param layout Layout with window bounds and effective metrics.
  * @param columns Expected columns.
  * @param rows Expected rows.
+ * @param padding Logical pixels reserved on each edge.
  */
 export const expectWindowCellSize = (
   layout: TerminalGridLayout | WindowCellLayout,
   columns: number,
-  rows: number
+  rows: number,
+  padding = 0
 ): void => {
   expect(layout.columns).toBe(columns);
   expect(layout.rows).toBe(rows);
   const remainderWidth =
-    layout.mainBounds.width - layout.chromeWidth - columns * layout.cellWidth;
+    layout.mainBounds.width -
+    layout.chromeWidth -
+    2 * padding -
+    columns * layout.cellWidth;
   const remainderHeight =
-    layout.mainBounds.height - layout.chromeHeight - rows * layout.cellHeight;
+    layout.mainBounds.height -
+    layout.chromeHeight -
+    2 * padding -
+    rows * layout.cellHeight;
   expect(remainderWidth).toBeGreaterThanOrEqual(0);
   expect(remainderWidth).toBeLessThan(layout.cellWidth);
   expect(remainderHeight).toBeGreaterThanOrEqual(0);

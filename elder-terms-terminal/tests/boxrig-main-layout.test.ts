@@ -26,6 +26,7 @@ describe.concurrent('boxrig main window layout', () => {
     for (const mode of ['preserve-grid', 'preserve-window']) {
       it(`keeps text visible and the PTY grid consistent throughout zoom and resize (${backend}, ${mode})`, async (context) => {
         const preserveWindow = mode === 'preserve-window';
+        const padding = preserveWindow ? 4 : 0;
         await withTemporaryDirectory(async (directory) => {
           const peerPath = join(directory, 'peer.mjs');
           const sizesPath = join(directory, 'sizes.jsonl');
@@ -49,7 +50,7 @@ process.stdout.write('\\x1b[?25l\\x1b[2J\\x1b[H\\x1b[38;2;255;0;255mZOOM-STABLE'
           );
           await writeFile(
             configPath,
-            `[general]\nauto_close=false\n[terminal]\nwidth=80\nheight=18\nfont_size_dip=14.5\nfont_zoom_mode=${mode}\nscrollback_lines=1234\n[local]\ncommand_line=${process.execPath} ${peerPath} ${sizesPath} ${inputPath}\n`,
+            `[general]\nauto_close=false\n[terminal]\nwidth=80\nheight=18\nfont_size_dip=14.5\nfont_zoom_mode=${mode}\npadding_dip=${padding}\ngrid_vertical_alignment=bottom\nscrollback_lines=1234\n[local]\ncommand_line=${process.execPath} ${peerPath} ${sizesPath} ${inputPath}\n`,
             'utf8'
           );
           await runGtkTest(
@@ -73,7 +74,7 @@ process.stdout.write('\\x1b[?25l\\x1b[2J\\x1b[H\\x1b[38;2;255;0;255mZOOM-STABLE'
                 expect(await status.text()).toContain(`backend=${backend}`);
                 expect(await status.text()).toContain('history=1234');
                 const layout = await readWindowCellLayout(app);
-                expectWindowCellSize(layout, 80, 18);
+                expectWindowCellSize(layout, 80, 18, padding);
                 expect(layout.fontSizeDip).toBe(14.5);
                 return layout;
               });
@@ -188,7 +189,7 @@ process.stdout.write('\\x1b[?25l\\x1b[2J\\x1b[H\\x1b[38;2;255;0;255mZOOM-STABLE'
                     expect(layout.fontSizeDip).not.toBe(previous.fontSizeDip);
                     if (preserveWindow)
                       expect(layout.mainBounds).toEqual(initial.mainBounds);
-                    else expectWindowCellSize(layout, 80, 18);
+                    else expectWindowCellSize(layout, 80, 18, padding);
                     expect((await readSizes()).pop()).toEqual({
                       columns: layout.columns,
                       rows: layout.rows,
@@ -224,7 +225,7 @@ process.stdout.write('\\x1b[?25l\\x1b[2J\\x1b[H\\x1b[38;2;255;0;255mZOOM-STABLE'
                   expect(await readFile(inputPath, 'utf8')).toBe('ax');
                   const layout = await readWindowCellLayout(app);
                   expect(layout.fontSizeDip).toBe(initial.fontSizeDip);
-                  expectWindowCellSize(layout, 80, 18);
+                  expectWindowCellSize(layout, 80, 18, padding);
                   expect((await readSizes()).pop()).toEqual({
                     columns: 80,
                     rows: 18,
@@ -276,7 +277,7 @@ process.stdout.write('\\x1b[?25l\\x1b[2J\\x1b[H\\x1b[38;2;255;0;255mZOOM-STABLE'
                       const layout = await readWindowCellLayout(app);
                       expect(layout.mainBounds).toEqual(initial.mainBounds);
                       expect(layout.fontSizeDip).toBe(initial.fontSizeDip);
-                      expectWindowCellSize(layout, 80, 18);
+                      expectWindowCellSize(layout, 80, 18, padding);
                       expect(frameNumber).toBeGreaterThan(beforeApply);
                       expect((await readSizes()).pop()).toEqual({
                         columns: 80,
@@ -298,7 +299,7 @@ process.stdout.write('\\x1b[?25l\\x1b[2J\\x1b[H\\x1b[38;2;255;0;255mZOOM-STABLE'
                 );
                 await waitForResult(async () => {
                   const layout = await readWindowCellLayout(app);
-                  expectWindowCellSize(layout, 84, 20);
+                  expectWindowCellSize(layout, 84, 20, padding);
                   expect(layout.fontSizeDip).toBe(initial.fontSizeDip);
                   expect(await readSizes()).toEqual([
                     ...sizesBeforeResize,
