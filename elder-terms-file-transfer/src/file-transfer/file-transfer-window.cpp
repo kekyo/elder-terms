@@ -211,7 +211,7 @@ struct FileTransferWindow {
   FileTransferPaneState remote;
   std::shared_ptr<RemoteFileClient> client;
   std::shared_ptr<FileTransferQueue> jobs;
-  std::map<std::uint64_t, GMainLoop *> export_waiters;
+  std::multimap<std::uint64_t, GMainLoop *> export_waiters;
   std::shared_ptr<FileTransferJobView> job_view;
   GtkWidget *vertical_paned = nullptr;
   std::string protocol_name;
@@ -2196,8 +2196,8 @@ static std::shared_ptr<FileTransferJob> submit_file_transfer_request(FileTransfe
 static void file_transfer_job_changed(FileTransferWindow *window, const FileTransferJobSnapshot &snapshot) {
   if (!window) return;
   if (snapshot.result) {
-    const auto waiter = window->export_waiters.find(snapshot.id);
-    if (waiter != window->export_waiters.end()) g_main_loop_quit(waiter->second);
+    const auto [begin, end] = window->export_waiters.equal_range(snapshot.id);
+    for (auto waiter = begin; waiter != end; ++waiter) g_main_loop_quit(waiter->second);
   }
   if (window->destroyed) return;
   update_file_transfer_job_view(window->job_view, file_transfer_jobs(window->jobs), window->connection_available);
@@ -2248,6 +2248,15 @@ static void start_file_transfer_transfer(
 
 enum PaneDragTarget : guint { pane_items, local_uris };
 
+static cardio::promise<void> retire_pane_export_async(std::string directory) {
+  try {
+    std::vector<std::string> paths{std::move(directory)};
+    co_await delete_file_transfer_items_async({}, FileTransferEndpoint::local, std::move(paths), {});
+  } catch (const std::exception &error) {
+    g_warning("Cannot retire drag export: %s", error.what());
+  }
+}
+
 struct PaneExport {
   std::shared_ptr<FileTransferJob> job;
   std::string directory;
@@ -2258,11 +2267,8 @@ struct PaneExport {
   ~PaneExport() {
     // A file manager may start copying after acknowledging the URI list.
     // Completed exports therefore live in the user's login-session directory.
-    if (!directory.empty() && (!delivered || cancelled)) {
-      std::error_code error;
-      std::filesystem::remove_all(directory, error);
-      if (error) g_warning("Cannot retire drag export: %s", error.message().c_str());
-    }
+    if (!directory.empty() && (!delivered || cancelled))
+      cardio::fire_and_forget(retire_pane_export_async(std::move(directory)));
   }
 };
 
@@ -2339,7 +2345,9 @@ static void provide_pane_uris(const PaneDrag &drag, GtkSelectionData *data) {
   if (drag.source->remote) {
     if (!owner->connection_available || drag.client.lock() != owner->client || prepared->cancelled) return;
     if (prepared->directory.empty()) {
-      auto directory = (std::filesystem::path(g_get_user_runtime_dir()) / "elder-terms-drop-XXXXXX").string();
+      const char *runtime = g_getenv("XDG_RUNTIME_DIR");
+      const char *temporary = runtime && g_path_is_absolute(runtime) ? runtime : g_get_tmp_dir();
+      auto directory = (std::filesystem::path(temporary) / "elder-terms-drop-XXXXXX").string();
       if (!g_mkdtemp(directory.data())) {
         set_file_transfer_status(owner.get(), _("Could not create the temporary download folder"));
         return;
@@ -2349,23 +2357,24 @@ static void provide_pane_uris(const PaneDrag &drag, GtkSelectionData *data) {
       request.direction = FileTransferDirection::receive;
       request.source_paths = drag.paths;
       request.destination_directory = directory;
-      auto job = submit_file_transfer_request(owner.get(), std::move(request));
-      if (!job) return;
-      prepared->job = job;
-      const auto &snapshot = file_transfer_job_snapshot(job);
-      if (!snapshot.result) {
-        auto *loop = g_main_loop_new(nullptr, FALSE);
-        owner->export_waiters.emplace(snapshot.id, loop);
-        g_main_loop_run(loop);
-        owner->export_waiters.erase(snapshot.id);
-        g_main_loop_unref(loop);
-      }
-      if (owner->destroyed || !owner->connection_available || drag.client.lock() != owner->client ||
-          prepared->cancelled || !snapshot.result || snapshot.result->outcome != FileTransferOutcome::completed ||
-          snapshot.result->skipped_items || snapshot.result->failed_items) return;
+      prepared->job = submit_file_transfer_request(owner.get(), std::move(request));
+    }
+    if (!prepared->job) return;
+    const auto &snapshot = file_transfer_job_snapshot(prepared->job);
+    if (!snapshot.result) {
+      auto *loop = g_main_loop_new(nullptr, FALSE);
+      const auto waiter = owner->export_waiters.emplace(snapshot.id, loop);
+      g_main_loop_run(loop);
+      owner->export_waiters.erase(waiter);
+      g_main_loop_unref(loop);
+    }
+    if (owner->destroyed || !owner->connection_available || drag.client.lock() != owner->client ||
+        prepared->cancelled || !snapshot.result || snapshot.result->outcome != FileTransferOutcome::completed ||
+        snapshot.result->skipped_items || snapshot.result->failed_items) return;
+    if (prepared->paths.empty()) {
       std::error_code error;
       std::vector<std::string> paths;
-      for (std::filesystem::directory_iterator entry(directory, error), end; !error && entry != end; entry.increment(error))
+      for (std::filesystem::directory_iterator entry(prepared->directory, error), end; !error && entry != end; entry.increment(error))
         paths.push_back(entry->path().string());
       if (error || paths.size() != drag.paths.size()) return;
       prepared->paths = std::move(paths);

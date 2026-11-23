@@ -5,7 +5,14 @@
 
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
-import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import {
+  mkdtemp,
+  mkdir,
+  readFile,
+  readdir,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -37,7 +44,9 @@ it('copies between panes and downloads a remote item into a desktop file manager
   try {
     const cursorProbe = join(dir, 'drag-cursor');
     await promisify(execFile)('cc', [
-      fileURLToPath(new URL('./drag-cursor.c', import.meta.url)),
+      fileURLToPath(
+        new URL('../../shared/tests/x11-pointer.c', import.meta.url)
+      ),
       '-lX11',
       '-lXfixes',
       '-o',
@@ -149,28 +158,41 @@ it('copies between panes and downloads a remote item into a desktop file manager
       );
       await window.moveTo(40, 70);
       await window.activate();
-      const from = await row(remote, file);
-      const x = from.x + Math.floor(from.width / 2);
-      const y = from.y + Math.floor(from.height / 2);
-      await app.input.moveMouseTo(x, y);
-      await app.input.setMouseButton('left', true);
-      try {
-        await app.input.moveMouseTo(x + 20, y);
-        await waitForResult(async () =>
-          expect(
-            (await promisify(execFile)(cursorProbe, [], { env })).stdout
-          ).toMatch(/dnd-/)
-        );
-        let position = 1700;
-        await waitForResult(async () => {
-          position = position === 1700 ? 1710 : 1700;
-          await app.input.moveMouseTo(position, 380);
-          expect(
-            (await promisify(execFile)(cursorProbe, [], { env })).stdout
-          ).toContain('copy');
-        });
-      } finally {
-        await app.input.setMouseButton('left', false);
+      for (const cancel of [true, false]) {
+        const from = await row(remote, file);
+        const x = from.x + Math.floor(from.width / 2);
+        const y = from.y + Math.floor(from.height / 2);
+        await app.input.moveMouseTo(x, y);
+        await app.input.setMouseButton('left', true);
+        try {
+          await app.input.moveMouseTo(x + 20, y);
+          await waitForResult(async () =>
+            expect(
+              (await promisify(execFile)(cursorProbe, [], { env })).stdout
+            ).toMatch(/dnd-/)
+          );
+          let position = 1700;
+          await waitForResult(async () => {
+            position = position === 1700 ? 1710 : 1700;
+            await app.input.moveMouseTo(position, 380);
+            expect(
+              (await promisify(execFile)(cursorProbe, [], { env })).stdout
+            ).toContain('copy');
+          });
+          if (cancel) await app.input.pressKey('Escape');
+        } finally {
+          await app.input.setMouseButton('left', false);
+        }
+        if (cancel) {
+          await waitForResult(async () => {
+            expect(await readdir(destination)).toEqual([]);
+            expect(
+              (await readdir(runtimeDirectory)).filter((name) =>
+                name.startsWith('elder-terms-drop-')
+              )
+            ).toEqual([]);
+          });
+        }
       }
       await waitForResult(async () =>
         expect(await readFile(join(destination, file), 'utf8')).toBe(
