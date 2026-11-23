@@ -1191,11 +1191,15 @@ std::optional<MainWindow> load_main_window(TerminalAmbiguousWidth ambiguous_widt
   return main_window;
 }
 
-void set_main_window_indicator_color(MainWindow *main_window,
-                                      const std::optional<RgbColor> &color,
-                                      const std::optional<RgbColor> &off_color) {
+void apply_main_window_indicator_settings(MainWindow *main_window, const SettingsStore &settings) {
   if (main_window == nullptr || main_window->indicator_default_on_icon == nullptr ||
       main_window->indicator_default_off_icon == nullptr) return;
+  const bool visible = general_show_indicators(settings);
+  gtk_widget_set_no_show_all(main_window->activity_indicator_bar, !visible);
+  if (visible) gtk_widget_show_all(main_window->activity_indicator_bar);
+  else gtk_widget_hide(main_window->activity_indicator_bar);
+  const auto color = general_indicator_color(settings);
+  const auto off_color = general_indicator_off_color(settings);
   const std::optional<guint32> packed = color.has_value()
       ? std::optional<guint32>{(static_cast<guint32>(color->red) << 16) |
                               (static_cast<guint32>(color->green) << 8) | color->blue}
@@ -1605,7 +1609,6 @@ void set_main_window_compact_mode(MainWindow *main_window, bool compact_mode) {
   gtk_container_remove(GTK_CONTAINER(old_parent), indicators);
   gtk_box_pack_start(GTK_BOX(new_parent), indicators, FALSE, FALSE, 0);
   g_object_unref(indicators);
-  gtk_widget_show(indicators);
 
   if (compact_mode) {
     apply_main_window_compact_header(main_window);

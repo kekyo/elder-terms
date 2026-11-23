@@ -224,11 +224,17 @@ static cardio::promise<void> verify_async(
       for (const char *protocol : {"FTP", "FTPS", "SFTP", "WebDAV"}) {
         auto settings = create_default_settings({}, "Auto-close");
         set_setting_value(&settings, general_auto_close_setting_key(), SettingValue{auto_close});
+        set_setting_value(&settings, make_setting_key("general", "show_indicators"), SettingValue{false});
+        set_setting_value(&settings, general_compact_mode_setting_key(), SettingValue{auto_close});
         auto closing_window = create_file_transfer_window({
             .connection_name = "Auto-close", .protocol_name = protocol,
             .local_directory = "/tmp", .remote_directory = "/remote",
             .remote_file_hash = {}, .colors = {}, .closed = {},
             .settings = settings});
+        show_file_transfer_window(closing_window);
+        auto *root = file_transfer_window_widget(closing_window);
+        auto *lamp = find_widget(auto_close ? gtk_window_get_titlebar(GTK_WINDOW(root)) : root, "conn_indicator_image");
+        expect(lamp && !gtk_widget_is_visible(lamp), "Disabled lamps must stay hidden in normal and compact windows");
         set_file_transfer_window_connection_available(closing_window, true);
         set_file_transfer_window_connection_available(closing_window, false);
         const bool destroyed = file_transfer_window_widget(closing_window) == nullptr;

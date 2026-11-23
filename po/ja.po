@@ -3401,3 +3401,6 @@ msgstr "Material (黒)"
 
 msgid "Material (White)"
 msgstr "Material (白)"
+
+msgid "Show activity indicators"
+msgstr "通信インジケーターを表示"

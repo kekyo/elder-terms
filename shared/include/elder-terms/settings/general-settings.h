@@ -238,6 +238,12 @@ general_open_connection_hotkey(const SettingsStore &store);
 ELDER_TERMS_API GeneralColorSettings
 general_color_settings(const SettingsStore &store);
 
+/** @return The [general] show_indicators setting key. */
+ELDER_TERMS_API SettingKey general_show_indicators_setting_key();
+
+/** @param store Source settings. @return Whether to display connection activity lamps. */
+ELDER_TERMS_API bool general_show_indicators(const SettingsStore &store);
+
 /**
  * Returns the setting key for [general] show_border.
  *

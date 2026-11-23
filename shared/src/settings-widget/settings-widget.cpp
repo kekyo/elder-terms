@@ -146,6 +146,7 @@ struct SettingsWidgetState {
   GtkWidget *general_compact_mode_combo = nullptr;
   GtkWidget *general_receive_effect_combo = nullptr;
   GtkWidget *general_show_border_combo = nullptr;
+  GtkWidget *general_show_indicators_combo = nullptr;
   GtkWidget *general_border_width_entry = nullptr;
   bool general_border_width_valid = true;
   KeyBindingInputWidgetState *general_open_connection_input = nullptr;
@@ -3512,6 +3513,9 @@ static void sync_widgets_from_draft(SettingsWidgetState *state, bool preserve_in
                            general_compact_mode_setting_key(),
                            general_compact_mode(state->draft_store));
   }
+  if (state->general_show_indicators_combo)
+    populate_boolean_combo(state->general_show_indicators_combo, state->draft_store,
+        general_show_indicators_setting_key(), general_show_indicators(state->draft_store));
   if (state->general_show_border_combo != nullptr) {
     populate_boolean_combo(state->general_show_border_combo,
                            state->draft_store,
@@ -5304,6 +5308,18 @@ static GtkWidget *create_general_page(SettingsWidgetState *state) {
                      state->general_background_button, FALSE, FALSE, 0);
   attach_row(page, row++, general_background_setting_key(),
              background_color_row);
+
+  state->general_show_indicators_combo = create_combo_box(widget_id(state, "general_show_indicators_combo").c_str());
+  g_signal_connect(state->general_show_indicators_combo, "changed", G_CALLBACK(+[](GtkComboBox *combo, gpointer data) {
+    auto *state = static_cast<SettingsWidgetState *>(data);
+    if (state->synchronizing) return;
+    const auto choice = active_combo_id(GTK_WIDGET(combo), inherit_choice);
+    const auto key = general_show_indicators_setting_key();
+    if (choice == inherit_choice) clear_explicit_setting_value(&state->draft_store, key);
+    else set_explicit_setting_value(&state->draft_store, key, SettingValue{choice == boolean_enabled});
+    notify_changed(state);
+  }), state);
+  attach_row(page, row++, general_show_indicators_setting_key(), state->general_show_indicators_combo);
 
   GtkWidget *indicator_color_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
   state->general_indicator_color_mode_combo = create_combo_box(

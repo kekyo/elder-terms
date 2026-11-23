@@ -139,6 +139,7 @@ static constexpr std::array setting_labels{
                       N_("Trim trailing spaces in block copies")},
     SettingLabelEntry{"terminal", "font_size_dip", N_("Font size (DIP)")},
     SettingLabelEntry{"terminal", "font_zoom_mode", N_("Font zoom behavior")},
+    SettingLabelEntry{"general", "show_indicators", N_("Show activity indicators")},
     SettingLabelEntry{"general", "indicator_color", N_("Active indicator color")},
     SettingLabelEntry{"general", "indicator_off_color", N_("Inactive indicator color")},
     SettingLabelEntry{"terminal", "font_families", N_("Font families")},

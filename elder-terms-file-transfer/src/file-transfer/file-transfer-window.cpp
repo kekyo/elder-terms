@@ -2918,7 +2918,6 @@ static void apply_file_transfer_compact_mode(FileTransferWindow *window,
     gtk_box_pack_start(GTK_BOX(new_parent), window->indicator_bar,
                        FALSE, FALSE, 0);
     g_object_unref(window->indicator_bar);
-    gtk_widget_show_all(window->indicator_bar);
   }
   set_compact_header_enabled(window->header_bar, window->header_provider,
       file_transfer_header_style_class, compact_mode);
@@ -2952,13 +2951,17 @@ static void apply_file_transfer_border(FileTransferWindow *window) {
   gtk_widget_set_size_request(window->frame_bottom_border, -1, width);
 }
 
-void set_file_transfer_window_indicator_colors(
-    const std::shared_ptr<FileTransferWindow> &window,
-    const std::optional<RgbColor> &color,
-    const std::optional<RgbColor> &off_color) {
+void apply_file_transfer_window_indicator_settings(
+    const std::shared_ptr<FileTransferWindow> &window, const SettingsStore &settings) {
   if (window == nullptr || window->destroyed ||
       window->indicator_default_on == nullptr ||
       window->indicator_default_off == nullptr) return;
+  const bool visible = general_show_indicators(settings);
+  gtk_widget_set_no_show_all(window->indicator_bar, !visible);
+  if (visible) gtk_widget_show_all(window->indicator_bar);
+  else gtk_widget_hide(window->indicator_bar);
+  const auto color = general_indicator_color(settings);
+  const auto off_color = general_indicator_off_color(settings);
   auto *on = color.has_value()
       ? create_colored_indicator_pixbuf(window->indicator_default_on, *color)
       : GDK_PIXBUF(g_object_ref(window->indicator_default_on));
@@ -3008,8 +3011,7 @@ static void open_file_settings(GtkMenuItem *, gpointer data) {
         window->self.lock(), general_connection_icon(settings));
     set_file_transfer_window_colors(
         window->self.lock(), general_color_settings(settings));
-    set_file_transfer_window_indicator_colors(window->self.lock(),
-        general_indicator_color(settings), general_indicator_off_color(settings));
+    apply_file_transfer_window_indicator_settings(window->self.lock(), settings);
     apply_file_transfer_compact_mode(window, general_compact_mode(settings));
     apply_file_transfer_border(window);
     action.complete(true, {});
@@ -3320,9 +3322,7 @@ create_file_transfer_window(FileTransferWindowOptions options) {
         state->indicator_on, state->indicator_off,
         index == 0 ? ActivityIndicatorMode::steady : ActivityIndicatorMode::blink);
   }
-  set_file_transfer_window_indicator_colors(state,
-      general_indicator_color(state->settings),
-      general_indicator_off_color(state->settings));
+  apply_file_transfer_window_indicator_settings(state, state->settings);
   // Programmatically built widgets must be visible for GTK to measure the
   // themed header height before compact mode is applied at startup.
   gtk_widget_show_all(state->header_bar);

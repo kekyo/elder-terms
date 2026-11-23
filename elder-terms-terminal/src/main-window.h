@@ -237,12 +237,9 @@ void set_main_window_colors(MainWindow *main_window,
 /**
  * Applies shared active and inactive tints without resetting current activity.
  * @param main_window Window owning indicator images and states.
- * @param color Active RGB tint, or null to restore the original green image.
- * @param off_color Inactive RGB tint, or null to restore the original gray image.
+ * @param settings Effective indicator visibility and colors.
  */
-void set_main_window_indicator_color(MainWindow *main_window,
-                                      const std::optional<RgbColor> &color,
-                                      const std::optional<RgbColor> &off_color);
+void apply_main_window_indicator_settings(MainWindow *main_window, const SettingsStore &settings);
 
 /**
  * Registers the open runtime settings dialog for connection color updates.
