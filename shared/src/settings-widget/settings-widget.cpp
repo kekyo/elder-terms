@@ -2136,9 +2136,7 @@ static void update_transfer_text_send_rate_from_widget(
     sync_cleared_entry(
         state, state->transfer_text_send_rate_entry,
         transfer_text_send_bytes_per_second_setting_key(),
-        std::to_string(setting_integer_value_or_default(
-            state->draft_store,
-            transfer_text_send_bytes_per_second_setting_key(), 1024)));
+        std::to_string(transfer_text_send_bytes_per_second(state->draft_store)));
     return;
   }
   gtk_entry_set_placeholder_text(

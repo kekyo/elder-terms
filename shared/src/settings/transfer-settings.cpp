@@ -16,7 +16,6 @@ static constexpr char transfer_text_send_bytes_per_second_key[] =
 static constexpr char transfer_text_send_follow_return_code_key[] =
     "text_send_follow_return_code";
 static constexpr char transfer_zmodem_autostart_key[] = "zmodem_autostart";
-static constexpr gint64 default_text_send_bytes_per_second = 1024;
 
 static bool validate_text_send_bytes_per_second(const SettingValue &value,
                                                 std::string *reason) {

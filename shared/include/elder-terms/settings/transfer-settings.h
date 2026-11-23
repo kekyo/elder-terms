@@ -13,6 +13,9 @@
 
 namespace elder_terms {
 
+/** Default encoded text send rate, in bytes per second. */
+inline constexpr gint64 default_text_send_bytes_per_second = 2048;
+
 /**
  * Returns the transfer base path setting key.
  *

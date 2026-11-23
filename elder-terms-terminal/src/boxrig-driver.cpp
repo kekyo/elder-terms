@@ -40,7 +40,7 @@ struct Driver {
   std::uint64_t log_generation = 0;
   elder_terms::TerminalTextSettings input_settings;
   elder_terms::TerminalTextSendSource text_source = elder_terms::TerminalTextSendBufferSource{"Text send from boxrig\n"};
-  std::uint64_t text_rate = 1024;
+  std::uint64_t text_rate = elder_terms::default_text_send_bytes_per_second;
   elder_terms::TerminalTransferRequest transfer;
   bool connection_mode = false;
   bool zmodem_auto = false;

@@ -114,7 +114,7 @@ struct TerminalTextSendRequest {
   /** True to normalize logical line endings to text_settings.return_code. */
   bool follow_return_code = true;
   /** Maximum encoded payload rate in bytes per second. */
-  std::uint64_t bytes_per_second = 1024;
+  std::uint64_t bytes_per_second = default_text_send_bytes_per_second;
   /** Receives transfer active/inactive state changes. */
   TerminalTransferActiveCallback active;
   /** Receives status text and conversion warnings. */

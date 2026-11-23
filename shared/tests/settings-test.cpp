@@ -329,8 +329,8 @@ static void test_default_settings() {
               "default terminal BREAK key text should be empty");
   expect_true(transfer_base_path(store).empty(),
               "default transfer base path should be empty");
-  expect_true(transfer_text_send_bytes_per_second(store) == 1024,
-              "default text send rate should be 1024 bytes per second");
+  expect_true(transfer_text_send_bytes_per_second(store) == 2048,
+              "default text send rate should be 2048 bytes per second");
   expect_true(transfer_text_send_follow_return_code(store),
               "text send should follow the Return code by default");
   expect_true(!transfer_zmodem_autostart(store),
@@ -2277,7 +2277,7 @@ static void test_transfer_text_send_bytes_per_second_setting() {
   const std::filesystem::path valid = temporary_config_path("text-send-rate");
   write_config(valid,
                "[transfer]\n"
-               "text_send_bytes_per_second=4096\n");
+               "text_send_bytes_per_second=1024\n");
 
   const SettingsLoadResult valid_result = load_settings(
       SettingsLoadOptions{
@@ -2287,7 +2287,7 @@ static void test_transfer_text_send_bytes_per_second_setting() {
       1.0);
   remove_config(valid);
 
-  expect_true(transfer_text_send_bytes_per_second(valid_result.store) == 4096,
+  expect_true(transfer_text_send_bytes_per_second(valid_result.store) == 1024,
               "text send rate should come from the configuration file");
 
   const std::filesystem::path invalid =
@@ -2305,7 +2305,7 @@ static void test_transfer_text_send_bytes_per_second_setting() {
   remove_config(invalid);
 
   expect_true(transfer_text_send_bytes_per_second(invalid_result.store) ==
-                  1024,
+                  2048,
               "out-of-range text send rate should use the default");
   expect_true(warnings_contain(invalid_result.warnings,
                                "text_send_bytes_per_second"),
@@ -3324,7 +3324,7 @@ static void test_save_settings_omits_default_values() {
       &store, transfer_base_path_setting_key(),
       elder_terms::SettingValue{std::string("file:///tmp/downloads")});
   set_setting_value(&store, transfer_text_send_bytes_per_second_setting_key(),
-                    elder_terms::SettingValue{gint64{2048}});
+                    elder_terms::SettingValue{gint64{1024}});
   set_setting_value(
       &store, transfer_text_send_follow_return_code_setting_key(),
       elder_terms::SettingValue{false});
@@ -3363,7 +3363,7 @@ static void test_save_settings_omits_default_values() {
   expect_true(content.find("base_path=file:///tmp/downloads") !=
                   std::string::npos,
               "saved settings should include non-default transfer base_path");
-  expect_true(content.find("text_send_bytes_per_second=2048") !=
+  expect_true(content.find("text_send_bytes_per_second=1024") !=
                   std::string::npos,
               "saved settings should include non-default text send rate");
   expect_true(content.find("text_send_follow_return_code=false") !=
