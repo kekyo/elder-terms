@@ -125,8 +125,73 @@ for (const application of ['terminal', 'file-transfer']) {
           );
           await window.moveTo(180, 100);
           await window.activate();
-          const original = await window.bounds();
           const prefix = application === 'terminal' ? '' : 'file_transfer_';
+          if (composited) {
+            const header = await app.getById(`${prefix}header_bar`);
+            const firstFrame = await window.bounds();
+            const firstHeader = (await header.capture()).bounds;
+            for (const [horizontal, vertical] of [
+              [-1, 0],
+              [1, 0],
+              [0, -1],
+              [-1, -1],
+              [1, -1],
+            ]) {
+              const { bounds, before } = await waitForResult(async () => {
+                const before = await window.bounds();
+                const bounds = (await header.capture()).bounds;
+                expect(bounds.x - before.x).toBe(firstHeader.x - firstFrame.x);
+                expect(bounds.y - before.y).toBe(firstHeader.y - firstFrame.y);
+                expect(before.width - bounds.width).toBe(
+                  firstFrame.width - firstHeader.width
+                );
+                return { bounds, before };
+              });
+              const inset = Math.floor(width / 2);
+              const x =
+                bounds.x +
+                (horizontal < 0
+                  ? inset
+                  : horizontal > 0
+                    ? bounds.width - 1 - inset
+                    : Math.floor(bounds.width / 2));
+              const y =
+                bounds.y + (vertical ? inset : Math.floor(bounds.height / 2));
+              await evidence.log('Header drag', {
+                horizontal,
+                vertical,
+                x,
+                y,
+                before,
+              });
+              await app.input.moveMouseTo(x, y);
+              await app.input.setMouseButton('left', true);
+              try {
+                let motion = 0;
+                await waitForResult(async () => {
+                  const delta = 20 + (motion++ % 2) * 4;
+                  await app.input.moveMouseTo(
+                    x + horizontal * delta,
+                    y + vertical * delta
+                  );
+                  const after = await window.bounds();
+                  if (horizontal)
+                    expect(
+                      after.width,
+                      `header edge ${horizontal},${vertical}`
+                    ).toBeGreaterThan(before.width);
+                  if (vertical)
+                    expect(
+                      after.height,
+                      `header edge ${horizontal},${vertical}`
+                    ).toBeGreaterThan(before.height);
+                });
+              } finally {
+                await app.input.setMouseButton('left', false);
+              }
+            }
+          }
+          const original = await window.bounds();
           await evidence.captureEvidence('visible-borders', async () =>
             app.capture()
           );
