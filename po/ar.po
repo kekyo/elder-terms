@@ -2675,3 +2675,27 @@ msgstr "ابحث عن الأيقونات…"
 
 msgid "No matching icons"
 msgstr "لا توجد أيقونات مطابقة"
+
+msgid "Show activity indicators"
+msgstr "إظهار مؤشرات النشاط"
+
+msgid "Drop regular files to send"
+msgstr "أسقط ملفات عادية لإرسالها"
+
+msgid "Drop one file for text send"
+msgstr "أسقط ملفًا واحدًا لإرساله كنص"
+
+msgid "Could not create the temporary download folder"
+msgstr "تعذّر إنشاء مجلد التنزيل المؤقت"
+
+msgid "Terminal padding (DIP)"
+msgstr "هامش الطرفية الداخلي (DIP)"
+
+msgid "Vertical grid alignment"
+msgstr "المحاذاة الرأسية للشبكة"
+
+msgid "Top"
+msgstr "أعلى"
+
+msgid "Bottom"
+msgstr "أسفل"

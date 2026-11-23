@@ -2679,3 +2679,27 @@ msgstr "Buscar iconos…"
 
 msgid "No matching icons"
 msgstr "No hay iconos coincidentes"
+
+msgid "Show activity indicators"
+msgstr "Mostrar indicadores de actividad"
+
+msgid "Drop regular files to send"
+msgstr "Suelta archivos normales para enviarlos"
+
+msgid "Drop one file for text send"
+msgstr "Suelta un solo archivo para enviarlo como texto"
+
+msgid "Could not create the temporary download folder"
+msgstr "No se pudo crear la carpeta temporal de descarga"
+
+msgid "Terminal padding (DIP)"
+msgstr "Margen interior del terminal (DIP)"
+
+msgid "Vertical grid alignment"
+msgstr "Alineación vertical de la cuadrícula"
+
+msgid "Top"
+msgstr "Arriba"
+
+msgid "Bottom"
+msgstr "Abajo"

@@ -2656,3 +2656,27 @@ msgstr "आइकन खोजें…"
 
 msgid "No matching icons"
 msgstr "कोई मेल खाने वाला आइकन नहीं"
+
+msgid "Show activity indicators"
+msgstr "गतिविधि संकेतक दिखाएँ"
+
+msgid "Drop regular files to send"
+msgstr "भेजने के लिए सामान्य फ़ाइलें यहाँ छोड़ें"
+
+msgid "Drop one file for text send"
+msgstr "पाठ के रूप में भेजने के लिए एक फ़ाइल छोड़ें"
+
+msgid "Could not create the temporary download folder"
+msgstr "डाउनलोड के लिए अस्थायी फ़ोल्डर नहीं बनाया जा सका"
+
+msgid "Terminal padding (DIP)"
+msgstr "टर्मिनल का आंतरिक हाशिया (DIP)"
+
+msgid "Vertical grid alignment"
+msgstr "ग्रिड का लंबवत संरेखण"
+
+msgid "Top"
+msgstr "ऊपर"
+
+msgid "Bottom"
+msgstr "नीचे"

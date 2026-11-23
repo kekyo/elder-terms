@@ -2657,3 +2657,27 @@ msgstr "아이콘 검색…"
 
 msgid "No matching icons"
 msgstr "일치하는 아이콘이 없습니다"
+
+msgid "Show activity indicators"
+msgstr "통신 표시등 표시"
+
+msgid "Drop regular files to send"
+msgstr "전송할 일반 파일을 놓으세요"
+
+msgid "Drop one file for text send"
+msgstr "텍스트로 전송할 파일 하나를 놓으세요"
+
+msgid "Could not create the temporary download folder"
+msgstr "다운로드용 임시 폴더를 만들 수 없습니다"
+
+msgid "Terminal padding (DIP)"
+msgstr "터미널 안쪽 여백(DIP)"
+
+msgid "Vertical grid alignment"
+msgstr "격자 세로 정렬"
+
+msgid "Top"
+msgstr "위쪽"
+
+msgid "Bottom"
+msgstr "아래쪽"
