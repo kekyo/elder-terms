@@ -2321,7 +2321,7 @@ describe.concurrent('shared settings widget', () => {
   });
 
   for (const mode of ['runtime', 'global']) {
-    it(`saves and inherits the font zoom mode in ${mode} settings`, async (context) => {
+    it(`saves and inherits zoom and grid placement in ${mode} settings`, async (context) => {
       const directory = await mkdtemp(join(tmpdir(), 'elder-terms-zoom-mode-'));
       const path = join(directory, 'settings.ini');
       const prefix = mode === 'global' ? 'global_settings' : 'settings';
@@ -2336,6 +2336,8 @@ describe.concurrent('shared settings widget', () => {
               : [
                   '--runtime',
                   '--global=terminal.font_zoom_mode=preserve-window',
+                  '--global=terminal.grid_vertical_alignment=bottom',
+                  '--global=terminal.padding_dip=7',
                 ]),
           ],
           async ({ app }) => {
@@ -2354,6 +2356,22 @@ describe.concurrent('shared settings widget', () => {
               await app.getById(`${prefix}_save_button`),
               'button'
             );
+            const alignId = `${prefix}_terminal_grid_alignment_combo`;
+            const align = expectElementKind(
+              await app.getById(alignId),
+              'comboBox'
+            );
+            const padding = expectElementKind(
+              await app.getById(`${prefix}_terminal_padding_dip_entry`),
+              'entry'
+            );
+            const alignmentNames = await comboOptionNames(app, alignId);
+            expect(alignmentNames.slice(1)).toEqual(['Top', 'Bottom']);
+            expect(alignmentNames[0]).toContain(
+              mode === 'global' ? 'Top' : 'Bottom'
+            );
+            await align.selectChildAt(2);
+            await padding.setText('4');
             for (const [index, value] of [
               [2, 'preserve-window'],
               [1, 'preserve-grid'],
@@ -2366,13 +2384,22 @@ describe.concurrent('shared settings widget', () => {
                 )
               );
             }
+            const stored = await readFile(path, 'utf8');
+            expect(stored).toContain('padding_dip=4');
+            expect(stored).toContain('grid_vertical_alignment=bottom');
             await combo.selectChildAt(0);
+            await align.selectChildAt(0);
+            await padding.setText('');
             await save.click();
-            await waitForResult(async () =>
-              expect(await readFile(path, 'utf8')).not.toContain(
-                'font_zoom_mode='
-              )
-            );
+            await waitForResult(async () => {
+              const cleared = await readFile(path, 'utf8');
+              for (const key of [
+                'font_zoom_mode',
+                'grid_vertical_alignment',
+                'padding_dip',
+              ])
+                expect(cleared).not.toContain(key + '=');
+            });
           }
         );
       } finally {

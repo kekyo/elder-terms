@@ -3413,3 +3413,15 @@ msgstr "テキスト送信ではファイルを1つドロップしてくださ�
 
 msgid "Could not create the temporary download folder"
 msgstr "受信用の一時フォルダーを作成できませんでした"
+
+msgid "Terminal padding (DIP)"
+msgstr "端末のパディング（DIP）"
+
+msgid "Vertical grid alignment"
+msgstr "セルの縦位置"
+
+msgid "Top"
+msgstr "上寄せ"
+
+msgid "Bottom"
+msgstr "下寄せ"

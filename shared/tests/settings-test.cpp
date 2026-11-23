@@ -1246,6 +1246,14 @@ static void test_terminal_font_zoom_mode() {
     return elder_terms::setting_string_value_or_default(store, key, "");
   };
   auto store = create_default_settings(default_terminal_display_settings(12), "Zoom");
+  const auto padding = elder_terms::make_setting_key("terminal", "padding_dip");
+  const auto align = elder_terms::make_setting_key("terminal", "grid_vertical_alignment");
+  expect_true(elder_terms::setting_integer_value_or_default(store, padding, -1) == 0 &&
+      elder_terms::setting_string_value_or_default(store, align, "") == "top", "default grid placement");
+  expect_true(set_explicit_setting_value(&store, padding, gint64{4}) &&
+      set_explicit_setting_value(&store, align, std::string("bottom")), "accept bottom aligned padded terminal");
+  expect_true(!set_explicit_setting_value(&store, padding, gint64{-1}) &&
+      !set_explicit_setting_value(&store, align, std::string("diagonal")), "reject invalid grid placement");
   expect_true(mode(store) == "preserve-grid", "font zoom must preserve the grid by default");
   write_config(global, "[terminal]\nfont_zoom_mode=preserve-window\n");
   write_config(path, "");

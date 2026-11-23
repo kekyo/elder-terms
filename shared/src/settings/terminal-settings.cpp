@@ -103,6 +103,20 @@ static bool validate_font_size_dip(const SettingValue &value, std::string *reaso
   return true;
 }
 
+static bool validate_terminal_padding(const SettingValue &value, std::string *reason) {
+  const auto *padding = std::get_if<gint64>(&value);
+  if (padding && *padding >= 0 && *padding <= maximum_terminal_padding_dip) return true;
+  *reason = "must be a nonnegative, representable terminal inset";
+  return false;
+}
+
+static bool validate_grid_alignment(const SettingValue &value, std::string *reason) {
+  const auto *mode = std::get_if<std::string>(&value);
+  if (mode && (*mode == "top" || *mode == "bottom")) return true;
+  *reason = "must be top or bottom";
+  return false;
+}
+
 static bool validate_font_zoom_mode(const SettingValue &value, std::string *reason) {
   const auto *mode = std::get_if<std::string>(&value);
   if (mode == nullptr || (*mode != "preserve-grid" && *mode != "preserve-window")) {
@@ -345,6 +359,16 @@ SettingKey terminal_block_copy_trim_trailing_spaces_setting_key() {
 
 SettingKey terminal_font_size_dip_setting_key() {
   return terminal_key(terminal_font_size_dip_key);
+}
+
+SettingKey terminal_padding_dip_setting_key() { return terminal_key("padding_dip"); }
+unsigned int terminal_padding_dip(const SettingsStore &store) {
+  return static_cast<unsigned int>(setting_integer_value_or_default(store, terminal_padding_dip_setting_key(), 0));
+}
+
+SettingKey terminal_grid_vertical_alignment_setting_key() { return terminal_key("grid_vertical_alignment"); }
+bool terminal_grid_bottom_aligned(const SettingsStore &store) {
+  return setting_string_value_or_default(store, terminal_grid_vertical_alignment_setting_key(), "top") == "bottom";
 }
 
 SettingKey terminal_font_zoom_mode_setting_key() {
@@ -596,6 +620,16 @@ terminal_setting_definitions(TerminalDisplaySettings terminal_defaults) {
           .default_value = SettingValue{std::vector<std::string>{}},
           .validate = validate_font_families,
           .normalize = normalize_font_families,
+      },
+      {
+          .key = terminal_padding_dip_setting_key(),
+          .default_value = SettingValue{gint64{0}},
+          .validate = validate_terminal_padding,
+      },
+      {
+          .key = terminal_grid_vertical_alignment_setting_key(),
+          .default_value = SettingValue{std::string("top")},
+          .validate = validate_grid_alignment,
       },
       {
           .key = terminal_font_zoom_mode_setting_key(),

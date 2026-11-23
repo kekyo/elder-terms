@@ -248,6 +248,17 @@ ELDER_TERMS_API SettingKey terminal_block_copy_trim_trailing_spaces_setting_key(
  */
 ELDER_TERMS_API SettingKey terminal_font_size_dip_setting_key();
 
+/** Largest symmetric inset accepted by the terminal widget, in logical pixels. */
+inline constexpr int maximum_terminal_padding_dip = G_MAXINT / 2;
+/** @returns Key for the uniform terminal inset in logical pixels. */
+ELDER_TERMS_API SettingKey terminal_padding_dip_setting_key();
+/** @param store Layered settings. @returns Inset on each edge, zero by default. */
+ELDER_TERMS_API unsigned int terminal_padding_dip(const SettingsStore &store);
+/** @returns Key for the vertical position of the terminal grid. */
+ELDER_TERMS_API SettingKey terminal_grid_vertical_alignment_setting_key();
+/** @param store Layered settings. @returns True to leave excess height above the grid. */
+ELDER_TERMS_API bool terminal_grid_bottom_aligned(const SettingsStore &store);
+
 /** Size retained by keyboard and Ctrl+wheel font zoom operations. */
 enum class TerminalFontZoomMode {
   preserve_grid,   /**< Keep the current rows and columns, resizing the window when allowed. */

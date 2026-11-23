@@ -253,6 +253,9 @@ bool apply_terminal_presentation(TerminalPresentation *presentation, const Setti
   auto *window = presentation->window;
   auto *widget = terminal_runtime_widget(window->runtime);
   const auto display = terminal_display_settings(settings);
+  if (boxrig_gtk3_terminal_widget_set_grid_padding(widget, terminal_padding_dip(settings)) != BOXRIG_UI_OK ||
+      boxrig_gtk3_terminal_widget_set_grid_alignment(widget, terminal_grid_bottom_aligned(settings)
+          ? BOXRIG_UI_GRID_BOTTOM : BOXRIG_UI_GRID_TOP) != BOXRIG_UI_OK) return false;
   const auto vision = terminal_color_vision_settings(settings);
   const auto links = terminal_link_decorations(settings);
   if (!apply_colors(presentation, {general_color_settings(settings).background,
