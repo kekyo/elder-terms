@@ -3404,3 +3404,9 @@ msgstr "Material (白)"
 
 msgid "Show activity indicators"
 msgstr "通信インジケーターを表示"
+
+msgid "Drop regular files to send"
+msgstr "送信するファイルをドロップしてください"
+
+msgid "Drop one file for text send"
+msgstr "テキスト送信ではファイルを1つドロップしてください"

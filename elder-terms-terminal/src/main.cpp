@@ -1387,6 +1387,128 @@ static bool can_paste_terminal_text(const ApplicationState *state) {
          !elder_terms::has_modal_dialog(state->window);
 }
 
+struct TerminalFileDrop {
+  GWeakRef owner;
+  ApplicationState *state;
+  std::uint64_t generation;
+  std::vector<std::string> files;
+  std::size_t next = 0;
+  GdkRectangle anchor;
+  GdkEvent *trigger;
+
+  TerminalFileDrop(GtkWidget *widget, ApplicationState *application, gint x, gint y, GdkEvent *event)
+      : state(application), generation(elder_terms::terminal_runtime_connection_state(application->runtime).generation),
+        anchor{x, y, 1, 1}, trigger(event) {
+    g_weak_ref_init(&owner, widget);
+  }
+  ~TerminalFileDrop() {
+    g_weak_ref_clear(&owner);
+    if (trigger) gdk_event_free(trigger);
+  }
+};
+
+static bool terminal_drop_available(const TerminalFileDrop &drop) {
+  return can_paste_terminal_text(drop.state) && !drop.state->closing &&
+      elder_terms::terminal_runtime_connection_state(drop.state->runtime).generation == drop.generation;
+}
+
+static void present_terminal_drop(GtkWidget *owner, const std::shared_ptr<TerminalFileDrop> &drop) {
+  GtkWidget *menu = gtk_menu_new();
+  gtk_menu_attach_to_widget(GTK_MENU(menu), owner, nullptr);
+  g_signal_connect_swapped(menu, "selection-done", G_CALLBACK(gtk_widget_destroy), menu);
+  const auto append = [&](const char *label, const char *id, std::optional<TransferMenuAction> action) {
+    auto *item = gtk_menu_item_new_with_label(label);
+    gestament_gtk_assign_accessible_id(item, id);
+    gtk_menu_shell_append(GTK_MENU_SHELL(menu), item);
+    using Choice = std::function<void()>;
+    auto *activate = new Choice([drop, action] {
+      auto *state = drop->state;
+      const bool started = terminal_drop_available(*drop) && (action
+          ? start_transfer_request(state, *action, drop->files)
+          : start_text_send_request(state, elder_terms::TerminalTextSendFileSource{drop->files.front()}));
+      if (!started) elder_terms::set_main_window_status_text(state->main_window, _("Transfer unavailable"));
+    });
+    g_signal_connect_data(item, "activate", G_CALLBACK(+[](GtkMenuItem *, gpointer data) {
+      (*static_cast<Choice *>(data))();
+    }), activate, +[](gpointer data, GClosure *) { delete static_cast<Choice *>(data); }, G_CONNECT_DEFAULT);
+  };
+  const bool single = drop->files.size() == 1;
+  if (single) append(_("Text (Send)"), "drop_text_send_item", std::nullopt);
+  if (drop->state->active_profile.kind != elder_terms::TerminalConnectionKind::local_shell) {
+    TransferMenuAction action;
+    if (single) {
+      action.protocol = elder_terms::TerminalTransferProtocol::xmodem;
+      action.options.xmodem_packet_size = elder_terms::TerminalTransferXmodemPacketSize::bytes_128;
+      append(_("XMODEM (send)"), "drop_xmodem_send_item", action);
+      action.options.xmodem_packet_size = elder_terms::TerminalTransferXmodemPacketSize::bytes_1024;
+      append(_("XMODEM 1K (send)"), "drop_xmodem_1k_send_item", action);
+    }
+    action.options = {};
+    action.protocol = elder_terms::TerminalTransferProtocol::ymodem;
+    append(_("YMODEM (send)"), "drop_ymodem_send_item", action);
+    action.protocol = elder_terms::TerminalTransferProtocol::zmodem;
+    append(_("ZMODEM (send)"), "drop_zmodem_send_item", action);
+  }
+  gtk_widget_show_all(menu);
+  GtkWidget *toplevel = gtk_widget_get_toplevel(owner);
+  GdkRectangle anchor = drop->anchor;
+  gtk_widget_translate_coordinates(owner, toplevel, anchor.x, anchor.y, &anchor.x, &anchor.y);
+  gtk_menu_popup_at_rect(GTK_MENU(menu), gtk_widget_get_window(toplevel), &anchor,
+      GDK_GRAVITY_SOUTH_WEST, GDK_GRAVITY_NORTH_WEST, drop->trigger);
+}
+
+// Query metadata asynchronously: a file manager can supply a mounted or remote URI.
+static void check_terminal_drop(std::shared_ptr<TerminalFileDrop> drop) {
+  auto *file = g_file_new_for_uri(drop->files[drop->next++].c_str());
+  g_file_query_info_async(file, G_FILE_ATTRIBUTE_STANDARD_TYPE, G_FILE_QUERY_INFO_NONE,
+      G_PRIORITY_DEFAULT, nullptr, +[](GObject *source, GAsyncResult *result, gpointer data) {
+    std::unique_ptr<std::shared_ptr<TerminalFileDrop>> pending(static_cast<std::shared_ptr<TerminalFileDrop> *>(data));
+    auto drop = *pending;
+    std::unique_ptr<GFileInfo, decltype(&g_object_unref)> info(
+        g_file_query_info_finish(G_FILE(source), result, nullptr), g_object_unref);
+    std::unique_ptr<GtkWidget, decltype(&g_object_unref)> owner(
+        static_cast<GtkWidget *>(g_weak_ref_get(&drop->owner)), g_object_unref);
+    if (!owner || !gtk_widget_get_mapped(owner.get()) || !terminal_drop_available(*drop)) return;
+    if (!info || g_file_info_get_file_type(info.get()) != G_FILE_TYPE_REGULAR) {
+      elder_terms::set_main_window_status_text(drop->state->main_window, _("Drop regular files to send"));
+    } else if (drop->next < drop->files.size()) {
+      check_terminal_drop(drop);
+    } else {
+      present_terminal_drop(owner.get(), drop);
+    }
+  }, new std::shared_ptr<TerminalFileDrop>(drop));
+  g_object_unref(file);
+}
+
+static void install_terminal_file_drop(ApplicationState *state) {
+  GtkWidget *owner = state->main_window->terminal_attachment;
+  gtk_drag_dest_set(owner, GTK_DEST_DEFAULT_ALL, nullptr, 0, GDK_ACTION_COPY);
+  gtk_drag_dest_add_uri_targets(owner);
+  g_signal_connect(owner, "drag-data-received", G_CALLBACK(+[](GtkWidget *widget,
+      GdkDragContext *context, gint x, gint y, GtkSelectionData *data, guint, guint time, gpointer user) {
+    auto *state = static_cast<ApplicationState *>(user);
+    if (!can_paste_terminal_text(state)) {
+      elder_terms::set_main_window_status_text(state->main_window, _("Transfer unavailable"));
+      return;
+    }
+    auto *event = gdk_event_new(GDK_BUTTON_RELEASE);
+    event->button.window = GDK_WINDOW(g_object_ref(gtk_widget_get_window(widget)));
+    event->button.time = time;
+    event->button.button = GDK_BUTTON_PRIMARY;
+    gdk_event_set_device(event, gdk_drag_context_get_device(context));
+    auto drop = std::make_shared<TerminalFileDrop>(widget, state, x, y, event);
+    gchar **uris = gtk_selection_data_get_uris(data);
+    for (gchar **uri = uris; uri && *uri; ++uri) drop->files.emplace_back(*uri);
+    g_strfreev(uris);
+    if (drop->files.empty()) return;
+    if (drop->files.size() > 1 && state->active_profile.kind == elder_terms::TerminalConnectionKind::local_shell) {
+      elder_terms::set_main_window_status_text(state->main_window, _("Drop one file for text send"));
+      return;
+    }
+    check_terminal_drop(drop);
+  }), state);
+}
+
 static bool can_send_terminal_break(const ApplicationState *state) {
   return state != nullptr && state->window != nullptr &&
          state->connection_active && !state->transfer_active &&
@@ -2052,6 +2174,7 @@ int main(int argc, char **argv) {
       });
   apply_zmodem_auto_start(&app_state);
   install_transfer_menu(&app_state);
+  install_terminal_file_drop(&app_state);
   elder_terms::set_main_window_transfer_button_visible(&*main_window, true);
   update_application_terminal_presentation(&app_state);
   update_application_session_identity(&app_state);
