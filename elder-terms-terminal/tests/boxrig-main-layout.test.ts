@@ -345,80 +345,110 @@ process.stdout.write('\\x1b[?25l\\x1b[2J\\x1b[H\\x1b[38;2;255;0;255mZOOM-STABLE'
 
 for (const backend of ['cairo', 'opengl']) {
   for (const mode of ['preserve-window', 'preserve-grid']) {
-    it(`places excess height above a padded terminal (${backend}, ${mode})`, async (context) => {
-      await withTemporaryDirectory(async (directory) => {
-        const config = join(directory, 'layout.ini');
-        const peer = join(directory, 'peer.mjs');
-        const keys = join(directory, 'mouse');
-        await writeFile(
-          peer,
-          `import { appendFileSync } from 'node:fs';
+    it.for([1, 2])(
+      `places excess height above a padded terminal (${backend}, ${mode}, scale %i)`,
+      async (scale, context) => {
+        await withTemporaryDirectory(async (directory) => {
+          const config = join(directory, 'layout.ini');
+          const peer = join(directory, 'peer.mjs');
+          const keys = join(directory, 'mouse');
+          await writeFile(
+            peer,
+            `import { appendFileSync } from 'node:fs';
 process.stdin.setRawMode(true);
 process.stdin.on('data', data => appendFileSync(process.argv[2], data));
 process.stdout.write('\\x1b[?25l\\x1b[?1000h\\x1b[?1006h\\x1b[H\\x1b[48;2;213;45;41m \\x1b[0m');`
-        );
-        await writeFile(
-          config,
-          `[terminal]\nwidth=79\nheight=17\nfont_size_dip=14\npadding_dip=4\ngrid_vertical_alignment=bottom\nfont_zoom_mode=${mode}\n[local]\ncommand_line=${process.execPath} ${peer} ${keys}\n`
-        );
-        await runGtkTest(
-          context,
-          [
-            ...(mode === 'preserve-grid' ? ['--test-maximize-window'] : []),
-            '-c',
+          );
+          await writeFile(
             config,
-          ],
-          async (app) => {
-            const terminal = await app.getById('terminal_view');
-            const initial = await waitForResult(() =>
-              readWindowCellLayout(app)
-            );
-            await initial.mainWindow.resizeTo(
-              initial.mainBounds.width + 3,
-              initial.mainBounds.height + 7
-            );
-            await scrollWheelWithControl(app, -1);
-            const top = await waitForResult(async () => {
-              const layout = await readWindowCellLayout(app);
-              expect(layout.fontSizeDip).toBeGreaterThan(14);
-              const capture = await terminal.capture();
-              const picture = PNG.sync.read(capture.image);
-              const remainder =
-                picture.height - 8 - layout.rows * layout.cellHeight;
-              expect(remainder).toBeGreaterThan(0);
-              expect(remainder).toBeLessThan(layout.cellHeight);
-              const y = 4 + remainder;
-              const rgb = (x: number, y: number) => [
-                ...picture.data.subarray(
-                  (y * picture.width + x) * 4,
-                  (y * picture.width + x) * 4 + 3
-                ),
-              ];
-              expect(rgb(4, y)).toEqual([213, 45, 41]);
-              expect(rgb(3, y)).not.toEqual([213, 45, 41]);
-              expect(rgb(4, y - 1)).not.toEqual([213, 45, 41]);
-              return { x: capture.bounds.x + 5, y: capture.bounds.y + y };
-            });
-            for (const y of [top.y - 1, top.y + 1]) {
-              // Keep the two presses outside the GTK double-click distance.
-              await app.input.moveMouseTo(y < top.y ? top.x + 110 : top.x, y);
-              await app.input.setMouseButton('left', true);
-              await app.input.setMouseButton('left', false);
-            }
-            await waitForResult(async () =>
-              expect(await readFile(keys, 'utf8')).toBe(
-                '\x1b[<0;1;1M\x1b[<0;1;1m'
-              )
-            );
-          },
-          {
-            env: {
-              LIBGL_ALWAYS_SOFTWARE: '1',
-              ...(backend === 'cairo' ? { GDK_GL: 'disable' } : {}),
+            `[terminal]\nwidth=${scale === 1 ? 79 : 40}\nheight=${scale === 1 ? 17 : 9}\nfont_size_dip=14\npadding_dip=4\ngrid_vertical_alignment=bottom\nfont_zoom_mode=${mode}\n[local]\ncommand_line=${process.execPath} ${peer} ${keys}\n`
+          );
+          await runGtkTest(
+            context,
+            [
+              ...(mode === 'preserve-grid' ? ['--test-maximize-window'] : []),
+              '-c',
+              config,
+            ],
+            async (app) => {
+              const terminal = await app.getById('terminal_view');
+              const initial = await waitForResult(() =>
+                readWindowCellLayout(app)
+              );
+              if (mode === 'preserve-grid') {
+                await initial.mainWindow.resizeTo(
+                  initial.mainBounds.width + 3,
+                  initial.mainBounds.height + 7
+                );
+              }
+              const initialArea = (await terminal.capture()).bounds;
+              await app.input.moveMouseTo(
+                (initialArea.x + 24) * scale,
+                (initialArea.y + 10) * scale
+              );
+              await scrollWheelWithControl(app, -1);
+              if (mode === 'preserve-window') {
+                const zoomed = await waitForResult(async () => {
+                  const layout = await readWindowCellLayout(app);
+                  expect(layout.fontSizeDip).toBeGreaterThan(
+                    initial.fontSizeDip
+                  );
+                  return layout;
+                });
+                const area = (await terminal.capture()).bounds;
+                const targetHeight =
+                  8 + Math.ceil(zoomed.rows * zoomed.cellHeight) + 3;
+                await zoomed.mainWindow.resizeTo(
+                  zoomed.mainBounds.width,
+                  zoomed.mainBounds.height - area.height + targetHeight
+                );
+              }
+              const top = await waitForResult(async () => {
+                const layout = await readWindowCellLayout(app);
+                expect(layout.fontSizeDip).toBeGreaterThan(14);
+                const area = (await terminal.capture()).bounds;
+                const picture = PNG.sync.read((await app.capture()).image);
+                const padding = 4 * scale;
+                const cellHeight = layout.cellHeight * scale;
+                const remainder =
+                  area.height * scale - 2 * padding - layout.rows * cellHeight;
+                expect(remainder).toBeGreaterThan(0);
+                expect(remainder).toBeLessThan(cellHeight);
+                const left = area.x * scale + padding;
+                const y = area.y * scale + padding + remainder;
+                const rgb = (x: number, y: number) => [
+                  ...picture.data.subarray(
+                    (y * picture.width + x) * 4,
+                    (y * picture.width + x) * 4 + 3
+                  ),
+                ];
+                expect(rgb(left, y)).toEqual([213, 45, 41]);
+                expect(rgb(left - 1, y)).not.toEqual([213, 45, 41]);
+                expect(rgb(left, y - 1)).not.toEqual([213, 45, 41]);
+                return { x: left + 1, y };
+              });
+              for (const y of [top.y - 1, top.y + 1]) {
+                // Keep the two presses outside the GTK double-click distance.
+                await app.input.moveMouseTo(y < top.y ? top.x + 110 : top.x, y);
+                await app.input.setMouseButton('left', true);
+                await app.input.setMouseButton('left', false);
+              }
+              await waitForResult(async () =>
+                expect(await readFile(keys, 'utf8')).toBe(
+                  '\x1b[<0;1;1M\x1b[<0;1;1m'
+                )
+              );
             },
-          }
-        );
-      });
-    });
+            {
+              env: {
+                LIBGL_ALWAYS_SOFTWARE: '1',
+                GDK_SCALE: String(scale),
+                ...(backend === 'cairo' ? { GDK_GL: 'disable' } : {}),
+              },
+            }
+          );
+        });
+      }
+    );
   }
 }
