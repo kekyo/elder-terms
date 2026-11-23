@@ -92,7 +92,7 @@ Alternatively:
 npm run dev
 ```
 
-To run the tests (which take a very long time because they include UI tests):
+The drag-and-drop tests use GNOME Files (`nautilus`), `gjs` and `xdotool`. Run the suite with the following command. The UI tests can take some time.
 
 ```bash
 npm run test

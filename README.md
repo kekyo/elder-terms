@@ -451,6 +451,11 @@ Filename encoding defaults to UTF-8 and can be set to CP932, EUC-JP, or another 
 ![File transfer item menu](./images/file-transfer-item-menu.png)
 
 SFTP/FTP/FTPS, WebDAV, SMB, and NFS use the same two-pane file browser.
+
+Drag from the local pane to the remote pane to upload, or from remote to local to download. Drop on a folder to copy into it, on a file to copy into its parent, or in empty space to use the current folder. You can select several items or whole folders.
+
+You can also drop local files from your desktop file manager onto the remote pane. Dragging the other way downloads the selection to a private temporary folder and hands the completed files to the file manager. The Transfers pane shows progress and lets you cancel. Interrupted downloads are removed. Completed copies stay available in the login session’s runtime directory so the file manager can finish reading them. Sessions without a runtime directory use the system temporary directory.
+
 Select an item in either the local or remote pane and right-click it to open the item menu.
 Multiple items can be selected with `Ctrl`+click or a drag rectangle before opening the menu.
 
@@ -623,6 +628,8 @@ Normal selection is unaffected.
 See [selection and copying details](./docs/en/text-selection.md) for clipboard differences, copy results, and what to do when copying is unavailable.
 
 ## Newlines When Sending and Pasting Text
+
+Drop a file onto the terminal to choose how to send it. A local shell accepts one file as text. SSH, serial and Telnet connections offer text, XMODEM, XMODEM 1K, YMODEM and ZMODEM for one file, and YMODEM or ZMODEM for several files. Dismiss the menu to cancel the send.
 
 ![Text sending and pasting settings](./images/terminal-send-paste.png)
 

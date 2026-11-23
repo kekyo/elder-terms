@@ -70,6 +70,7 @@ npm run build
 npm run dev
 ```
 
+ドラッグアンドドロップの試験には、GNOME Files（`nautilus`）、`gjs`、`xdotool`を使用します。
 テストは次のコマンドで実行してください。UIテストを含むため、完了まで時間がかかります。
 
 ```bash

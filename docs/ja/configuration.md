@@ -67,6 +67,7 @@ auto_close=false
 compact_mode=true
 show_border=true
 border_width=4
+show_indicators=true
 indicator_color=#3584E4
 indicator_off_color=#808080
 receive_effect=strong
@@ -81,6 +82,7 @@ visual_bell=disabled
 | `compact_mode` | `true`でコンパクトモード。組み込み既定値は`false` |
 | `show_border` | `true`でボーダーを表示。組み込み既定値は`false` |
 | `border_width` | 1〜1000ピクセル。組み込み既定値は4 |
+| `show_indicators` | `true`で接続・通信・シリアル信号のランプを表示。既定値は`true` |
 | `indicator_color`、`indicator_off_color` | `#RRGGBB`形式の色、または`default`。`default`はそれぞれ元の緑色、灰色 |
 | `receive_effect`、`visual_bell` | `disabled`、`weak`、`medium`、`strong`。組み込み既定値は`medium` |
 
@@ -116,6 +118,8 @@ block_copy_trim_trailing_spaces=false
 [terminal]
 font_size_dip=14.5
 font_zoom_mode=preserve-window
+padding_dip=4
+grid_vertical_alignment=bottom
 ambiguous_width=wide
 font_families=DejaVu Sans Mono;Noto Sans Mono CJK JP;Monospace;
 ```
@@ -133,6 +137,10 @@ font_families=DejaVu Sans Mono;Noto Sans Mono CJK JP;Monospace;
 モードの適用だけでは現在の文字サイズやウインドウサイズは変わらず、適用後のズーム操作から有効になります。
 文字サイズ・行数・桁数の直接指定や手動リサイズは、この設定によらず使用できます。
 最大化や全画面などでウインドウサイズが制限される場合は、どちらのモードでも実際の表示領域に行・桁数を合わせます。
+
+「端末の外観」の「端末のパディング」は、四辺から文字セルまでの幅です。単位は論理ピクセル（DIP）で、既定値は0です。
+「セルの縦位置」は、文字セルで割り切れない高さをどちらに残すかを選びます。既定の`top`は下に、`bottom`は上に余りを置きます。横の余りは常に右に残ります。
+たとえばパディング4 DIP、縦の余り7 DIPで下寄せにすると、上の余白は11 DIP、下は4 DIPです。どちらのズーム設定でも、最大化やタイル配置中も同じ規則を使います。
 
 `ambiguous_width`は`narrow`で1列、`wide`で2列、`font`でフォント依存になります。組み込み既定値は`narrow`です。
 幅の決め方を変更した後は、保存して端末を開き直してください。
@@ -233,7 +241,10 @@ carrier_detect=ignore
 ```ini
 [transfer]
 text_send_follow_return_code=true
+text_send_bytes_per_second=2048
 ```
+
+`text_send_bytes_per_second`は、文字コード変換後の1秒あたりの送信バイト数です。テキストファイル送信とペーストの既定値は2,048 B/sです。接続や継承元で速度を指定すると、その値を使います。
 
 `true`ではテキスト送信・ペースト・マクロ送信の改行を`return_code`に合わせます。`auto`の場合はCRです。
 `false`では元のCR・LF・CRLFを保持します。組み込み既定値は`true`です。
