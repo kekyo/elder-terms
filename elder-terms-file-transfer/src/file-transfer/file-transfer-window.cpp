@@ -2279,6 +2279,41 @@ struct PaneDrag {
   std::shared_ptr<PaneExport> remote_export = std::make_shared<PaneExport>();
 };
 
+struct PanePressSelection {
+  std::weak_ptr<RemoteFileClient> client;
+  std::uint64_t generation;
+  std::vector<std::unique_ptr<GtkTreeRowReference, decltype(&gtk_tree_row_reference_free)>> rows;
+};
+
+static gboolean remember_pane_press(GtkWidget *widget, GdkEvent *event, gpointer data) {
+  if ((event->type != GDK_BUTTON_PRESS && event->type != GDK_BUTTON_RELEASE) ||
+      event->button.button != GDK_BUTTON_PRIMARY) return FALSE;
+  g_object_set_data(G_OBJECT(widget), "file-transfer-press", nullptr);
+  auto *tree = GTK_TREE_VIEW(widget);
+  if (event->type == GDK_BUTTON_RELEASE || event->button.window != gtk_tree_view_get_bin_window(tree)) return FALSE;
+  GtkTreePath *path = nullptr;
+  if (!gtk_tree_view_get_path_at_pos(tree, static_cast<int>(event->button.x), static_cast<int>(event->button.y),
+          &path, nullptr, nullptr, nullptr)) return FALSE;
+  auto *pane = static_cast<FileTransferPaneState *>(data);
+  auto *press = new PanePressSelection{pane->window->client, pane->generation, {}};
+  auto *selection = gtk_tree_view_get_selection(tree);
+  // A plain press collapses a GtkTreeView's multiple selection before drag-begin.
+  // A click keeps GTK's normal behavior. A drag restores the rows it started on.
+  if (!(event->button.state & (GDK_CONTROL_MASK | GDK_SHIFT_MASK)) &&
+      gtk_tree_selection_path_is_selected(selection, path) && gtk_tree_selection_count_selected_rows(selection) > 1) {
+    GtkTreeModel *model = nullptr;
+    GList *rows = gtk_tree_selection_get_selected_rows(selection, &model);
+    for (auto *row = rows; row; row = row->next)
+      press->rows.emplace_back(gtk_tree_row_reference_new(model, static_cast<GtkTreePath *>(row->data)),
+          gtk_tree_row_reference_free);
+    g_list_free_full(rows, reinterpret_cast<GDestroyNotify>(gtk_tree_path_free));
+  }
+  gtk_tree_path_free(path);
+  g_object_set_data_full(G_OBJECT(widget), "file-transfer-press", press,
+      +[](gpointer value) { delete static_cast<PanePressSelection *>(value); });
+  return FALSE;
+}
+
 static bool pane_can_transfer(FileTransferWindow *window) {
   return !window->destroyed && window->connection_available && window->client &&
       !window->reconnecting && !window->browser_action_active && !window->certificate_confirmation &&
@@ -2401,9 +2436,19 @@ static void install_pane_drag(GtkWidget *tree, FileTransferPaneState *pane) {
   gtk_drag_source_set(tree, GDK_BUTTON1_MASK, targets, G_N_ELEMENTS(targets), GDK_ACTION_COPY);
   gtk_drag_dest_set(tree, static_cast<GtkDestDefaults>(GTK_DEST_DEFAULT_MOTION | GTK_DEST_DEFAULT_HIGHLIGHT),
       targets, pane->remote ? 2 : 1, GDK_ACTION_COPY);
+  g_signal_connect(tree, "event", G_CALLBACK(remember_pane_press), pane);
   g_signal_connect(tree, "drag-begin", G_CALLBACK(+[](GtkWidget *widget, GdkDragContext *, gpointer data) {
     auto *pane = static_cast<FileTransferPaneState *>(data);
-    auto *drag = new PaneDrag(pane, pane->window->client, selected_file_transfer_paths(pane));
+    auto *press = static_cast<PanePressSelection *>(g_object_get_data(G_OBJECT(widget), "file-transfer-press"));
+    if (!press || press->generation != pane->generation || press->client.lock() != pane->window->client) return;
+    auto *selection = gtk_tree_view_get_selection(GTK_TREE_VIEW(widget));
+    for (const auto &row : press->rows) {
+      if (auto *path = gtk_tree_row_reference_get_path(row.get())) {
+        gtk_tree_selection_select_path(selection, path);
+        gtk_tree_path_free(path);
+      }
+    }
+    auto *drag = new PaneDrag(pane, press->client, selected_file_transfer_paths(pane));
     g_object_set_data_full(G_OBJECT(widget), "file-transfer-drag", drag,
         +[](gpointer data) { delete static_cast<PaneDrag *>(data); });
   }), pane);

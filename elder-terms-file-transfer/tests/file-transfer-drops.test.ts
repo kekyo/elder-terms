@@ -162,6 +162,26 @@ it('copies between panes and downloads a remote item into a desktop file manager
         const from = await row(remote, file);
         const x = from.x + Math.floor(from.width / 2);
         const y = from.y + Math.floor(from.height / 2);
+        if (!cancel) {
+          const folder = await row(remote, 'archive');
+          await app.input.moveMouseTo(
+            folder.x + Math.floor(folder.width / 2),
+            folder.y + Math.floor(folder.height / 2)
+          );
+          await app.input.setMouseButton('left', true);
+          await app.input.setMouseButton('left', false);
+          await app.input.setModifier('control', true);
+          try {
+            await app.input.moveMouseTo(x, y);
+            await app.input.setMouseButton('left', true);
+            await app.input.setMouseButton('left', false);
+          } finally {
+            await app.input.setModifier('control', false);
+          }
+          await waitForResult(async () =>
+            expect(await remote.selectedRows()).toHaveLength(2)
+          );
+        }
         await app.input.moveMouseTo(x, y);
         await app.input.setMouseButton('left', true);
         try {
@@ -198,6 +218,11 @@ it('copies between panes and downloads a remote item into a desktop file manager
         expect(await readFile(join(destination, file), 'utf8')).toBe(
           'round trip\n'
         )
+      );
+      await waitForResult(async () =>
+        expect(
+          await readFile(join(destination, 'archive', 'old.log'), 'utf8')
+        ).toBe('old remote log\n')
       );
     } finally {
       manager.kill();
