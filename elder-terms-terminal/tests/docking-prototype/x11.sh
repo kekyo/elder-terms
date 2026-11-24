@@ -141,6 +141,25 @@ source_origin=$(origin 1 | xargs)
 drag 1 title $(point 2 content) title
 expect '^state 2 tabs=CAB active=B sidebar=1$'
 expect '^closed 1$'
+xdotool mousemove 690 420
+row_color() {
+  local x y
+  read -r x y < <(point 2 "close$1")
+  convert "$out/merged.png" -format "%[pixel:p{$x,$y}]" info:
+}
+selection_matches() {
+  import -window root "$out/merged.png"
+  local inactive
+  inactive=$(row_color A)
+  [[ "$(row_color C)" == "$inactive" && "$(row_color B)" != "$inactive" ]]
+}
+for ((i=0; i<25; i++)); do
+  if selection_matches; then break; fi
+  sleep .05
+done
+if ! selection_matches; then
+  echo "Merged list must highlight B alone" >&2; exit 1
+fi
 mark
 drag 2 tabA 1350 780
 expect '^state 4 tabs=A active=A sidebar=0$'

@@ -95,6 +95,8 @@ static void detach(Tab *t)
     }
     w->tabs = g_list_delete_link(w->tabs, node);
     t->owner = NULL;
+    // A retained GtkListBoxRow carries its selection state across reparenting.
+    gtk_list_box_unselect_row(GTK_LIST_BOX(w->list), GTK_LIST_BOX_ROW(t->row));
     gtk_container_remove(GTK_CONTAINER(w->list), t->row);
     gtk_container_remove(GTK_CONTAINER(w->stack), pilot_session_widget(t->session));
 }
