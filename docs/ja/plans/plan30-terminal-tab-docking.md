@@ -78,6 +78,35 @@ SSHチャネル、認証、進行中の転送を管理するのは接続元の�
 
 完了条件は、実際のUIで1件→2件→1件が正しく表示され、同じシェルへの入力、非表示端末の連番出力、右欄のリサイズが続くことです。非選択行の×、選択行の×、最後のウインドウの×、Esc、ドロップ拒否、通常のウインドウ移動をそれぞれ試します。3端末で行1件の移動と全件の結合を区別し、移動元を閉じてもログと受信が続くこと、ランチャーから該当タブを選べることも確認します。ウインドウの移動、外への分離、ファイルドロップは、X11とWaylandの通常・コンパクト表示のすべてで確認する項目です。
 
+#### 30.1の検証試作と結果（2026年11月24日）
+
+boxrig 0.16.0のLinux配布SDKで、A・B・Cの3つのローカルPTYを開くGTK3ドライバーを作りました。起動時はAとBが同じウインドウに入り、Cだけが単独表示になります。Ubuntu 24.04のGTK 3.24.41で、X11はKWin 5.27.11、WaylandはWeston 13.0.0を使いました。Waylandの試験はWestonを別のXサーバー内で起動し、外からマウスとキーを操作しています。端末自身が接続したのはネイティブWaylandです。[試作ドライバー](../../../elder-terms-terminal/tests/docking-prototype/pilot.c)・[X11試験](../../../elder-terms-terminal/tests/docking-prototype/x11.sh)・[Wayland試験](../../../elder-terms-terminal/tests/docking-prototype/wayland.mjs)
+
+| 操作 | X11・KWin | Wayland・Weston |
+| --- | --- | --- |
+| Bの行をCの端末面に落とす | 移動元はAの単独表示。移動先はC・Bの順でBを選択 | 同じ |
+| A・Bのタイトル文字をCの端末面に落とす | C・A・Bの順で元の選択を引き継ぎ、空の移動元が閉じる | 同じ |
+| タイトルバーの余白をドラッグする | 実ウインドウが移動。他の端末上で離しても結合しない | 実ウインドウが移動 |
+| タブをデスクトップで離す | デスクトップへのドロップを確認でき、1件を分離 | Escと同じエラー通知。元のタブを維持 |
+| ドラッグ中にEscを押す | 取り消しを受け取り元のタブを維持 | 元のタブを維持 |
+| 選択中に試験用の `Ctrl+Shift+U` を押す | 同じシェルを単独ウインドウに分離 | 同じ |
+| タブの×を押す | 指定した1件が終了。残り1件で一覧を隠す | 同じ |
+
+タイトルバーは、文字の部分を全件ドック用のつかみ場所にし、余白で通常の移動ができる構成が成立しました。GTKのドラッグ中に動くのはアイコンです。X11では他の端末上まで運んだ時点でも、移動元の実ウインドウが元の位置にあることを計測しました。実ウインドウを動かしたまま、その同じ操作でドックする目標は残ります。[GTKのウインドウ移動](https://docs.gtk.org/gtk3/method.Window.begin_move_drag.html)・[GTKのドラッグアイコン](https://docs.gtk.org/gtk3/func.drag_set_icon_name.html)
+
+X11では、GTKがルートウインドウへのドロップを通知した時だけ行を分離します。別プロセスのウインドウでドロップを拒否させても、元のタブは残りました。逆向きの操作も試し、そのプロセスから端末面に落としたファイルURIがファイル用の処理に届くことを確認しています。Westonでは、デスクトップ上の解放とEscのどちらでも `GTK_DRAG_RESULT_ERROR` が届きました。GTK3のWayland実装でも、コンポジターからの取り消しを同じエラーに変換しています。この環境ではキーで分離し、失敗通知からマウスを離した場所を推定する処理は入れません。[GTK3のルートウインドウ処理](https://github.com/GNOME/gtk/blob/3.24.41/gtk/gtkdnd.c#L2630-L2661)・[Waylandの取り消し処理](https://github.com/GNOME/gtk/blob/3.24.41/gdk/wayland/gdkselection-wayland.c#L1024-L1051)
+
+両環境で、移動の前後にBへ入力すると同じシェルPIDが応答しました。X11では、非表示にしたBの連番1〜5も欠落や重複なく受信しました。ウインドウを広げてから縮めると、AのPTYで実行した `stty size` がboxrigの行列数と一致し、非表示のBとCの行列数は変わりませんでした。行にポインターを重ねた時だけ×が現れることは画像で、タブを閉じた時のシェル終了はPIDで確認しました。[PTYを使った試験](../../../elder-terms-terminal/tests/docking-prototype/session.c)
+
+この試作は同一プロセスで既存の端末ウィジェットの親を付け替えます。PTYは同じセッションから直接読み書きし、移動時も本文の中継や状態のコピーは発生しません。3つのシェルが入力待ちになった時の試作プロセスのCPU使用率は、Xvfb上で1秒ずつ3回計測していずれも0.00%でした。負荷中の遅延、別プロセスへの所有権移動、SSH中継の費用は後続の測定対象です。既存ランチャーからのタブ選択と、通常・コンパクト表示それぞれの操作領域は、本体への組み込み時に確認します。
+
+再現するには、対象のLinux向けboxrig 0.16.0のSDKを展開し、リポジトリのルートで次のコマンドを実行してください。`SDK` の値は `include` と `lib` のあるディレクトリです。自動試験にはプロジェクトのnpm依存に加え、Xvfb、KWin X11、Weston、xdotool、FFmpeg、ImageMagickを使います。画面と操作ログの保存先は `test-results/dock-pilot/` です。[boxrig 0.16.0配布物](https://github.com/kekyo/boxrig/releases/tag/0.16.0)
+
+```sh
+make -C elder-terms-terminal/tests/docking-prototype SDK=/path/to/boxrig-0.16.0 test
+elder-terms-terminal/tests/docking-prototype/build/dock-pilot
+```
+
 ### 30.2 ローカルPTYを別プロセスへ直接引き渡す
 
 この段階ではboxrig 0.16.0の`boxrig_session_export_checkpoint()`で端末データと受信終了フラグを書き出し、`boxrig_terminal_import_checkpoint()`と`boxrig_session_create_resumed()`で移動先に接続します。最初の試験は、UTF-8のシェルを単独ウインドウから別プロセスのトレイへ移し、元へ戻す操作です。旧UIプロセスを終了できる構成にし、シェルの起動・終了回収とFDの直接入出力を確かめます。複数件の移設では、1件が`BOXRIG_STATUS_BUSY`を返した場合に全件が元の所有者で再開することも試します。
