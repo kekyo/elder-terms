@@ -131,7 +131,7 @@ export const withWaylandHarness = async (binary, callback) => {
         return false;
       }
     }, 'Weston socket');
-    app = spawn(binary, [], { env, stdio: ['ignore', 'pipe', 'pipe'] });
+    app = spawn(binary, ['--fixture'], { env, stdio: ['ignore', 'pipe', 'pipe'] });
     app.stdout.on('data', (bytes) => {
       appOutput += bytes.toString();
     });

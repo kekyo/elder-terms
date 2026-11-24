@@ -10,7 +10,7 @@ fi
 export GDK_BACKEND=x11
 KWIN_COMPOSE=N kwin_x11 --replace >"$out/kwin.log" 2>&1 & wm=$!
 gdbus wait --session --timeout=20 org.kde.KWin
-build/dock-pilot >"$out/pilot.log" 2>&1 & pilot=$!
+build/dock-pilot --fixture >"$out/pilot.log" 2>&1 & pilot=$!
 build/dock-peer >"$out/peer.log" 2>&1 & peer=$!
 recorder=
 cleanup() {
@@ -187,6 +187,28 @@ expect '^state 2 tabs=CA active=A sidebar=1$'
 if kill -0 "$pid" 2>/dev/null; then echo "Closed tab still owns shell $pid" >&2; exit 1; fi
 click 2 closeA
 expect '^state 2 tabs=C active=C sidebar=0$'
+xdotool windowactivate --sync "$(wid 2)" key alt+F4
+expect '^closed 2$'
+wait "$pilot"
+if grep -Eq 'CRITICAL|WARNING|ERROR' "$log"; then cat "$log" >&2; exit 1; fi
+# The same binary's manual entry point must run commands in an interactive shell.
+log="$out/interactive.log"
+from=1
+build/dock-pilot >"$log" 2>&1 & pilot=$!
+expect '^rect 2 content '
+xdotool windowmove "$(wid 1)" 40 100 windowmove "$(wid 2)" 760 140
+click 1 tabB
+input 'printf "\033]0;shell-%s-%s\007" "$$" "$((6*7))"'
+expect '^pty B shell-[0-9]+-42$'
+interactive_pid=$(sed -nE 's/^pty B shell-([0-9]+)-42$/\1/p' "$log")
+drag 1 tabB $(point 2 content)
+expect '^state 2 tabs=CB active=B sidebar=1$'
+input 'printf "\033]0;shell-%s-%s\007" "$$" "$((6*8))"'
+expect "^pty B shell-$interactive_pid-48$"
+input exit
+expect '^state 2 tabs=C active=C sidebar=0$'
+xdotool windowactivate --sync "$(wid 1)" key alt+F4
+expect '^closed 1$'
 xdotool windowactivate --sync "$(wid 2)" key alt+F4
 expect '^closed 2$'
 wait "$pilot"

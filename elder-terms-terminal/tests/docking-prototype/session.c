@@ -16,6 +16,8 @@ struct PilotSession {
     boxrig_session *session;
     char label;
     gboolean frame_requested;
+    PilotShellEnded ended;
+    gpointer data;
 };
 
 static void request_frame(void *context)
@@ -115,15 +117,21 @@ static gboolean dispatch(GSource *source, GSourceFunc unused, gpointer data)
         if (boxrig_terminal_host_item_consume(s->terminal) != BOXRIG_STATUS_OK)
             g_error("terminal notification");
     }
-    return !io.peer_closed;
+    if (io.peer_closed) {
+        s->ended(s->data);
+        return G_SOURCE_REMOVE;
+    }
+    return G_SOURCE_CONTINUE;
 }
 
 static GSourceFuncs callbacks = {prepare, check, dispatch, NULL, NULL, NULL};
 
-PilotSession *pilot_session_open(char label)
+PilotSession *pilot_session_open(char label, gboolean fixture, PilotShellEnded ended, gpointer data)
 {
     PilotSession *s = (PilotSession *)g_source_new(&callbacks, sizeof(*s));
     s->label = label;
+    s->ended = ended;
+    s->data = data;
     boxrig_terminal_config tc = boxrig_terminal_config_default();
     tc.rows = 12;
     tc.columns = 36;
@@ -133,7 +141,7 @@ PilotSession *pilot_session_open(char label)
     wc.frame_request_context = s;
     char name[] = {label, 0};
     // OSC title reports let the test observe bytes parsed from the real PTY.
-    char *args[] = {"/bin/sh", "-c",
+    char *test_shell[] = {"/bin/sh", "-c",
         "printf 'Session %s (shell %s)\n' \"$0\" \"$$\"; "
         "while IFS= read -r line; do "
         "if [ \"$line\" = burst ]; then (for n in 1 2 3 4 5; do sleep 0.16; "
@@ -141,9 +149,11 @@ PilotSession *pilot_session_open(char label)
         "elif [ \"$line\" = size ]; then printf '\\033]0;size-%s\\007' \"$(stty size)\"; "
         "else printf '%s: %s\\n\\033]0;ack-%s-%s\\007' \"$0\" \"$line\" \"$$\" \"$line\"; fi; done",
         name, NULL};
+    char *interactive_shell[] = {"/bin/sh", "-i", NULL};
     if (boxrig_terminal_create(&tc, &s->terminal) != BOXRIG_STATUS_OK ||
         boxrig_ui_model_create(s->terminal, &s->model) != BOXRIG_UI_OK ||
-        boxrig_posix_pty_spawn(args, "xterm-256color", tc.rows, tc.columns, &s->pty) ||
+        boxrig_posix_pty_spawn(fixture ? test_shell : interactive_shell,
+            "xterm-256color", tc.rows, tc.columns, &s->pty) ||
         boxrig_posix_pty_session_create(s->terminal, s->pty, &sc, &s->session) != BOXRIG_SESSION_OK ||
         boxrig_gtk3_terminal_widget_create(s->model, &wc, &s->widget) != BOXRIG_UI_OK ||
         boxrig_gtk3_terminal_widget_set_visible(s->widget, true) != BOXRIG_UI_OK)

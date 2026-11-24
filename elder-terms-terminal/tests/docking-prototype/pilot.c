@@ -328,19 +328,25 @@ static void select_tab(GtkButton *button, Tab *t)
     refresh(t->owner);
 }
 
-static void close_tab(GtkButton *button, Tab *t)
+static void close_tab(gpointer data)
 {
-    (void)button;
+    Tab *t = data;
     Window *w = t->owner;
     detach(t);
     release(t);
     refresh(w);
 }
 
-static void add_tab(Window *w, Tab *t, char label)
+static void close_clicked(GtkButton *button, Tab *t)
+{
+    (void)button;
+    close_tab(t);
+}
+
+static void add_tab(Window *w, Tab *t, char label, gboolean fixture)
 {
     t->name = label;
-    t->session = pilot_session_open(label);
+    t->session = pilot_session_open(label, fixture, close_tab, t);
     t->row = gtk_list_box_row_new();
     g_object_ref_sink(t->row);
     GtkWidget *line = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
@@ -356,7 +362,7 @@ static void add_tab(Window *w, Tab *t, char label)
     g_object_set_data(G_OBJECT(t->pick), "tab", t);
     source(t->pick);
     g_signal_connect(t->pick, "clicked", G_CALLBACK(select_tab), t);
-    g_signal_connect(t->close, "clicked", G_CALLBACK(close_tab), t);
+    g_signal_connect(t->close, "clicked", G_CALLBACK(close_clicked), t);
     gtk_widget_show_all(t->row);
     gtk_widget_show(pilot_session_widget(t->session));
     attach(w, t);
@@ -366,6 +372,11 @@ int main(int argc, char **argv)
 {
     setvbuf(stdout, NULL, _IOLBF, 0);
     gtk_init(&argc, &argv);
+    gboolean fixture = argc == 2 && strcmp(argv[1], "--fixture") == 0;
+    if (argc != (fixture ? 2 : 1)) {
+        fprintf(stderr, "Usage: %s [--fixture]\n", argv[0]);
+        return 2;
+    }
     printf("backend %s\n", G_OBJECT_TYPE_NAME(gdk_display_get_default()));
     GtkCssProvider *style = gtk_css_provider_new();
     gtk_css_provider_load_from_data(style,
@@ -379,11 +390,11 @@ int main(int argc, char **argv)
     g_object_unref(style);
     windows = g_ptr_array_new_with_free_func(g_free);
     Window *first = open_window();
-    add_tab(first, &tabs[0], 'A');
-    add_tab(first, &tabs[1], 'B');
+    add_tab(first, &tabs[0], 'A', fixture);
+    add_tab(first, &tabs[1], 'B', fixture);
     refresh(first);
     Window *second = open_window();
-    add_tab(second, &tabs[2], 'C');
+    add_tab(second, &tabs[2], 'C', fixture);
     refresh(second);
     gtk_main();
     g_ptr_array_unref(windows);
