@@ -5,7 +5,14 @@
 
 import { spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { mkdir, mkdtemp, readFile, stat, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  mkdtemp,
+  readFile,
+  rm,
+  stat,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { PNG } from 'pngjs';
@@ -74,8 +81,7 @@ const findColor = (image, red, green, blue, tolerance = 2) => {
  * @returns {Promise<void>} Resolves after the pilot and compositor have stopped.
  */
 export const withWaylandHarness = async (binary, callback) => {
-  if (!process.env.DISPLAY)
-    throw new Error('Run this harness inside xvfb-run');
+  if (!process.env.DISPLAY) throw new Error('Run this harness inside xvfb-run');
   const directory = await mkdtemp(join(tmpdir(), 'elder-dock-wayland-'));
   const runtime = join(directory, 'runtime');
   await mkdir(runtime, { mode: 0o700 });
@@ -179,5 +185,6 @@ export const withWaylandHarness = async (binary, callback) => {
       weston.kill('SIGTERM');
       await once(weston, 'close');
     }
+    await rm(directory, { recursive: true, force: true });
   }
 };

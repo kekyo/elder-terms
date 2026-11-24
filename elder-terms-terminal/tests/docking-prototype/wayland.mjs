@@ -5,14 +5,15 @@
 
 import { execFileSync, spawn } from 'node:child_process';
 import { once } from 'node:events';
-import { copyFile, mkdir, stat, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, rm, stat, writeFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { withWaylandHarness } from './wayland-harness.mjs';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const evidence = resolve(
-  process.env.DOCK_RESULTS ?? join(here, '../../../test-results/dock-pilot/wayland')
+  process.env.DOCK_RESULTS ??
+    join(here, '../../../test-results/dock-pilot/wayland')
 );
 if (process.argv[2] !== '--inside') {
   const child = spawn(
@@ -32,6 +33,14 @@ if (process.argv[2] !== '--inside') {
 }
 
 await mkdir(evidence, { recursive: true });
+for (const name of [
+  'gestures.mp4',
+  'native-before.png',
+  'native-after.png',
+  'final-docked.png',
+  'last-terminal.png',
+])
+  await rm(join(evidence, name), { force: true });
 const colors = {
   1: [0x14, 0x6d, 0xa3],
   2: [0xb3, 0x5a, 0x19],
@@ -88,8 +97,12 @@ await withWaylandHarness(binary, async (h) => {
     checkedAt = h.output.length;
   };
   const rect = (id, name) => {
-    const records = [...h.output.matchAll(/^rect (\d+) (\w+) (\d+) (\d+) (\d+) (\d+)$/gm)];
-    const record = records.reverse().find((row) => row[1] === String(id) && row[2] === name);
+    const records = [
+      ...h.output.matchAll(/^rect (\d+) (\w+) (\d+) (\d+) (\d+) (\d+)$/gm),
+    ];
+    const record = records
+      .reverse()
+      .find((row) => row[1] === String(id) && row[2] === name);
     if (!record) throw new Error(`Missing rectangle ${id}/${name}`);
     return {
       x: Number(record[3]),
@@ -111,13 +124,14 @@ await withWaylandHarness(binary, async (h) => {
         ...color.map((channel) => Math.round(channel * 0.916)),
         6
       );
-      visible =
-        (active?.count ?? 0) >= (dimmed?.count ?? 0) ? active : dimmed;
+      visible = (active?.count ?? 0) >= (dimmed?.count ?? 0) ? active : dimmed;
       if (visible) break;
       await h.pause(50);
     }
     if (!visible)
-      throw new Error(`Window ${id} title marker is not visible in ${frameName}`);
+      throw new Error(
+        `Window ${id} title marker is not visible in ${frameName}`
+      );
     const title = rect(id, 'title');
     return {
       x: visible.left - title.x,
@@ -132,7 +146,9 @@ await withWaylandHarness(binary, async (h) => {
       x:
         origin.x +
         area.x +
-        (name === 'content' ? Math.min(40, Math.floor(area.width / 2)) : Math.floor(area.width / 2)),
+        (name === 'content'
+          ? Math.min(40, Math.floor(area.width / 2))
+          : Math.floor(area.width / 2)),
       y: origin.y + area.y + Math.floor(area.height / 2),
     };
   };
@@ -155,10 +171,7 @@ await withWaylandHarness(binary, async (h) => {
     await drag(2, 'native', { x: native.x + 260, y: native.y + 65 });
     await h.pause(200);
     const after = await locate(2, 'native-after');
-    if (
-      Math.abs(after.x - before.x) < 30 &&
-      Math.abs(after.y - before.y) < 30
-    )
+    if (Math.abs(after.x - before.x) < 30 && Math.abs(after.y - before.y) < 30)
       throw new Error('Native title drag did not move the Wayland toplevel');
     await click(1, 'tabB');
     await expectLine(/^state 1 tabs=AB active=B sidebar=1$/m);
@@ -216,10 +229,21 @@ await withWaylandHarness(binary, async (h) => {
     if (recorder.exitCode === null) await once(recorder, 'close');
     await writeFile(join(evidence, 'ffmpeg.log'), recorderError);
     await writeFile(join(evidence, 'pilot.log'), h.output + h.errors);
-    await copyFile(join(h.directory, 'weston.log'), join(evidence, 'weston.log'));
-    for (const name of ['native-before', 'native-after', 'final-docked', 'last-terminal']) {
+    await copyFile(
+      join(h.directory, 'weston.log'),
+      join(evidence, 'weston.log')
+    );
+    for (const name of [
+      'native-before',
+      'native-after',
+      'final-docked',
+      'last-terminal',
+    ]) {
       try {
-        await copyFile(join(h.directory, `${name}.png`), join(evidence, `${name}.png`));
+        await copyFile(
+          join(h.directory, `${name}.png`),
+          join(evidence, `${name}.png`)
+        );
       } catch {
         // Failed steps may not have produced every frame.
       }
@@ -238,9 +262,12 @@ const frames = Number(
     '-of',
     'default=nw=1:nk=1',
     join(evidence, 'gestures.mp4'),
-  ]).toString().trim()
+  ])
+    .toString()
+    .trim()
 );
-if (frames < 30) throw new Error(`Gesture video recorded only ${frames} frames`);
+if (frames < 30)
+  throw new Error(`Gesture video recorded only ${frames} frames`);
 console.log(
   `PASS Wayland native move, Escape, desktop drop, tab and title docking, key undock, PTY continuity and close; ${frames} video frames; evidence: ${evidence}`
 );
