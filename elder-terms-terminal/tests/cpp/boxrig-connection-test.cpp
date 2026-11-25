@@ -6,16 +6,64 @@
 #include "../../src/terminal-connection.h"
 
 #include <glib.h>
+#include <sys/socket.h>
+#include <sys/wait.h>
 #include <unistd.h>
 #include <algorithm>
 #include <csignal>
 #include <cstdio>
+#include <cstring>
 #include <exception>
 #include <filesystem>
 #include <fstream>
 #include <stdexcept>
 #include <string>
 #include <utility>
+
+struct HandoffWireHeader {
+  std::uint32_t size;
+  std::uint32_t child;
+  std::uint32_t capacity;
+  std::uint32_t chunk;
+  std::uint8_t input_finished;
+};
+
+static void socket_bytes(int fd, void *data, std::size_t size, bool sending) {
+  auto *cursor = static_cast<unsigned char *>(data);
+  while (size) {
+    const auto count = sending ? ::write(fd, cursor, size) : ::read(fd, cursor, size);
+    if (count < 0 && errno == EINTR) continue;
+    if (count <= 0) throw std::runtime_error("handoff socket closed");
+    cursor += count;
+    size -= static_cast<std::size_t>(count);
+  }
+}
+
+static void socket_master(int socket, int *master, bool sending) {
+  char tag = 'F';
+  struct iovec payload{&tag, 1};
+  union { struct cmsghdr align; unsigned char bytes[CMSG_SPACE(sizeof(int))]; } control{};
+  struct msghdr message{};
+  message.msg_iov = &payload;
+  message.msg_iovlen = 1;
+  message.msg_control = control.bytes;
+  message.msg_controllen = sizeof(control.bytes);
+  if (sending) {
+    auto *item = CMSG_FIRSTHDR(&message);
+    item->cmsg_level = SOL_SOCKET;
+    item->cmsg_type = SCM_RIGHTS;
+    item->cmsg_len = CMSG_LEN(sizeof(int));
+    std::memcpy(CMSG_DATA(item), master, sizeof(int));
+    if (::sendmsg(socket, &message, 0) != 1) throw std::runtime_error("send handoff master");
+  } else {
+    if (::recvmsg(socket, &message, MSG_CMSG_CLOEXEC) != 1 || tag != 'F' ||
+        (message.msg_flags & MSG_CTRUNC)) throw std::runtime_error("receive handoff master");
+    const auto *item = CMSG_FIRSTHDR(&message);
+    if (!item || item->cmsg_level != SOL_SOCKET || item->cmsg_type != SCM_RIGHTS ||
+        item->cmsg_len != CMSG_LEN(sizeof(int))) throw std::runtime_error("invalid handoff master");
+    std::memcpy(master, CMSG_DATA(item), sizeof(int));
+  }
+}
 
 using namespace elder_terms;
 
@@ -367,6 +415,131 @@ static cardio::promise<void> scenarios(Test *test) {
   state = terminal_connection_state(test->connection);
   expect(state.spawn.state == BOXRIG_POSIX_PTY_SPAWN_FAILED && state.spawn.stage == BOXRIG_POSIX_PTY_STAGE_ARGUMENTS &&
       state.spawn.error_number == EINVAL && state.child == 0 && !state.reaped, "parent preparation failure is separate from process exit");
+
+  expect(terminal_connection_start_local(test->connection, command(
+      "stty -echo; echo HANDOFF_READY; while read value; do echo \"$value\"; "
+      "[ \"$value\" = quit ] && exit 0; done")), "start handoff shell");
+  while (contents(test).find("HANDOFF_READY") == std::string::npos) co_await test->changed.wait();
+  auto rolled_back = co_await terminal_connection_prepare_local_handoff(test->connection);
+  expect(rolled_back.has_value() && rolled_back->master_fd >= 0, "prepare local checkpoint and master");
+  const auto original_child = rolled_back->child;
+  ::close(rolled_back->master_fd);
+  terminal_connection_rollback_local_handoff(test->connection);
+  expect(boxrig_terminal_send_text(test->core, "ROLLBACK\n", 9) == BOXRIG_STATUS_OK,
+      "send after handoff rollback");
+  wake(test);
+  while (contents(test).find("ROLLBACK") == std::string::npos) co_await test->changed.wait();
+  auto handoff = co_await terminal_connection_prepare_local_handoff(test->connection);
+  expect(handoff.has_value() && handoff->child == original_child, "prepare same shell after rollback");
+
+  Test destination;
+  expect(boxrig_terminal_import_checkpoint(handoff->checkpoint.data(), handoff->checkpoint.size(),
+      64 * 1024 * 1024, &destination.core) == BOXRIG_STATUS_OK, "restore terminal checkpoint");
+  destination.connection = create_terminal_connection(destination.core,
+      [&destination] { wake(&destination); },
+      [&destination](std::span<const unsigned char>, std::span<const unsigned char>) {
+        destination.changed.trigger();
+      });
+  expect(terminal_connection_resume_local(destination.connection, handoff->master_fd,
+      handoff->input_finished, handoff->child, handoff->queue_capacity, handoff->io_chunk_size),
+      "resume direct PTY I/O");
+  handoff->master_fd = -1;
+  auto *reaper = terminal_connection_commit_local_handoff(test->connection);
+  expect(reaper != nullptr, "commit supplies an independent child reaper");
+  co_await terminal_connection_wait_stopped(test->connection);
+  expect(terminal_connection_state(test->connection).phase == TerminalConnectionPhase::closed,
+      "source connection closes while transferred shell is alive");
+  destroy_terminal_connection(test->connection);
+  test->connection = create_terminal_connection(test->core, [&] { wake(test); },
+      [&](std::span<const unsigned char>, std::span<const unsigned char>) {});
+  expect(boxrig_terminal_send_text(destination.core, "AFTER_HANDOFF\n", 14) == BOXRIG_STATUS_OK,
+      "send to transferred shell");
+  wake(&destination);
+  while (contents(&destination).find("AFTER_HANDOFF") == std::string::npos)
+    co_await destination.changed.wait();
+  auto second_handoff = co_await terminal_connection_prepare_local_handoff(destination.connection);
+  expect(second_handoff.has_value() && second_handoff->child == original_child,
+      "export a previously imported PTY session again");
+  Test third;
+  expect(boxrig_terminal_import_checkpoint(second_handoff->checkpoint.data(),
+      second_handoff->checkpoint.size(), 64 * 1024 * 1024, &third.core) == BOXRIG_STATUS_OK,
+      "restore second-generation terminal checkpoint");
+  third.connection = create_terminal_connection(third.core, [&third] { wake(&third); },
+      [&third](std::span<const unsigned char>, std::span<const unsigned char>) {
+        third.changed.trigger();
+      });
+  expect(terminal_connection_resume_local(third.connection, second_handoff->master_fd,
+      second_handoff->input_finished, second_handoff->child,
+      second_handoff->queue_capacity, second_handoff->io_chunk_size),
+      "adopt second-generation PTY master");
+  second_handoff->master_fd = -1;
+  expect(terminal_connection_commit_local_handoff(destination.connection) == nullptr,
+      "a relay generation cannot reap the original owner's child");
+  co_await terminal_connection_wait_stopped(destination.connection);
+  destroy_terminal_connection(destination.connection);
+  boxrig_terminal_destroy(destination.core);
+  expect(boxrig_terminal_send_text(third.core, "quit\n", 5) == BOXRIG_STATUS_OK,
+      "stop twice-transferred shell");
+  wake(&third);
+  co_await terminal_connection_wait_stopped(third.connection);
+  const auto exit = co_await terminal_local_child_reaper_wait(reaper);
+  expect(exit.child == original_child && exit.exit_code == 0 && exit.error == 0,
+      "independent original owner reaps the transferred child exactly once");
+  destroy_terminal_local_child_reaper(reaper);
+  destroy_terminal_connection(third.connection);
+  boxrig_terminal_destroy(third.core);
+
+  expect(terminal_connection_start_local(test->connection, command(
+      "stty -echo; echo PROCESS_READY; while read value; do echo \"$$ $value\"; "
+      "[ \"$value\" = quit ] && exit 0; done")), "start interprocess shell");
+  while (contents(test).find("PROCESS_READY") == std::string::npos) co_await test->changed.wait();
+  auto process_handoff = co_await terminal_connection_prepare_local_handoff(test->connection);
+  expect(process_handoff.has_value(), "prepare interprocess handoff");
+  int channel[2]{};
+  expect(::socketpair(AF_UNIX, SOCK_STREAM, 0, channel) == 0, "create handoff socket");
+  const auto receiver = ::fork();
+  expect(receiver >= 0, "fork destination process");
+  if (receiver == 0) {
+    ::close(channel[0]);
+    const auto descriptor = std::to_string(channel[1]);
+    char *arguments[] = {const_cast<char *>("boxrig-connection-test"),
+        const_cast<char *>("--handoff-receiver"), const_cast<char *>(descriptor.c_str()), nullptr};
+    ::execv("/proc/self/exe", arguments);
+    _exit(127);
+  }
+  ::close(channel[1]);
+  socket_master(channel[0], &process_handoff->master_fd, true);
+  ::close(process_handoff->master_fd);
+  HandoffWireHeader wire{static_cast<std::uint32_t>(process_handoff->checkpoint.size()),
+      static_cast<std::uint32_t>(process_handoff->child),
+      static_cast<std::uint32_t>(process_handoff->queue_capacity),
+      static_cast<std::uint32_t>(process_handoff->io_chunk_size),
+      static_cast<std::uint8_t>(process_handoff->input_finished)};
+  socket_bytes(channel[0], &wire, sizeof(wire), true);
+  socket_bytes(channel[0], process_handoff->checkpoint.data(), process_handoff->checkpoint.size(), true);
+  char ready = 0;
+  socket_bytes(channel[0], &ready, 1, false);
+  expect(ready == 'R', "destination restored transferred terminal");
+  auto *process_reaper = terminal_connection_commit_local_handoff(test->connection);
+  expect(process_reaper != nullptr, "commit interprocess transfer");
+  co_await terminal_connection_wait_stopped(test->connection);
+  destroy_terminal_connection(test->connection);
+  test->connection = create_terminal_connection(test->core, [&] { wake(test); },
+      [&](std::span<const unsigned char>, std::span<const unsigned char>) {});
+  char commit = 'C';
+  socket_bytes(channel[0], &commit, 1, true);
+  const auto receiver_status = co_await cardio::promises::start_new([receiver] {
+    int status = 0;
+    if (::waitpid(receiver, &status, 0) != receiver) throw std::runtime_error("wait destination");
+    return status;
+  });
+  const auto process_exit = co_await terminal_local_child_reaper_wait(process_reaper);
+  expect(WIFEXITED(receiver_status) && WEXITSTATUS(receiver_status) == 0 &&
+      process_exit.child == static_cast<pid_t>(wire.child) &&
+      process_exit.exit_code == 0 && process_exit.error == 0,
+      "a different process drives the same shell and the original process reaps it");
+  destroy_terminal_local_child_reaper(process_reaper);
+  ::close(channel[0]);
 }
 
 static cardio::promise<void> run(Test *test, cardio::dispatcher_group_glib *group, std::exception_ptr *failure) {
@@ -377,7 +550,70 @@ static cardio::promise<void> run(Test *test, cardio::dispatcher_group_glib *grou
   group->shutdown();
 }
 
-int main() {
+static cardio::promise<void> run_handoff_receiver(Test *test, cardio::dispatcher_group_glib *group,
+    std::exception_ptr *failure, pid_t child) {
+  try {
+    while (terminal_connection_state(test->connection).phase != TerminalConnectionPhase::connected)
+      co_await test->changed.wait();
+    expect(boxrig_terminal_send_text(test->core, "AFTER_PROCESS_HANDOFF\n", 22) == BOXRIG_STATUS_OK,
+        "send in receiving process");
+    wake(test);
+    const auto expected = std::to_string(child) + " AFTER_PROCESS_HANDOFF";
+    while (contents(test).find(expected) == std::string::npos) co_await test->changed.wait();
+    expect(boxrig_terminal_send_text(test->core, "quit\n", 5) == BOXRIG_STATUS_OK,
+        "exit shell from receiving process");
+    wake(test);
+    co_await terminal_connection_wait_stopped(test->connection);
+    expect(contents(test).find(std::to_string(child) + " quit") != std::string::npos,
+        "receiving process sees final output");
+  } catch (...) { *failure = std::current_exception(); }
+  terminal_connection_stop(test->connection);
+  co_await terminal_connection_wait_stopped(test->connection);
+  group->shutdown();
+}
+
+static int handoff_receiver_main(int socket) {
+  int master = -1;
+  socket_master(socket, &master, false);
+  HandoffWireHeader wire{};
+  socket_bytes(socket, &wire, sizeof(wire), false);
+  expect(wire.size > 0 && wire.size <= 64 * 1024 * 1024 && wire.child > 0,
+      "bounded handoff image");
+  std::vector<std::uint8_t> checkpoint(wire.size);
+  socket_bytes(socket, checkpoint.data(), checkpoint.size(), false);
+  cardio::dispatcher_group_glib group;
+  cardio::dispatcher_host_glib dispatcher(group);
+  Test test;
+  expect(boxrig_terminal_import_checkpoint(checkpoint.data(), checkpoint.size(),
+      64 * 1024 * 1024, &test.core) == BOXRIG_STATUS_OK, "restore in receiving process");
+  test.connection = create_terminal_connection(test.core, [&] { wake(&test); },
+      [&test](std::span<const unsigned char>, std::span<const unsigned char>) { test.changed.trigger(); });
+  expect(terminal_connection_resume_local(test.connection, master, wire.input_finished != 0,
+      wire.child, wire.capacity, wire.chunk), "adopt master in receiving process");
+  char ready = 'R';
+  socket_bytes(socket, &ready, 1, true);
+  char commit = 0;
+  socket_bytes(socket, &commit, 1, false);
+  expect(commit == 'C', "wait for source commit");
+  std::exception_ptr failure;
+  auto completion = run_handoff_receiver(&test, &group, &failure, wire.child);
+  dispatcher.park();
+  if (test.dispatch_source) g_source_remove(test.dispatch_source);
+  destroy_terminal_connection(test.connection);
+  boxrig_terminal_destroy(test.core);
+  ::close(socket);
+  if (failure) std::rethrow_exception(failure);
+  return 0;
+}
+
+int main(int argc, char **argv) {
+  if (argc == 3 && std::string(argv[1]) == "--handoff-receiver") {
+    try { return handoff_receiver_main(std::stoi(argv[2])); }
+    catch (const std::exception &error) {
+      std::fprintf(stderr, "handoff receiver: %s\n", error.what());
+      return 1;
+    }
+  }
   cardio::dispatcher_group_glib group;
   cardio::dispatcher_host_glib dispatcher(group);
   Test test;

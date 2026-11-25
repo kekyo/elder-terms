@@ -9,6 +9,7 @@
 #include <cardio.h>
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -47,6 +48,37 @@ struct TerminalLocalCommand {
   /** Observes completed local I/O; true denotes outgoing bytes. */
   std::function<void(bool outgoing)> activity = {};
 };
+
+/** One prepared local PTY handoff; the caller owns and closes master_fd. */
+struct TerminalLocalHandoff {
+  /** Versioned boxrig terminal image, including unsent core output. */
+  std::vector<std::uint8_t> checkpoint;
+  /** Whether the old session had accepted peer EOF. */
+  bool input_finished = false;
+  /** Duplicate of the PTY master for SCM_RIGHTS transfer. */
+  int master_fd = -1;
+  /** Original shell PID; only its spawning process can reap it. */
+  pid_t child = 0;
+  /** Capacity of each bounded application queue. */
+  std::size_t queue_capacity = 0;
+  /** Maximum operating-system I/O chunk size. */
+  std::size_t io_chunk_size = 0;
+};
+
+/** Final child status collected by the original spawning process. */
+struct TerminalLocalChildExit {
+  /** Original child PID. */
+  pid_t child = 0;
+  /** Normal exit code, or -1 when unavailable. */
+  int exit_code = -1;
+  /** Terminating signal, or zero. */
+  int signal_number = 0;
+  /** waitpid errno, or zero after successful reaping. */
+  int error = 0;
+};
+
+/** Independent child reaper retained after the source terminal is destroyed. */
+struct TerminalLocalChildReaper;
 
 /** Snapshot separating spawn diagnostics, process exit, and resource recovery. */
 struct TerminalConnectionState {
@@ -117,6 +149,48 @@ void destroy_terminal_connection(TerminalConnection *connection);
  * @return False while previous resources are still being recovered or limits are invalid.
  */
 bool terminal_connection_start_local(TerminalConnection *connection, TerminalLocalCommand command);
+
+/**
+ * Pauses a UTF-8 local connection at a boxrig checkpoint boundary.
+ * @param connection Connected local owner; callers must inhibit new terminal input.
+ * @return Handoff with a duplicated master FD, or nullopt if the state is busy.
+ * @remarks On failure the connection resumes automatically. The returned FD is
+ * owned by the caller, including after commit or rollback.
+ */
+cardio::promise<std::optional<TerminalLocalHandoff>> terminal_connection_prepare_local_handoff(
+    TerminalConnection *connection);
+
+/** Restores normal I/O after an uncommitted local handoff. */
+void terminal_connection_rollback_local_handoff(TerminalConnection *connection);
+
+/**
+ * Ends source I/O after the destination has acknowledged the handoff.
+ * @return Owned reaper for the original spawning process, or nullptr when a
+ * previously received descriptor is moved again or no handoff was prepared.
+ * The caller must await and destroy a nonnull reaper.
+ * @remarks The spawning process must keep its dispatcher alive until reaping
+ * completes, even if its last GTK window has closed.
+ */
+TerminalLocalChildReaper *terminal_connection_commit_local_handoff(TerminalConnection *connection);
+
+/** Awaits the original shell's exit without retaining the old terminal. */
+cardio::promise<TerminalLocalChildExit> terminal_local_child_reaper_wait(TerminalLocalChildReaper *reaper);
+
+/** Releases a reaper after terminal_local_child_reaper_wait has completed. */
+void destroy_terminal_local_child_reaper(TerminalLocalChildReaper *reaper);
+
+/**
+ * Starts direct PTY I/O over a transferred descriptor and imported terminal.
+ * @param connection Inactive owner borrowing the already imported core.
+ * @param master_fd Nonblocking received FD; ownership transfers only on success.
+ * @param input_finished EOF flag from the handoff.
+ * @param child Original child PID, monitored but never reaped here.
+ * @param queue_capacity Bounded queue size from the source.
+ * @param io_chunk_size Maximum I/O chunk size from the source.
+ * @return True if the descriptor was adopted.
+ */
+bool terminal_connection_resume_local(TerminalConnection *connection, int master_fd,
+    bool input_finished, pid_t child, std::size_t queue_capacity, std::size_t io_chunk_size);
 
 /**
  * Starts a channel factory using the confirmed core grid and bounded queues.

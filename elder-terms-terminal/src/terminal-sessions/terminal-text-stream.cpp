@@ -94,6 +94,8 @@ private:
   }
 
 public:
+  bool has_pending() const { return !pending.empty(); }
+
   TerminalTextStream(const std::string &from, const std::string &to,
                           TerminalTextConversionDirection direction)
       : converter(iconv_open(to.c_str(), from.c_str())),
@@ -226,5 +228,7 @@ TerminalTextConversionResult convert_terminal_text(TerminalTextStream *stream, s
 }
 
 TerminalTextConversionResult finish_terminal_text(TerminalTextStream *stream) { return stream->finish(); }
+
+bool terminal_text_stream_has_pending(const TerminalTextStream *stream) { return stream->has_pending(); }
 
 } // namespace elder_terms
