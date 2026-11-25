@@ -187,6 +187,16 @@ Well then, enjoy elder-terms!
 
 ---
 
+## Grouping running terminals
+
+Drag the title text or connection icon of a local or SSH terminal window onto another terminal. Click a row on the left to display its terminal on the right and give it keyboard focus. Drag an empty part of the title bar to move the window.
+
+Drag a row onto another terminal window to move just that session. Press `Ctrl+Shift+U` to detach the selected session. You can change this shortcut in the terminal settings. Dropping a row on the desktop also detaches it. On Wayland, use the shortcut when other terminal windows are open.
+
+Hover over a row and click its close button to end that session. The list disappears when one session remains. Closing the window ends all the sessions it contains.
+
+UTF-8 local shells and authenticated SSH shells can move between processes. Finish an active file transfer before moving its session.
+
 ## INI File Locations
 
 elder-terms configuration files are stored under the XDG user configuration directory.
