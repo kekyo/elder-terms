@@ -5,6 +5,7 @@
 #include "terminal-tabs.h"
 #include "tab-tearoff.h"
 #include "terminal-background.h"
+#include "../../shared/src/connection-runtime/window-resize-border.h"
 #include <algorithm>
 #include <memory>
 #define GETTEXT_PACKAGE "elder-terms"
@@ -63,6 +64,8 @@ static void refresh(TerminalTray *tray) {
   for (auto *tab : tray->tabs) tab->actions.host(tray->window, tray->body, tab == active);
   gtk_stack_set_visible_child(GTK_STACK(tray->headers), active->page->header_bar);
   gtk_stack_set_visible_child(GTK_STACK(tray->pages), active->page->root_box);
+  install_window_resize_borders(GTK_WINDOW(tray->window), active->page->frame_start_border,
+      active->page->frame_end_border, active->page->frame_bottom_border);
   gtk_list_box_select_row(GTK_LIST_BOX(tray->list), GTK_LIST_BOX_ROW(active->row));
   gtk_window_set_title(GTK_WINDOW(tray->window), gtk_label_get_text(GTK_LABEL(active->page->header_title_label)));
   focus_main_window_terminal_if_interactive(active->page);
@@ -268,9 +271,11 @@ static GtkWidget *drag_handle(GtkWidget *child, TerminalTab *tab) {
   unparent(child);
   gtk_container_add(GTK_CONTAINER(button), child);
   g_object_unref(child);
-  if (GTK_IS_LABEL(child)) g_signal_connect(button, "button-press-event", G_CALLBACK(+[](GtkWidget *handle,
+  g_signal_connect(button, "button-press-event", G_CALLBACK(+[](GtkWidget *handle,
       GdkEventButton *event, gpointer data) -> gboolean {
     if (event->button != GDK_BUTTON_PRIMARY) return FALSE;
+    if (begin_window_header_resize(gtk_widget_get_toplevel(handle), event)) return TRUE;
+    if (!GTK_IS_LABEL(data)) return FALSE;
     auto *label = GTK_LABEL(data);
     int x; int y;
     gtk_label_get_layout_offsets(label, &x, &y);
