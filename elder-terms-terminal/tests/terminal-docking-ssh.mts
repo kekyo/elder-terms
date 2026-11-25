@@ -9,7 +9,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startSshLatencyFixture } from '../../shared/tests/ssh-latency-fixture.mts';
 
-const binary = fileURLToPath(
+const binary = process.argv[2] ?? fileURLToPath(
   new URL(
     '../../.build/elder-terms-terminal/elder-terms-terminal',
     import.meta.url

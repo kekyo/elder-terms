@@ -76,7 +76,7 @@ const findColor = (image, red, green, blue, tolerance = 2) => {
 /**
  * Runs a native Wayland pilot under a Weston window on the outer X display.
  *
- * @param {string} binary Pilot executable path.
+ * @param {string|null} binary Pilot executable path, or null when the caller launches product terminals.
  * @param {(harness: object) => Promise<void>} callback Receives capture and XTest input helpers.
  * @returns {Promise<void>} Resolves after the pilot and compositor have stopped.
  */
@@ -131,16 +131,18 @@ export const withWaylandHarness = async (binary, callback) => {
         return false;
       }
     }, 'Weston socket');
-    app = spawn(binary, ['--fixture'], {
-      env,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    app.stdout.on('data', (bytes) => {
-      appOutput += bytes.toString();
-    });
-    app.stderr.on('data', (bytes) => {
-      appError += bytes.toString();
-    });
+    if (binary) {
+      app = spawn(binary, ['--fixture'], {
+        env,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+      app.stdout.on('data', (bytes) => {
+        appOutput += bytes.toString();
+      });
+      app.stderr.on('data', (bytes) => {
+        appError += bytes.toString();
+      });
+    }
     const capture = async (name) => {
       const path = join(directory, `${name}.png`);
       await run('import', ['-window', 'root', path]);
