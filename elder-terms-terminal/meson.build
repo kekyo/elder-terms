@@ -815,3 +815,9 @@ if get_option('build_tests') and find_program('xvfb-run', required: false).found
     args: [meson.current_source_dir() / 'tests/terminal-docking-group.sh', elder_terms_terminal],
     timeout: 90, is_parallel: false)
 endif
+
+if get_option('build_tests')
+  terminal_dock_resume_test = executable('terminal-dock-resume-test',
+    'tests/cpp/terminal-dock-resume-test.cpp')
+  test('terminal-dock-resume-test', terminal_dock_resume_test)
+endif

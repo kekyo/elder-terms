@@ -44,6 +44,7 @@
 #include "main-window.h"
 #include "terminal-tabs.h"
 #include "terminal-dock-bus.h"
+#include "terminal-dock-resume.h"
 #include "sftp-origin-bus.h"
 #include "../../elder-terms-file-transfer/src/file-transfer/file-hash.h"
 #include "../../elder-terms-file-transfer/src/file-transfer/file-transfer-paths.h"
@@ -2456,6 +2457,11 @@ static elder_terms::DockDecision stage_pages(ApplicationState *destination, cons
   bool ready = true;
   for (const auto &page : batch.pages) {
     if (find_page(page.id)) { g_debug("Terminal already present"); break; }
+    if (page.capacity == 0 || page.capacity > 1024 * 1024 || page.chunk == 0 ||
+        (page.control_descriptor < 0 ? page.child == 0 : page.encoding.empty())) {
+      g_debug("Invalid terminal resume parameters");
+      break;
+    }
     elder_terms::LaunchOptions options;
     if (!page.config.empty()) options.config_path = page.config;
     if (!page.startup.empty()) options.startup_config_path = page.startup;
@@ -2474,31 +2480,55 @@ static elder_terms::DockDecision stage_pages(ApplicationState *destination, cons
     const auto control_fd = page.control_descriptor < 0 ? -1 :
         g_unix_fd_list_get(batch.descriptors.get(), page.control_descriptor, nullptr);
     staged.push_back({s, fd, control_fd, page.encoding, page.eof, page.child, page.capacity, page.chunk, page.host_state});
+    const auto phase = elder_terms::terminal_connection_state(
+        elder_terms::terminal_runtime_connection(s->runtime)).phase;
     ready = fd >= 0 && (page.control_descriptor < 0 || control_fd >= 0) &&
+        (phase == elder_terms::TerminalConnectionPhase::idle ||
+         phase == elder_terms::TerminalConnectionPhase::closed) &&
         track_session(s);
     if (!ready) break;
   }
   auto finish = [staged, active = batch.active, destination](bool commit) {
-    std::vector<elder_terms::TerminalTab *> tabs;
-    for (const auto &page : staged) {
-      auto *s = page.state;
-      auto *connection = elder_terms::terminal_runtime_connection(s->runtime);
-      if (commit && (page.control_fd >= 0 ? elder_terms::terminal_connection_resume_transport(connection, page.fd,
-          page.control_fd, page.eof, page.encoding, page.capacity, page.chunk) :
-          elder_terms::terminal_connection_resume_local(connection, page.fd, page.eof, page.child, page.capacity, page.chunk))) {
-        tabs.push_back(s->tab);
-        elder_terms::terminal_runtime_restore_host_state(s->runtime, s->terminal_title, page.host_state.get());
-        set_application_connection_phase(s, elder_terms::TerminalSessionConnectionPhase::connected);
-      } else {
+    const auto close_page = [&staged](std::size_t index) {
+        const auto &page = staged[index];
+        auto *s = page.state;
         if (page.fd >= 0) close(page.fd);
         if (page.control_fd >= 0) close(page.control_fd);
         on_main_window_delete(nullptr, nullptr, s);
-      }
+    };
+    if (!commit) {
+      for (std::size_t index = 0; index < staged.size(); ++index) close_page(index);
+      return;
     }
-    if (commit && tabs.size() == staged.size()) {
-      elder_terms::dock_terminal_tabs(tabs, tabs[active], destination->tab);
-      elder_terms::focus_main_window_terminal_if_interactive(staged[active].state->main_window);
-    }
+    elder_terms::finish_terminal_dock_resumes(staged.size(), active,
+        [&staged](std::size_t index) {
+          const auto &page = staged[index];
+          auto *s = page.state;
+          auto *connection = elder_terms::terminal_runtime_connection(s->runtime);
+          const bool resumed = page.control_fd >= 0 ? elder_terms::terminal_connection_resume_transport(connection, page.fd,
+              page.control_fd, page.eof, page.encoding, page.capacity, page.chunk) :
+              elder_terms::terminal_connection_resume_local(connection, page.fd, page.eof, page.child, page.capacity, page.chunk);
+          if (resumed) {
+            elder_terms::terminal_runtime_restore_host_state(s->runtime, s->terminal_title, page.host_state.get());
+            set_application_connection_phase(s, elder_terms::TerminalSessionConnectionPhase::connected);
+          }
+          return resumed;
+        }, close_page,
+        [&staged, destination](const std::vector<std::size_t> &indices, std::size_t selected) {
+          std::vector<elder_terms::TerminalTab *> tabs;
+          tabs.reserve(indices.size());
+          for (const auto index : indices) tabs.push_back(staged[index].state->tab);
+          if (!destination->tab || !elder_terms::dock_terminal_tabs(tabs, staged[selected].state->tab, destination->tab))
+            return false;
+          elder_terms::focus_main_window_terminal_if_interactive(staged[selected].state->main_window);
+          return true;
+        },
+        [&staged](std::size_t index) {
+          auto *s = staged[index].state;
+          gtk_widget_show_all(s->window);
+          gtk_window_present_with_time(GTK_WINDOW(s->window), GDK_CURRENT_TIME);
+        });
+    update_peer_presence();
   };
   if (ready && staged.size() == batch.pages.size()) return finish;
   finish(false);
