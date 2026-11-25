@@ -19,7 +19,19 @@ struct SftpOriginService {
   guint registration = 0;
   std::string bus_name;
   std::string path;
+  std::string tab_bus_name;
+  std::shared_ptr<struct SftpOriginState> state;
+};
+
+struct SftpOriginState {
+  bool active = true;
   std::function<void()> show;
+};
+
+struct ShowCheck {
+  std::shared_ptr<SftpOriginState> state;
+  GDBusMethodInvocation *invocation = nullptr;
+  std::string sender;
 };
 
 struct SftpRequest {
@@ -33,12 +45,48 @@ static std::string object_path(const std::string &session_id) {
   return path;
 }
 
+static std::string tab_name(const std::string &session_id) {
+  std::string name = "net.kekyo.ElderTerms.Tab.t";
+  for (const char character : session_id)
+    if (character != '-') name.push_back(character);
+  return name;
+}
+
+static void on_owner_checked(GObject *source, GAsyncResult *result, gpointer user_data) {
+  auto check = std::unique_ptr<ShowCheck>(static_cast<ShowCheck *>(user_data));
+  GError *error = nullptr;
+  GVariant *reply = g_dbus_connection_call_finish(G_DBUS_CONNECTION(source), result, &error);
+  const gchar *owner = nullptr;
+  if (reply) g_variant_get(reply, "(&s)", &owner);
+  const bool allowed = check->state->active && owner != nullptr && check->sender == owner;
+  if (allowed) {
+    try {
+      check->state->show();
+      g_dbus_method_invocation_return_value(check->invocation, nullptr);
+    } catch (...) {
+      g_dbus_method_invocation_return_dbus_error(check->invocation,
+          "net.kekyo.ElderTerms.SftpOrigin.ShowFailed",
+          "Shared SFTP could not be presented");
+    }
+  } else g_dbus_method_invocation_return_dbus_error(check->invocation,
+      "net.kekyo.ElderTerms.SftpOrigin.NotTabOwner",
+      "Only the current tab owner may present shared SFTP");
+  if (reply) g_variant_unref(reply);
+  if (error) g_error_free(error);
+}
+
 static void on_show(GDBusConnection *, const gchar *, const gchar *,
     const gchar *, const gchar *, GVariant *, GDBusMethodInvocation *invocation,
     gpointer user_data) {
   auto *service = static_cast<SftpOriginService *>(user_data);
-  service->show();
-  g_dbus_method_invocation_return_value(invocation, nullptr);
+  auto check = std::make_unique<ShowCheck>();
+  check->state = service->state;
+  check->invocation = invocation;
+  check->sender = g_dbus_method_invocation_get_sender(invocation);
+  g_dbus_connection_call(service->connection, "org.freedesktop.DBus",
+      "/org/freedesktop/DBus", "org.freedesktop.DBus", "GetNameOwner",
+      g_variant_new("(s)", service->tab_bus_name.c_str()), G_VARIANT_TYPE("(s)"),
+      G_DBUS_CALL_FLAGS_NONE, 3000, nullptr, on_owner_checked, check.release());
 }
 
 static void on_show_finished(GObject *source, GAsyncResult *result, gpointer user_data) {
@@ -60,7 +108,9 @@ SftpOriginService *create_sftp_origin_service(GDBusConnection *connection,
   service->connection = G_DBUS_CONNECTION(g_object_ref(connection));
   service->bus_name = name;
   service->path = object_path(session_id);
-  service->show = std::move(show);
+  service->tab_bus_name = tab_name(session_id);
+  service->state = std::make_shared<SftpOriginState>();
+  service->state->show = std::move(show);
   GError *error = nullptr;
   auto *node = g_dbus_node_info_new_for_xml(introspection_xml, &error);
   if (!node) {
@@ -87,6 +137,7 @@ std::string sftp_origin_service_bus_name(const SftpOriginService *service) {
 
 void destroy_sftp_origin_service(SftpOriginService *service) {
   if (!service) return;
+  service->state->active = false;
   g_dbus_connection_unregister_object(service->connection, service->registration);
   g_object_unref(service->connection);
   delete service;
