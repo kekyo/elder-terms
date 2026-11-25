@@ -26,6 +26,7 @@ describe.concurrent('boxrig main window layout', () => {
     for (const mode of ['preserve-grid', 'preserve-window']) {
       it(`keeps text visible and the PTY grid consistent throughout zoom and resize (${backend}, ${mode})`, async (context) => {
         const preserveWindow = mode === 'preserve-window';
+        const padding = preserveWindow ? 4 : 0;
         await withTemporaryDirectory(async (directory) => {
           const peerPath = join(directory, 'peer.mjs');
           const sizesPath = join(directory, 'sizes.jsonl');
@@ -49,7 +50,7 @@ process.stdout.write('\\x1b[?25l\\x1b[2J\\x1b[H\\x1b[38;2;255;0;255mZOOM-STABLE'
           );
           await writeFile(
             configPath,
-            `[general]\nauto_close=false\n[terminal]\nwidth=80\nheight=18\nfont_size_dip=14.5\nfont_zoom_mode=${mode}\nscrollback_lines=1234\n[local]\ncommand_line=${process.execPath} ${peerPath} ${sizesPath} ${inputPath}\n`,
+            `[general]\nauto_close=false\n[terminal]\nwidth=80\nheight=18\nfont_size_dip=14.5\nfont_zoom_mode=${mode}\npadding_dip=${padding}\ngrid_vertical_alignment=bottom\nscrollback_lines=1234\n[local]\ncommand_line=${process.execPath} ${peerPath} ${sizesPath} ${inputPath}\n`,
             'utf8'
           );
           await runGtkTest(
@@ -73,7 +74,7 @@ process.stdout.write('\\x1b[?25l\\x1b[2J\\x1b[H\\x1b[38;2;255;0;255mZOOM-STABLE'
                 expect(await status.text()).toContain(`backend=${backend}`);
                 expect(await status.text()).toContain('history=1234');
                 const layout = await readWindowCellLayout(app);
-                expectWindowCellSize(layout, 80, 18);
+                expectWindowCellSize(layout, 80, 18, padding);
                 expect(layout.fontSizeDip).toBe(14.5);
                 return layout;
               });
@@ -188,7 +189,7 @@ process.stdout.write('\\x1b[?25l\\x1b[2J\\x1b[H\\x1b[38;2;255;0;255mZOOM-STABLE'
                     expect(layout.fontSizeDip).not.toBe(previous.fontSizeDip);
                     if (preserveWindow)
                       expect(layout.mainBounds).toEqual(initial.mainBounds);
-                    else expectWindowCellSize(layout, 80, 18);
+                    else expectWindowCellSize(layout, 80, 18, padding);
                     expect((await readSizes()).pop()).toEqual({
                       columns: layout.columns,
                       rows: layout.rows,
@@ -224,7 +225,7 @@ process.stdout.write('\\x1b[?25l\\x1b[2J\\x1b[H\\x1b[38;2;255;0;255mZOOM-STABLE'
                   expect(await readFile(inputPath, 'utf8')).toBe('ax');
                   const layout = await readWindowCellLayout(app);
                   expect(layout.fontSizeDip).toBe(initial.fontSizeDip);
-                  expectWindowCellSize(layout, 80, 18);
+                  expectWindowCellSize(layout, 80, 18, padding);
                   expect((await readSizes()).pop()).toEqual({
                     columns: 80,
                     rows: 18,
@@ -276,7 +277,7 @@ process.stdout.write('\\x1b[?25l\\x1b[2J\\x1b[H\\x1b[38;2;255;0;255mZOOM-STABLE'
                       const layout = await readWindowCellLayout(app);
                       expect(layout.mainBounds).toEqual(initial.mainBounds);
                       expect(layout.fontSizeDip).toBe(initial.fontSizeDip);
-                      expectWindowCellSize(layout, 80, 18);
+                      expectWindowCellSize(layout, 80, 18, padding);
                       expect(frameNumber).toBeGreaterThan(beforeApply);
                       expect((await readSizes()).pop()).toEqual({
                         columns: 80,
@@ -298,7 +299,7 @@ process.stdout.write('\\x1b[?25l\\x1b[2J\\x1b[H\\x1b[38;2;255;0;255mZOOM-STABLE'
                 );
                 await waitForResult(async () => {
                   const layout = await readWindowCellLayout(app);
-                  expectWindowCellSize(layout, 84, 20);
+                  expectWindowCellSize(layout, 84, 20, padding);
                   expect(layout.fontSizeDip).toBe(initial.fontSizeDip);
                   expect(await readSizes()).toEqual([
                     ...sizesBeforeResize,
@@ -341,3 +342,113 @@ process.stdout.write('\\x1b[?25l\\x1b[2J\\x1b[H\\x1b[38;2;255;0;255mZOOM-STABLE'
     }
   }
 });
+
+for (const backend of ['cairo', 'opengl']) {
+  for (const mode of ['preserve-window', 'preserve-grid']) {
+    it.for([1, 2])(
+      `places excess height above a padded terminal (${backend}, ${mode}, scale %i)`,
+      async (scale, context) => {
+        await withTemporaryDirectory(async (directory) => {
+          const config = join(directory, 'layout.ini');
+          const peer = join(directory, 'peer.mjs');
+          const keys = join(directory, 'mouse');
+          await writeFile(
+            peer,
+            `import { appendFileSync } from 'node:fs';
+process.stdin.setRawMode(true);
+process.stdin.on('data', data => appendFileSync(process.argv[2], data));
+process.stdout.write('\\x1b[?25l\\x1b[?1000h\\x1b[?1006h\\x1b[H\\x1b[48;2;213;45;41m \\x1b[0m');`
+          );
+          await writeFile(
+            config,
+            `[terminal]\nwidth=${scale === 1 ? 79 : 40}\nheight=${scale === 1 ? 17 : 9}\nfont_size_dip=14\npadding_dip=4\ngrid_vertical_alignment=bottom\nfont_zoom_mode=${mode}\n[local]\ncommand_line=${process.execPath} ${peer} ${keys}\n`
+          );
+          await runGtkTest(
+            context,
+            [
+              ...(mode === 'preserve-grid' ? ['--test-maximize-window'] : []),
+              '-c',
+              config,
+            ],
+            async (app) => {
+              const terminal = await app.getById('terminal_view');
+              const initial = await waitForResult(() =>
+                readWindowCellLayout(app)
+              );
+              if (mode === 'preserve-grid') {
+                await initial.mainWindow.resizeTo(
+                  initial.mainBounds.width + 3,
+                  initial.mainBounds.height + 7
+                );
+              }
+              const initialArea = (await terminal.capture()).bounds;
+              await app.input.moveMouseTo(
+                (initialArea.x + 24) * scale,
+                (initialArea.y + 10) * scale
+              );
+              await scrollWheelWithControl(app, -1);
+              if (mode === 'preserve-window') {
+                const zoomed = await waitForResult(async () => {
+                  const layout = await readWindowCellLayout(app);
+                  expect(layout.fontSizeDip).toBeGreaterThan(
+                    initial.fontSizeDip
+                  );
+                  return layout;
+                });
+                const area = (await terminal.capture()).bounds;
+                const targetHeight =
+                  8 + Math.ceil(zoomed.rows * zoomed.cellHeight) + 3;
+                await zoomed.mainWindow.resizeTo(
+                  zoomed.mainBounds.width,
+                  zoomed.mainBounds.height - area.height + targetHeight
+                );
+              }
+              const top = await waitForResult(async () => {
+                const layout = await readWindowCellLayout(app);
+                expect(layout.fontSizeDip).toBeGreaterThan(14);
+                const area = (await terminal.capture()).bounds;
+                const picture = PNG.sync.read((await app.capture()).image);
+                const padding = 4 * scale;
+                const cellHeight = layout.cellHeight * scale;
+                const remainder =
+                  area.height * scale - 2 * padding - layout.rows * cellHeight;
+                expect(remainder).toBeGreaterThan(0);
+                expect(remainder).toBeLessThan(cellHeight);
+                const left = area.x * scale + padding;
+                const y = area.y * scale + padding + remainder;
+                const rgb = (x: number, y: number) => [
+                  ...picture.data.subarray(
+                    (y * picture.width + x) * 4,
+                    (y * picture.width + x) * 4 + 3
+                  ),
+                ];
+                expect(rgb(left, y)).toEqual([213, 45, 41]);
+                expect(rgb(left - 1, y)).not.toEqual([213, 45, 41]);
+                expect(rgb(left, y - 1)).not.toEqual([213, 45, 41]);
+                return { x: left + 1, y };
+              });
+              for (const y of [top.y - 1, top.y + 1]) {
+                // Keep the two presses outside the GTK double-click distance.
+                await app.input.moveMouseTo(y < top.y ? top.x + 110 : top.x, y);
+                await app.input.setMouseButton('left', true);
+                await app.input.setMouseButton('left', false);
+              }
+              await waitForResult(async () =>
+                expect(await readFile(keys, 'utf8')).toBe(
+                  '\x1b[<0;1;1M\x1b[<0;1;1m'
+                )
+              );
+            },
+            {
+              env: {
+                LIBGL_ALWAYS_SOFTWARE: '1',
+                GDK_SCALE: String(scale),
+                ...(backend === 'cairo' ? { GDK_GL: 'disable' } : {}),
+              },
+            }
+          );
+        });
+      }
+    );
+  }
+}

@@ -2679,3 +2679,27 @@ msgstr "Поиск значков…"
 
 msgid "No matching icons"
 msgstr "Подходящие значки не найдены"
+
+msgid "Show activity indicators"
+msgstr "Показывать индикаторы активности"
+
+msgid "Drop regular files to send"
+msgstr "Перетащите обычные файлы для отправки"
+
+msgid "Drop one file for text send"
+msgstr "Перетащите один файл для отправки в текстовом режиме"
+
+msgid "Could not create the temporary download folder"
+msgstr "Не удалось создать временную папку для загрузки"
+
+msgid "Terminal padding (DIP)"
+msgstr "Внутренний отступ терминала (DIP)"
+
+msgid "Vertical grid alignment"
+msgstr "Выравнивание сетки по вертикали"
+
+msgid "Top"
+msgstr "По верхнему краю"
+
+msgid "Bottom"
+msgstr "По нижнему краю"

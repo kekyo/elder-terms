@@ -2649,3 +2649,27 @@ msgstr "搜索图标…"
 
 msgid "No matching icons"
 msgstr "没有匹配的图标"
+
+msgid "Show activity indicators"
+msgstr "显示活动指示灯"
+
+msgid "Drop regular files to send"
+msgstr "拖入要发送的普通文件"
+
+msgid "Drop one file for text send"
+msgstr "拖入一个文件以文本方式发送"
+
+msgid "Could not create the temporary download folder"
+msgstr "无法创建临时下载文件夹"
+
+msgid "Terminal padding (DIP)"
+msgstr "终端内边距（DIP）"
+
+msgid "Vertical grid alignment"
+msgstr "网格垂直对齐方式"
+
+msgid "Top"
+msgstr "顶部"
+
+msgid "Bottom"
+msgstr "底部"

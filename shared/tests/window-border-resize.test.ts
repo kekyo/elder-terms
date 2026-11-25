@@ -21,12 +21,13 @@ const exec = promisify(execFile);
 
 for (const application of ['terminal', 'file-transfer']) {
   for (const scale of [1, 2]) {
-    for (const { width, composited } of [
-      { width: 3, composited: false },
-      { width: 11, composited: false },
-      ...(scale === 1 ? [{ width: 11, composited: true }] : []),
+    for (const { width, composited, compact } of [
+      { width: 3, composited: false, compact: true },
+      { width: 11, composited: false, compact: true },
+      { width: 11, composited: true, compact: true },
+      { width: 11, composited: true, compact: false },
     ]) {
-      it(`resizes only on the visible ${width}px borders (${application}, scale ${scale}${composited ? ', composited' : ''})`, async (context) => {
+      it(`resizes only on the visible ${width}px borders (${application}, scale ${scale}${composited ? (compact ? ', composited compact' : ', composited normal') : ''})`, async (context) => {
         const directory = await mkdtemp(join(tmpdir(), 'elder-resize-border-'));
         const evidence = createTestEvidence(context);
         const launcher = createGtkAppLauncher({
@@ -49,6 +50,8 @@ for (const application of ['terminal', 'file-transfer']) {
           onSystemOutput: evidence.recordSystemOutputEvent,
         });
         let compositor: ChildProcess | undefined;
+        let observer: ChildProcess | undefined;
+        let resizeEvents = '';
         let compositorFinished: Promise<void> | undefined;
         const compositorOutput: string[] = [];
         try {
@@ -110,7 +113,7 @@ for (const application of ['terminal', 'file-transfer']) {
           const config = join(directory, 'connection.ini');
           await writeFile(
             config,
-            `[general]\ncompact_mode=true\nshow_border=true\nborder_width=${width}\nexterior_background=#800000\n${application === 'file-transfer' ? 'type=sftp\n[ssh]\naddress=fixture.example\n[sftp]\nremote_directory=/remote\nlocal_directory=' + directory : '[hyperlink]\nenabled=false'}\n`
+            `[general]\ncompact_mode=${compact}\nshow_border=true\nborder_width=${width}\nexterior_background=#800000\n${application === 'file-transfer' ? 'type=sftp\n[ssh]\naddress=fixture.example\n[sftp]\nremote_directory=/remote\nlocal_directory=' + directory : '[hyperlink]\nenabled=false'}\n`
           );
           const app = await launcher.launch(['--test-fixture', '-c', config], {
             onOutput: evidence.recordAppOutputEvent,
@@ -123,10 +126,112 @@ for (const application of ['terminal', 'file-transfer']) {
             ),
             'window'
           );
-          await window.moveTo(180, 100);
+          await window.moveTo(180 * scale, 100 * scale);
           await window.activate();
-          const original = await window.bounds();
           const prefix = application === 'terminal' ? '' : 'file_transfer_';
+          if (composited) {
+            const probe = join(directory, 'x11-resize-events');
+            await exec('cc', [
+              fileURLToPath(new URL('./x11-pointer.c', import.meta.url)),
+              '-lX11',
+              '-lXfixes',
+              '-o',
+              probe,
+            ]);
+            const env = await app.environment();
+            observer = spawn(probe, ['resize'], {
+              env,
+              stdio: ['ignore', 'pipe', 'ignore'],
+            });
+            observer.stdout!.on('data', (bytes) => {
+              resizeEvents += bytes.toString();
+            });
+            await waitForResult(async () =>
+              expect(resizeEvents).toContain('ready')
+            );
+            const header = await app.getById(`${prefix}header_bar`);
+            for (const [horizontal, vertical] of [
+              [-1, 0],
+              [1, 0],
+              [0, -1],
+              [-1, -1],
+              [1, -1],
+            ]) {
+              // Themes may use core X11 names for GTK's CSS resize cursors.
+              const cursor = vertical
+                ? horizontal
+                  ? /(?:nwse|nesw)-resize|[bf]d_double_arrow|corner|size_[bf]diag/
+                  : /(?:n|s|ns)-resize|v_double_arrow|size_ver/
+                : /(?:w|e|ew)-resize|h_double_arrow|size_hor/;
+              const { x, y, before } = await waitForResult(async () => {
+                const bounds = (await header.capture()).bounds;
+                const before = await window.bounds();
+                const inset = Math.floor(width / 2);
+                const x =
+                  scale *
+                  (bounds.x +
+                    (horizontal < 0
+                      ? inset
+                      : horizontal > 0
+                        ? bounds.width - 1 - inset
+                        : Math.floor(bounds.width / 2)));
+                const y =
+                  scale *
+                  (bounds.y +
+                    (vertical ? inset : Math.floor(bounds.height / 2)));
+                await app.input.moveMouseTo(x, y);
+                expect((await exec(probe, [], { env })).stdout.trim()).toMatch(
+                  cursor
+                );
+                return { x, y, before };
+              });
+              await evidence.log('Header drag', {
+                horizontal,
+                vertical,
+                x,
+                y,
+                before,
+              });
+              resizeEvents = '';
+              await app.input.setMouseButton('left', true);
+              try {
+                const expectedEdge = vertical
+                  ? horizontal + 1
+                  : horizontal < 0
+                    ? 7
+                    : 3;
+                await waitForResult(async () =>
+                  expect(resizeEvents.trim(), 'WM resize direction').toBe(
+                    String(expectedEdge)
+                  )
+                );
+                let motion = 0;
+                await waitForResult(async () => {
+                  const delta = (24 + (motion++ % 2)) * scale;
+                  await app.input.moveMouseTo(
+                    x + horizontal * delta,
+                    y + vertical * delta
+                  );
+                  const after = await window.bounds();
+                  if (horizontal)
+                    expect(
+                      after.width,
+                      `header edge ${horizontal},${vertical}`
+                    ).toBeGreaterThan(before.width);
+                  if (vertical)
+                    expect(
+                      after.height,
+                      `header edge ${horizontal},${vertical}`
+                    ).toBeGreaterThan(before.height);
+                });
+              } finally {
+                await app.input.setMouseButton('left', false);
+              }
+            }
+          }
+          // Uncomposited cases exercise every physical pixel of the body borders at both scales.
+          if (composited && (!compact || scale === 2)) return;
+          const original = await window.bounds();
           await evidence.captureEvidence('visible-borders', async () =>
             app.capture()
           );
@@ -276,6 +381,7 @@ for (const application of ['terminal', 'file-transfer']) {
             await compositorFinished;
             await evidence.log('Compositor output', compositorOutput.join(''));
           }
+          observer?.kill();
           await launcher.release();
           await evidence.release();
           await rm(directory, { recursive: true, force: true });

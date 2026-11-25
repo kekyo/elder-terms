@@ -13,6 +13,7 @@ import { promisify } from 'node:util';
 import type { GtkApp, GtkCapture } from 'gestament';
 import { describe, expect, it } from 'vitest';
 import { waitForResult, toPass } from 'gestament/testing';
+import { dropTerminalFiles } from './terminal-file-drop.ts';
 import { waitForActivityIndicatorImageState } from './activity-indicator-test-helpers';
 import {
   activateTerminalPaste,
@@ -1103,6 +1104,32 @@ mode=cooked
             SHELL: shell.shellPath,
           },
         }
+      );
+    });
+  });
+
+  it('asks before sending a file dropped on a local terminal', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const shell = await createRawInputShellFixture(directory);
+      const path = join(directory, '日本 語.txt');
+      await writeFile(path, 'Q');
+      await runGtkTest(
+        context,
+        [],
+        async (app) => {
+          await waitForFileText(shell.readyPath, 'ready');
+          const files = [pathToFileURL(path).href];
+          await dropTerminalFiles(app, files);
+          await app.input.pressKey('Escape');
+          expect(await readFile(shell.markerPath, 'utf8')).toBe('');
+          await dropTerminalFiles(app, files);
+          await expectElementKind(
+            await app.getById('drop_text_send_item'),
+            'menuItem'
+          ).click();
+          await waitForFileText(shell.markerPath, 'Q');
+        },
+        { env: { SHELL: shell.shellPath } }
       );
     });
   });

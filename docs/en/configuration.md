@@ -67,6 +67,7 @@ auto_close=false
 compact_mode=true
 show_border=true
 border_width=4
+show_indicators=true
 indicator_color=#3584E4
 indicator_off_color=#808080
 receive_effect=strong
@@ -81,6 +82,7 @@ visual_bell=disabled
 | `compact_mode` | `true` enables compact mode; built-in default: `false` |
 | `show_border` | `true` shows borders; built-in default: `false` |
 | `border_width` | 1–1000 pixels; built-in default: 4 |
+| `show_indicators` | Show the connection, activity and serial signal lamps. Defaults to `true` |
 | `indicator_color`, `indicator_off_color` | An RGB color in `#RRGGBB` format, or `default` for the original green and gray respectively |
 | `receive_effect`, `visual_bell` | `disabled`, `weak`, `medium`, or `strong`; built-in default: `medium` |
 
@@ -116,6 +118,8 @@ See [selection and copying](text-selection.md) for whitespace and clipboard beha
 [terminal]
 font_size_dip=14.5
 font_zoom_mode=preserve-window
+padding_dip=4
+grid_vertical_alignment=bottom
 ambiguous_width=wide
 font_families=DejaVu Sans Mono;Noto Sans Mono CJK JP;Monospace;
 ```
@@ -133,6 +137,10 @@ Omit the key to inherit from the connection's selected theme or the global setti
 Applying the mode leaves the current text and window sizes unchanged; it takes effect on subsequent zoom input.
 You can still edit the text size, rows, or columns directly and resize the window manually in either mode.
 When the window size is constrained, such as when maximized or full screen, both modes fit the row and column counts to the actual display area.
+
+In Terminal Appearance, Terminal padding sets the inset between each edge and the cells. It uses device-independent pixels (DIPs) and defaults to zero. Vertical grid alignment places the height left over after fitting whole cells below the grid with `top` (the default), or above it with `bottom`. Extra width stays on the right.
+
+For example, an inset of 4 DIP and 7 DIP of excess height give an 11 DIP top margin and a 4 DIP bottom margin with bottom alignment. Both zoom modes use this placement, including in maximized and tiled windows.
 
 For `ambiguous_width`, `narrow` means one column, `wide` means two, and `font` means font dependent. The built-in default is `narrow`.
 Save and reopen the terminal after changing the width policy.
@@ -233,7 +241,10 @@ Existing INI files with a device path but no `device_match_mode` continue to use
 ```ini
 [transfer]
 text_send_follow_return_code=true
+text_send_bytes_per_second=2048
 ```
+
+`text_send_bytes_per_second` sets the rate in encoded bytes per second for text file sends and pastes. The default is 2,048 B/s. A connection or an inherited setting can specify a different rate.
 
 `true` converts newlines in text sends, pastes, and macro sends according to `return_code`; `auto` uses CR.
 `false` preserves the original CR, LF, and CRLF sequences. The built-in default is `true`.

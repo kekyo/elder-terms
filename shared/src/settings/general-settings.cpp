@@ -57,6 +57,14 @@ static bool validate_border_width(const SettingValue &value,
   return true;
 }
 
+SettingKey general_show_indicators_setting_key() {
+  return make_setting_key(general_section, "show_indicators");
+}
+
+bool general_show_indicators(const SettingsStore &store) {
+  return setting_boolean_value_or_default(store, general_show_indicators_setting_key(), true);
+}
+
 SettingKey general_show_border_setting_key() {
   return make_setting_key(general_section, general_show_border_key);
 }
@@ -334,6 +342,11 @@ general_setting_definitions(std::string default_connection_name) {
           .default_value =
               SettingValue{std::string(default_general_background)},
           .validate = validate_general_color,
+      },
+      {
+          .key = general_show_indicators_setting_key(),
+          .default_value = SettingValue{true},
+          .validate = nullptr,
       },
       {
           .key = general_indicator_color_setting_key(),

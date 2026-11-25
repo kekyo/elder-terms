@@ -20,6 +20,7 @@ import {
 } from 'gestament';
 import { describe, expect, it, type TestContext } from 'vitest';
 import { waitForResult } from 'gestament/testing';
+import { dropTerminalFiles } from './terminal-file-drop.ts';
 import { waitForActivityIndicatorImageState } from './activity-indicator-test-helpers';
 import {
   withTemporaryDirectory,
@@ -2699,6 +2700,80 @@ const registerBaseTests = () =>
           batchTransferTimeoutMs + 30_000
         );
       }
+    }
+
+    for (const transferCase of batchTransferMenuCases.filter(
+      (item) => item.direction === 'send'
+    )) {
+      it(
+        `sends a dropped batch over TELNET using ${transferCase.protocol}`,
+        async (context) => {
+          await expectRequiredCommands();
+          await withTemporaryDirectory(async (directory) => {
+            const fixture = await createBatchTransferFixture(
+              directory,
+              transferCase
+            );
+            const connection = await startConnection(
+              connectionCases[0],
+              fixture
+            );
+            try {
+              await connection.writeConfig(
+                fixture.configPath,
+                fixture.transferBasePath,
+                false
+              );
+              await runGtkTest(
+                context,
+                [...connection.launchArguments, '-c', fixture.configPath],
+                async (app, evidence) => {
+                  await waitForTransferConnection(
+                    app,
+                    evidence,
+                    connection,
+                    fixture.peerReadyPath
+                  );
+                  const singleOnly = [
+                    'drop_text_send_item',
+                    'drop_xmodem_send_item',
+                    'drop_xmodem_1k_send_item',
+                  ];
+                  const batch = [
+                    'drop_ymodem_send_item',
+                    'drop_zmodem_send_item',
+                  ];
+                  await dropTerminalFiles(app, [fixture.sourceUris[0]]);
+                  for (const id of [...singleOnly, ...batch])
+                    expectElementKind(await app.getById(id), 'menuItem');
+                  await app.input.pressKey('Escape');
+                  await dropTerminalFiles(app, fixture.sourceUris);
+                  for (const id of singleOnly)
+                    expect(await app.findById(id)).toBeUndefined();
+                  for (const id of batch)
+                    expectElementKind(await app.getById(id), 'menuItem');
+                  await writeFile(fixture.markerPath, 'start', 'utf8');
+                  await expectElementKind(
+                    await app.getById(
+                      `drop_${transferCase.protocol}_send_item`
+                    ),
+                    'menuItem'
+                  ).click();
+                  await waitForBatchFileBytes(
+                    fixture.files,
+                    transferCase.protocol,
+                    batchTransferTimeoutMs
+                  );
+                },
+                connection.gtkTestOptions
+              );
+            } finally {
+              await connection.close();
+            }
+          });
+        },
+        batchTransferTimeoutMs + 30_000
+      );
     }
 
     it(

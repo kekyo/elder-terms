@@ -3,7 +3,11 @@
 // Under MIT.
 // https://github.com/kekyo/elder-terms/
 
-import { spawnSync, type SpawnSyncReturns } from 'node:child_process';
+import {
+  execFileSync,
+  spawnSync,
+  type SpawnSyncReturns,
+} from 'node:child_process';
 import {
   chmodSync,
   copyFileSync,
@@ -406,13 +410,14 @@ container_image_for_target debian trixie riscv64
       }
     );
     expectSuccess(versions, 'build SDK version lookup failed');
-    expect(versions.stdout.trim().split(/\s+/)).toEqual([
-      '0.15.0',
-      '0.15.0',
-      '0.15.0',
-      '0.15.0',
-      '0.15.0',
-    ]);
+    const checkoutVersion = execFileSync(
+      join(projectRoot, 'node_modules/.bin/screw-up'),
+      ['format', '-e', '{version}', '-f'],
+      { cwd: join(projectRoot, 'deps/boxrig'), encoding: 'utf8' }
+    ).trim();
+    expect(versions.stdout.trim().split(/\s+/)).toEqual(
+      Array(5).fill(checkoutVersion)
+    );
   });
 
   it('builds a usable SDK from relocated host-prepared tools without target npm or Git', () => {
@@ -562,7 +567,14 @@ int main(void) {
       { ...process.env, PKG_CONFIG_PATH: join(sdk, 'lib/pkgconfig') }
     );
     expectSuccess(versions, 'prepared SDK version lookup failed');
-    expect(versions.stdout.trim().split(/\s+/)).toEqual(['0.15.0', '0.15.0']);
+    const packagedVersion = readFileSync(
+      join(relocated, 'boxrig/version.txt'),
+      'utf8'
+    ).trim();
+    expect(versions.stdout.trim().split(/\s+/)).toEqual([
+      packagedVersion,
+      packagedVersion,
+    ]);
     const consumer = join(temporaryRoot, 'prepared-sdk-consumer');
     expectSuccess(
       run('cc', [

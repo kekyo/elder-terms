@@ -2686,8 +2686,8 @@ describe.concurrent('elder-terms-terminal settings', () => {
         const pageCenterX =
           topCapture.bounds.x + Math.trunc(topCapture.bounds.width / 2);
 
-        expect
-          .soft([
+        context
+          .expect([
             capturePixelAtScreenPosition(
               topCapture,
               topCapture.bounds.x + 6,
@@ -3125,7 +3125,8 @@ describe.concurrent('elder-terms-terminal settings', () => {
       await mkdir(join(directory, 'gtk-3.0'));
       await writeFile(
         join(directory, 'gtk-3.0', 'gtk.css'),
-        'headerbar { background: #123456; }\n' +
+        // The settings dialog can briefly cover the terminal's title bar in the recording.
+        'headerbar.terminal-header { background: #123456; }\n' +
           'headerbar, headerbar button { transition-duration: 2s; }\n',
         'utf8'
       );

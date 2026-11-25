@@ -2673,3 +2673,27 @@ msgstr "Pesquisar ícones…"
 
 msgid "No matching icons"
 msgstr "Nenhum ícone correspondente"
+
+msgid "Show activity indicators"
+msgstr "Mostrar indicadores de atividade"
+
+msgid "Drop regular files to send"
+msgstr "Solte arquivos comuns para enviá-los"
+
+msgid "Drop one file for text send"
+msgstr "Solte um arquivo para enviá-lo como texto"
+
+msgid "Could not create the temporary download folder"
+msgstr "Não foi possível criar a pasta temporária de download"
+
+msgid "Terminal padding (DIP)"
+msgstr "Margem interna do terminal (DIP)"
+
+msgid "Vertical grid alignment"
+msgstr "Alinhamento vertical da grade"
+
+msgid "Top"
+msgstr "Superior"
+
+msgid "Bottom"
+msgstr "Inferior"
