@@ -379,6 +379,9 @@ void set_main_window_terminal_interactive(MainWindow *main_window,
  */
 void focus_main_window_terminal_if_interactive(MainWindow *main_window);
 
+/** Reports whether the view owns a nonempty linear or rectangular text selection. */
+bool terminal_widget_has_selected_text(BoxrigGtk3TerminalWidget *terminal);
+
 /**
  * Displays one SSH question as an overlay on the dimmed terminal surface.
  *

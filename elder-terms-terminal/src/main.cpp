@@ -44,6 +44,7 @@
 #include "main-window.h"
 #include "terminal-tabs.h"
 #include "terminal-dock-bus.h"
+#include "sftp-origin-bus.h"
 #include "../../elder-terms-file-transfer/src/file-transfer/file-hash.h"
 #include "../../elder-terms-file-transfer/src/file-transfer/file-transfer-paths.h"
 #include "../../elder-terms-file-transfer/src/file-transfer/file-transfer-window.h"
@@ -71,7 +72,10 @@ struct ApplicationState {
   std::optional<std::filesystem::path> startup_path;
   bool transferring = false;
   bool origin_active = false;
-  std::string session_id, launcher;
+  bool owns_desktop_entry = false;
+  std::string session_id, launcher, sftp_origin;
+  elder_terms::SftpOriginService *sftp_service = nullptr;
+  elder_terms::TerminalTransportOrigin *ssh_origin = nullptr;
   bool cleanup_queued = false;
   gulong sensitivity_handler = 0;
   elder_terms::MainWindow *main_window = nullptr;
@@ -87,7 +91,6 @@ struct ApplicationState {
   elder_terms::TerminalLogState *log_state = nullptr;
   elder_terms::TerminalBellPlayer *bell_player = nullptr;
   elder_terms::TerminalBellState *bell_state = nullptr;
-  cardio::dispatcher_group_glib *dispatcher_group = nullptr;
   std::optional<cardio::promise<void>> shutdown_task;
   std::optional<cardio::promise<void>> ssh_prompt_fixture_task;
   std::optional<cardio::promise<void>> sftp_open_task;
@@ -861,7 +864,8 @@ static bool apply_runtime_settings(ApplicationState *state,
     return false;
   }
   state->settings_store = store;
-  elder_terms::update_connection_desktop_session(state->settings_store);
+  if (state->owns_desktop_entry)
+    elder_terms::update_connection_desktop_session(state->settings_store);
   elder_terms::set_connection_window_icon(GTK_WINDOW(state->main_window->window),
       GTK_IMAGE(state->main_window->header_connection_icon),
       elder_terms::general_connection_icon(state->settings_store),
@@ -1783,18 +1787,28 @@ static void on_sftp_menu_item_activate(GtkMenuItem *,
   if (state == nullptr) {
     return;
   }
+  if (!state->sftp_service && !state->sftp_origin.empty()) {
+    const auto id = state->session_id;
+    elder_terms::request_sftp_origin(elder_terms::terminal_dock_connection(), state->sftp_origin, id,
+        [id](bool shown) {
+          if (!shown) for (auto &s : sessions) if (s->session_id == id && s->tab && !s->closing)
+            elder_terms::set_main_window_status_text(s->main_window, _("SFTP unavailable"));
+        });
+    return;
+  }
   if (state->sftp_window != nullptr) {
     elder_terms::present_file_transfer_window(state->sftp_window);
     return;
   }
-  if (state->sftp_opening || !state->connection_active) {
+  if (state->sftp_opening || (!state->ssh_origin && !state->connection_active)) {
     return;
   }
 
   std::shared_ptr<elder_terms::AuthenticatedSshTransport> transport;
   if (!state->test_options.fixture) {
     transport =
-        elder_terms::terminal_runtime_authenticated_ssh(state->runtime);
+        state->ssh_origin ? elder_terms::terminal_transport_origin_authenticated_ssh(state->ssh_origin) :
+        state->runtime ? elder_terms::terminal_runtime_authenticated_ssh(state->runtime) : nullptr;
     if (transport == nullptr) {
       elder_terms::set_main_window_status_text(
           state->main_window, _("SFTP unavailable"));
@@ -2016,10 +2030,10 @@ static ApplicationState *create_session(const elder_terms::LaunchOptions &launch
   sessions.push_back(std::move(owned));
 
   app_state.startup_path = launch_options.startup_config_path;
+  app_state.owns_desktop_entry = !imported;
   app_state.main_window = &*main_window;
   app_state.runtime = main_window->runtime;
   app_state.active_profile = *connection_profile;
-  app_state.dispatcher_group = process_dispatcher;
   app_state.settings_store = settings_result.store;
   if (main_window->compact_mode) {
     elder_terms::set_connection_window_icon(GTK_WINDOW(main_window->window),
@@ -2190,7 +2204,8 @@ static ApplicationState *create_session(const elder_terms::LaunchOptions &launch
         if (moved) elder_terms::attach_terminal_presentation(app_state.presentation);
       },
       .close = [&app_state] { on_main_window_delete(nullptr, nullptr, &app_state); },
-      .movable = [&app_state] { return !app_state.closing && !app_state.transferring; },
+      .movable = [&app_state] { return !app_state.closing && !app_state.transferring &&
+          !elder_terms::has_modal_dialog(app_state.window); },
       .undock_key = [&app_state](guint key, GdkModifierType modifiers) {
         const auto binding = elder_terms::terminal_key_bindings(app_state.settings_store).undock;
         return binding && elder_terms::key_binding_matches(*binding, key, modifiers);
@@ -2216,8 +2231,18 @@ static ApplicationState *create_session(const elder_terms::LaunchOptions &launch
             elder_terms::present_tracked_window(s->window, timestamp, token);
           }
         });
-    if (tracked && track_session(&app_state)) elder_terms::announce_terminal_dock_page(id, g_getenv("ELDER_TERMS_LAUNCH_ID"), app_state.launcher);
-    else app_state.launcher.clear();
+    if (!tracked) app_state.launcher.clear();
+    if (track_session(&app_state) && tracked)
+      elder_terms::announce_terminal_dock_page(id, g_getenv("ELDER_TERMS_LAUNCH_ID"), app_state.launcher);
+    if (connection_profile->kind == elder_terms::TerminalConnectionKind::ssh && elder_terms::terminal_dock_connection()) {
+      app_state.sftp_service = elder_terms::create_sftp_origin_service(elder_terms::terminal_dock_connection(),
+          id, [&app_state] {
+            on_sftp_menu_item_activate(nullptr, &app_state);
+            if (app_state.sftp_window) elder_terms::present_tracked_window(
+                elder_terms::file_transfer_window_widget(app_state.sftp_window), GDK_CURRENT_TIME, {});
+          });
+      app_state.sftp_origin = elder_terms::sftp_origin_service_bus_name(app_state.sftp_service);
+    }
   }
   if (launch_options.test.show_transfer_progress) {
     elder_terms::set_main_window_transfer_progress_visible(
@@ -2249,6 +2274,7 @@ static ApplicationState *create_session(const elder_terms::LaunchOptions &launch
 
 static void dispose_session(ApplicationState *state) {
   auto &app_state = *state;
+  elder_terms::destroy_sftp_origin_service(app_state.sftp_service);
 
   if (app_state.sftp_cancel_source.has_value()) {
     (void)app_state.sftp_cancel_source->cancel();
@@ -2300,10 +2326,12 @@ static cardio::promise<void> commit_ssh_page(ApplicationState *s) {
   s->origin_active = true;
   auto *origin = co_await elder_terms::terminal_connection_commit_transport_handoff(
       elder_terms::terminal_runtime_connection(s->runtime));
+  s->ssh_origin = origin;
   s->transferring = false;
   on_main_window_delete(nullptr, nullptr, s);
   if (origin) {
     co_await elder_terms::terminal_transport_origin_wait(origin);
+    s->ssh_origin = nullptr;
     elder_terms::destroy_terminal_transport_origin(origin);
   }
   s->origin_active = false;
@@ -2324,6 +2352,10 @@ static cardio::promise<elder_terms::DockPrepared> prepare_pages(std::vector<std:
     if (!can_move_terminal(s) || (s->active_profile.kind != elder_terms::TerminalConnectionKind::local_shell &&
         s->active_profile.kind != elder_terms::TerminalConnectionKind::ssh))
       co_return result;
+    if (elder_terms::terminal_widget_has_selected_text(BOXRIG_GTK3_TERMINAL_WIDGET(s->main_window->terminal))) {
+      elder_terms::set_main_window_status_text(s->main_window, _("Clear the text selection to move this terminal"));
+      co_return result;
+    }
     pages.push_back(s);
   }
   for (auto *s : pages) {
@@ -2357,7 +2389,8 @@ static cardio::promise<elder_terms::DockPrepared> prepare_pages(std::vector<std:
     for (auto *s : pages) {
       auto *connection = elder_terms::terminal_runtime_connection(s->runtime);
       elder_terms::DockPageImage page{s->session_id, s->config_path.value_or(""), s->startup_path.value_or(""),
-          s->terminal_title, s->launcher, elder_terms::snapshot_connection_settings(s->settings_store), {}, {}, false, -1, -1, "UTF-8", 0, 0, 0};
+          s->terminal_title, s->launcher, elder_terms::snapshot_connection_settings(s->settings_store), {}, s->sftp_origin, {}, false, -1, -1, "UTF-8", 0, 0, 0, {}};
+      if (!elder_terms::terminal_runtime_pause_input_for_handoff(s->runtime)) { finish(false); co_return result; }
       auto keep_fd = [&](int fd) {
         const int index = g_unix_fd_list_append(result.batch.descriptors.get(), fd, nullptr);
         close(fd);
@@ -2385,6 +2418,8 @@ static cardio::promise<elder_terms::DockPrepared> prepare_pages(std::vector<std:
         page.child = image->child;
       }
       if (page.descriptor < 0) { finish(false); co_return result; }
+      page.host_state = elder_terms::terminal_runtime_save_host_state(s->runtime);
+      if (!page.host_state) { finish(false); co_return result; }
       page.log = co_await elder_terms::terminal_log_handoff_path(s->log_state);
       result.batch.pages.push_back(std::move(page));
     }
@@ -2413,6 +2448,7 @@ struct StagedPage {
   std::string encoding;
   bool eof;
   unsigned child, capacity, chunk;
+  std::shared_ptr<GVariant> host_state;
 };
 
 static elder_terms::DockDecision stage_pages(ApplicationState *destination, const elder_terms::DockBatch &batch) {
@@ -2430,15 +2466,16 @@ static elder_terms::DockDecision stage_pages(ApplicationState *destination, cons
     if (!s) { g_debug("Cannot create checkpoint page"); break; }
     s->session_id = page.id;
     s->launcher = page.launcher;
+    s->sftp_origin = page.sftp_origin;
     s->terminal_title = page.title;
     elder_terms::terminal_log_resume_path(s->log_state, page.log);
     update_application_session_identity(s);
     const int fd = g_unix_fd_list_get(batch.descriptors.get(), page.descriptor, nullptr);
     const auto control_fd = page.control_descriptor < 0 ? -1 :
         g_unix_fd_list_get(batch.descriptors.get(), page.control_descriptor, nullptr);
-    staged.push_back({s, fd, control_fd, page.encoding, page.eof, page.child, page.capacity, page.chunk});
+    staged.push_back({s, fd, control_fd, page.encoding, page.eof, page.child, page.capacity, page.chunk, page.host_state});
     ready = fd >= 0 && (page.control_descriptor < 0 || control_fd >= 0) &&
-        (s->launcher.empty() || track_session(s));
+        track_session(s);
     if (!ready) break;
   }
   auto finish = [staged, active = batch.active, destination](bool commit) {
@@ -2450,6 +2487,7 @@ static elder_terms::DockDecision stage_pages(ApplicationState *destination, cons
           page.control_fd, page.eof, page.encoding, page.capacity, page.chunk) :
           elder_terms::terminal_connection_resume_local(connection, page.fd, page.eof, page.child, page.capacity, page.chunk))) {
         tabs.push_back(s->tab);
+        elder_terms::terminal_runtime_restore_host_state(s->runtime, s->terminal_title, page.host_state.get());
         set_application_connection_phase(s, elder_terms::TerminalSessionConnectionPhase::connected);
       } else {
         if (page.fd >= 0) close(page.fd);
@@ -2477,7 +2515,8 @@ static cardio::promise<void> receive_pages_async(ApplicationState *destination, 
 }
 
 static void receive_terminal_pages(ApplicationState *destination, std::string token, std::function<void(bool)> done) {
-  if (!destination || destination->closing || destination->transferring) { done(false); return; }
+  if (!destination || destination->closing || destination->transferring ||
+      elder_terms::has_modal_dialog(destination->window)) { done(false); return; }
   std::erase_if(docking_jobs, [](const auto &task) { return task.is_ready(); });
   docking_jobs.emplace_back(receive_pages_async(destination, std::move(token), std::move(done)));
 }

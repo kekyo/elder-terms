@@ -16,6 +16,7 @@ struct TerminalTray {
   GtkWidget *window, *body, *sidebar, *list, *pages, *headers;
   std::vector<TerminalTab *> tabs;
   TerminalTab *active = nullptr;
+  guint16 undock_keycode = 0;
 };
 struct TerminalTab {
   MainWindow *page;
@@ -78,6 +79,7 @@ static void remove_page(TerminalTab *tab) {
   const auto next = tray->tabs.erase(pos);
   if (tray->active == tab)
     tray->active = next != tray->tabs.end() ? *next : tray->tabs.empty() ? nullptr : tray->tabs.back();
+  tray->undock_keycode = 0;
   gtk_list_box_unselect_row(GTK_LIST_BOX(tray->list), GTK_LIST_BOX_ROW(tab->row));
   unparent(tab->row);
   unparent(tab->page->root_box);
@@ -184,7 +186,18 @@ static TerminalTray *make_tray(GtkWidget *window) {
     auto *tray = static_cast<TerminalTray *>(data);
     if (tray->tabs.size() < 2 || !tray->active->actions.undock_key(event->keyval,
         static_cast<GdkModifierType>(event->state & gtk_accelerator_get_default_mod_mask()))) return FALSE;
+    tray->undock_keycode = event->hardware_keycode;
+    return TRUE;
+  }), tray);
+  g_signal_connect(window, "key-release-event", G_CALLBACK(+[](GtkWidget *, GdkEventKey *event, gpointer data) -> gboolean {
+    auto *tray = static_cast<TerminalTray *>(data);
+    if (!tray->undock_keycode || event->hardware_keycode != tray->undock_keycode) return FALSE;
+    tray->undock_keycode = 0;
     return undock_terminal_tab(tray->active);
+  }), tray);
+  g_signal_connect(window, "focus-out-event", G_CALLBACK(+[](GtkWidget *, GdkEventFocus *, gpointer data) -> gboolean {
+    static_cast<TerminalTray *>(data)->undock_keycode = 0;
+    return FALSE;
   }), tray);
   trays.push_back(tray);
   return tray;

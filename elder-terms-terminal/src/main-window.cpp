@@ -237,20 +237,23 @@ static void on_terminal_context_break_activate(GtkMenuItem *, gpointer data) {
   }
 }
 
+bool terminal_widget_has_selected_text(BoxrigGtk3TerminalWidget *terminal) {
+  boxrig_ui_selection selection{};
+  if (!boxrig_ui_view_get_selection(boxrig_gtk3_terminal_widget_view(terminal), &selection) ||
+      selection.stale) return false;
+  return selection.shape == BOXRIG_UI_SELECTION_RECTANGULAR
+      ? selection.row_count != 0 && selection.visual_column_count != 0
+      : selection.range_valid && (selection.range.start.line_id.epoch != selection.range.end.line_id.epoch ||
+          selection.range.start.line_id.serial != selection.range.end.line_id.serial ||
+          selection.range.start.column != selection.range.end.column);
+}
+
 static void show_terminal_context_menu(TerminalContextMenuState *state, const boxrig_mouse_event &event,
     std::optional<std::string> link_text) {
   state->link_text = std::move(link_text);
   gtk_widget_set_visible(state->copy_link_item, state->link_text.has_value());
   // Copy is a view action and remains available when screen-reader text is off.
-  boxrig_ui_selection selection{};
-  const bool selected = boxrig_ui_view_get_selection(
-      boxrig_gtk3_terminal_widget_view(state->terminal), &selection) && !selection.stale;
-  const bool nonempty = selection.shape == BOXRIG_UI_SELECTION_RECTANGULAR
-      ? selection.row_count != 0 && selection.visual_column_count != 0
-      : selection.range_valid && (selection.range.start.line_id.epoch != selection.range.end.line_id.epoch ||
-          selection.range.start.line_id.serial != selection.range.end.line_id.serial ||
-          selection.range.start.column != selection.range.end.column);
-  gtk_widget_set_sensitive(state->copy_item, selected && nonempty);
+  gtk_widget_set_sensitive(state->copy_item, terminal_widget_has_selected_text(state->terminal));
   update_terminal_context_paste_sensitivity(state);
   gtk_widget_set_sensitive(state->break_item,
       state->break_callbacks.can_send && state->break_callbacks.send && state->break_callbacks.can_send());
@@ -1424,7 +1427,7 @@ void set_main_window_terminal_interactive(MainWindow *main_window,
 }
 
 void focus_main_window_terminal_if_interactive(MainWindow *main_window) {
-  if (main_window == nullptr || !main_window->terminal_interactive ||
+  if (main_window == nullptr || !main_window->selected || !main_window->terminal_interactive ||
       main_window->terminal == nullptr ||
       !gtk_widget_get_visible(main_window->terminal) ||
       !gtk_widget_get_mapped(main_window->terminal)) {

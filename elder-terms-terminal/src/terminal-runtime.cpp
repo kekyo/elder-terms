@@ -1667,4 +1667,42 @@ void terminal_runtime_request_input_enabled(TerminalRuntime *runtime, bool enabl
   request_frame(runtime);
 }
 
+bool terminal_runtime_pause_input_for_handoff(TerminalRuntime *runtime) {
+  boxrig_ui_input_state state{};
+  const auto status = boxrig_gtk3_terminal_widget_set_input_enabled(runtime->widget, false);
+  return status == BOXRIG_UI_OK &&
+      boxrig_gtk3_terminal_widget_get_input_state(runtime->widget, &state) == BOXRIG_UI_OK &&
+      state.phase == BOXRIG_UI_INPUT_DISABLED;
+}
+
+std::shared_ptr<GVariant> terminal_runtime_save_host_state(const TerminalRuntime *runtime) {
+  auto line = runtime->macros ? terminal_received_macros_snapshot(runtime->macros.get()) : ReceivedMacroLine{};
+  if (!line) return {};
+  GVariantBuilder titles;
+  g_variant_builder_init(&titles, G_VARIANT_TYPE_STRING_ARRAY);
+  for (const auto &title : runtime->title_stack) g_variant_builder_add(&titles, "s", title.c_str());
+  auto *bytes = g_variant_new_fixed_array(G_VARIANT_TYPE_BYTE, line->bytes.data(), line->bytes.size(), 1);
+  return {g_variant_ref_sink(g_variant_new("(as@aybb)", &titles, bytes, line->pending_carriage_return,
+      line->action_executed)), g_variant_unref};
+}
+
+void terminal_runtime_restore_host_state(TerminalRuntime *runtime, const std::string &title, GVariant *state) {
+  runtime->title = title;
+  runtime->has_title = !title.empty();
+  GVariantIter *titles;
+  GVariant *bytes;
+  gboolean carriage_return, executed;
+  g_variant_get(state, "(as@aybb)", &titles, &bytes, &carriage_return, &executed);
+  const char *saved;
+  while (g_variant_iter_loop(titles, "&s", &saved)) runtime->title_stack.emplace_back(saved);
+  g_variant_iter_free(titles);
+  if (runtime->macros) {
+    gsize size;
+    auto *data = static_cast<const char *>(g_variant_get_fixed_array(bytes, &size, 1));
+    terminal_received_macros_restore(runtime->macros.get(), terminal_connection_state(runtime->connection).generation,
+        {size ? std::string(data, size) : std::string{}, carriage_return != FALSE, executed != FALSE});
+  }
+  g_variant_unref(bytes);
+}
+
 }

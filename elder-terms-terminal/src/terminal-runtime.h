@@ -20,6 +20,13 @@ namespace elder_terms {
 /** Owns a terminal, its model, and the GTK attachment on the GTK thread. */
 struct TerminalRuntime;
 
+/** Stops GTK input and reports whether accepted paste output can be drained by the connection. */
+bool terminal_runtime_pause_input_for_handoff(TerminalRuntime *runtime);
+/** Copies the title stack and received-line context after transport quiescence. Null requests a rollback. */
+std::shared_ptr<GVariant> terminal_runtime_save_host_state(const TerminalRuntime *runtime);
+/** Restores host state on a resumed connection before its first input dispatch. */
+void terminal_runtime_restore_host_state(TerminalRuntime *runtime, const std::string &title, GVariant *state);
+
 /** Application integration retained when a failed GTK attachment is replaced. */
 struct TerminalRuntimeHostCallbacks {
   /** Installs application input routing, widget identity and UI signal handlers. */

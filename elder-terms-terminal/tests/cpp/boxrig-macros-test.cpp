@@ -120,6 +120,17 @@ int main() {
     drain(1);
     expect(sent == std::string("CR\0done[]Y", 10), "a lone CR, embedded NUL, and absent capture preserve received bytes");
     expect(errors.empty(), "valid macros produce no diagnostics");
+    macros.reset(create_terminal_received_macros(rules, callbacks));
+    sent.clear();
+    feed("RE");
+    drain(1);
+    auto saved = terminal_received_macros_snapshot(macros.get());
+    expect(saved.has_value(), "an idle partial line can move to another runner");
+    macros.reset(create_terminal_received_macros(rules, callbacks));
+    terminal_received_macros_restore(macros.get(), ++generation, *saved);
+    feed("ADY Dock\n");
+    drain(1);
+    expect(sent == "Dock:Dock:$:READY Dock;", "a pattern spanning a terminal handoff executes once");
     std::puts("boxrig macros: snapshots, captures, controls, generations and backpressure passed");
     return 0;
   } catch (const std::exception &error) {

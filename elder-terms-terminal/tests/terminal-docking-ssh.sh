@@ -78,6 +78,7 @@ open_sftp_menu "$remote_window"
 sftp_window() { xdotool search --onlyvisible --name 'Remote .* SFTP' | tail -1; }
 wait_until sftp_window
 sftp_id=$(sftp_window)
+sftp_active() { [[ $(xdotool getactivewindow) = "$sftp_id" ]]; }
 mkdir -p "$scratch/download"
 xdotool windowactivate --sync "$sftp_id"
 sleep .5
@@ -119,6 +120,7 @@ wait_until merged
 xdotool windowactivate --sync "$local_window"
 open_sftp_menu "$local_window"
 wait_until show_count_at_least 1
+wait_until sftp_active
 test "$(sftp_window)" = "$sftp_id"
 rm "$scratch/download/shared.txt"
 receive_shared
@@ -126,11 +128,14 @@ xdotool windowactivate --sync "$local_window" type 'docked-ssh'
 xdotool key Return
 wait_until grep -qx "$(cat "$scratch/shell.pid"):docked-ssh" "$scratch/shell.input"
 xdotool key ctrl+shift+u
-wait_until ready Remote
-undocked_window=$(window Remote)
+undocked() {
+  undocked_window=$(window Remote) && [[ -n $undocked_window && $undocked_window != "$local_window" ]]
+}
+wait_until undocked
 xdotool windowactivate --sync "$undocked_window"
 open_sftp_menu "$undocked_window"
 wait_until show_count_at_least 2
+wait_until sftp_active
 test "$(sftp_window)" = "$sftp_id"
 ! grep -Eq 'NotTabOwner|ShowFailed' "$scratch/sftp-bus.log"
 rm "$scratch/download/shared.txt"

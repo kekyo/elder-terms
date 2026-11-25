@@ -6,6 +6,7 @@
 #include <filesystem>
 #include <map>
 #include <set>
+#include <utility>
 #include <unistd.h>
 
 namespace elder_terms {
@@ -14,14 +15,17 @@ static constexpr char interface[] = "net.kekyo.ElderTerms.Dock";
 static constexpr char prefix[] = "net.kekyo.ElderTerms.DockWindow.p";
 static constexpr char methods[] = "<node><interface name='net.kekyo.ElderTerms.Dock'>"
     "<method name='Prepare'><arg type='s' direction='in'/><arg type='u' direction='out'/>"
-    "<arg type='a(sssssssaybhisuuu)' direction='out'/></method>"
+    "<arg type='a(ssssssssaybhisuuu(asaybb))' direction='out'/></method>"
     "<method name='Finish'><arg type='s' direction='in'/><arg type='b' direction='in'/></method>"
+    "<method name='State'><arg type='s' direction='in'/><arg type='b' direction='out'/></method>"
+    "<method name='Release'><arg type='s' direction='in'/></method>"
     "<method name='Present'><arg type='s' direction='in'/><arg type='u' direction='in'/><arg type='s' direction='in'/></method>"
     "<signal name='Tracked'><arg type='s'/><arg type='s'/></signal></interface></node>";
 struct Offer {
   std::function<cardio::promise<DockPrepared>()> prepare;
   DockDecision finish;
   std::string peer;
+  gint64 offered_at = g_get_monotonic_time();
   bool committed = false;
   bool abandoned = false;
 };
@@ -69,14 +73,14 @@ static cardio::promise<void> prepare_offer(std::shared_ptr<Offer> offer, std::st
     offer->finish = std::move(prepared.finish);
     if (!offer->finish || offer->abandoned) throw std::runtime_error("The terminal cannot move now");
     GVariantBuilder pages;
-    g_variant_builder_init(&pages, G_VARIANT_TYPE("a(sssssssaybhisuuu)"));
+    g_variant_builder_init(&pages, G_VARIANT_TYPE("a(ssssssssaybhisuuu(asaybb))"));
     for (const auto &page : prepared.batch.pages) {
       auto *bytes = g_variant_new_fixed_array(G_VARIANT_TYPE_BYTE, page.checkpoint.data(), page.checkpoint.size(), 1);
-      g_variant_builder_add(&pages, "(sssssss@aybhisuuu)", page.id.c_str(), page.config.c_str(), page.startup.c_str(),
-          page.title.c_str(), page.launcher.c_str(), page.settings.c_str(), page.log.c_str(), bytes, page.eof, page.descriptor, page.control_descriptor, page.encoding.c_str(), page.child, page.capacity, page.chunk);
+      g_variant_builder_add(&pages, "(ssssssss@aybhisuuu@(asaybb))", page.id.c_str(), page.config.c_str(), page.startup.c_str(),
+          page.title.c_str(), page.launcher.c_str(), page.settings.c_str(), page.log.c_str(), page.sftp_origin.c_str(), bytes, page.eof, page.descriptor, page.control_descriptor, page.encoding.c_str(), page.child, page.capacity, page.chunk, page.host_state.get());
     }
     g_dbus_method_invocation_return_value_with_unix_fd_list(invocation,
-        g_variant_new("(ua(sssssssaybhisuuu))", prepared.batch.active, &pages), prepared.batch.descriptors.get());
+        g_variant_new("(ua(ssssssssaybhisuuu(asaybb)))", prepared.batch.active, &pages), prepared.batch.descriptors.get());
   } catch (const std::exception &error) {
     if (offer->finish) std::exchange(offer->finish, {})(false);
     offer->abandoned = true;
@@ -103,10 +107,20 @@ static void dispatch(GDBusConnection *, const gchar *sender, const gchar *, cons
   auto found = offers.find(key);
   if (found != offers.end() && !found->second->abandoned) {
     auto offer = found->second;
-    if (std::string_view(method) == "Prepare" && offer->peer.empty()) {
+    if (std::string_view(method) == "Prepare" && offer->peer.empty() &&
+        g_get_monotonic_time() - offer->offered_at < 30 * G_TIME_SPAN_SECOND) {
       offer->peer = sender;
       std::erase_if(requests, [](const auto &task) { return task.is_ready(); });
       requests.emplace_back(prepare_offer(offer, sender, G_DBUS_METHOD_INVOCATION(g_object_ref(invocation))));
+      return;
+    }
+    if (offer->peer == sender && std::string_view(method) == "State") {
+      g_dbus_method_invocation_return_value(invocation, g_variant_new("(b)", offer->committed));
+      return;
+    }
+    if (offer->peer == sender && offer->committed && std::string_view(method) == "Release") {
+      offers.erase(found);
+      g_dbus_method_invocation_return_value(invocation, nullptr);
       return;
     }
     if (std::string_view(method) == "Finish" && offer->peer == sender) {
@@ -124,12 +138,13 @@ static void dispatch(GDBusConnection *, const gchar *sender, const gchar *, cons
   g_dbus_method_invocation_return_dbus_error(invocation, "net.kekyo.ElderTerms.Dock.Expired", "Dock offer has expired");
 }
 
+GDBusConnection *terminal_dock_connection() { return bus; }
 static std::string tab_name(std::string id) {
   std::erase(id, '-');
   return "net.kekyo.ElderTerms.Tab.t" + id;
 }
 bool track_terminal_dock_page(const std::string &id, std::string launcher, std::function<void(guint, const std::string &)> present) {
-  if (!bus || launcher.empty() || !g_uuid_string_is_valid(id.c_str())) return false;
+  if (!bus || !g_uuid_string_is_valid(id.c_str())) return false;
   auto *reply = g_dbus_connection_call_sync(bus, "org.freedesktop.DBus", "/org/freedesktop/DBus",
       "org.freedesktop.DBus", "RequestName", g_variant_new("(su)", tab_name(id).c_str(),
           G_BUS_NAME_OWNER_FLAGS_ALLOW_REPLACEMENT | G_BUS_NAME_OWNER_FLAGS_REPLACE), G_VARIANT_TYPE("(u)"),
@@ -210,7 +225,7 @@ std::string terminal_dock_offer(std::function<cardio::promise<DockPrepared>()> p
   if (!bus || !registration) return "local";
   std::erase_if(offers, [](const auto &entry) {
     auto &o = *entry.second;
-    return o.peer.empty() || o.abandoned || o.committed;
+    return o.peer.empty() || o.abandoned;
   });
   auto *uuid = g_uuid_string_random();
   std::string key(uuid);
@@ -228,50 +243,76 @@ cardio::promise<bool> terminal_dock_receive(std::string token, std::function<Doc
   if (!g_dbus_is_unique_name(peer.c_str()) || !g_uuid_string_is_valid(key.c_str())) co_return false;
   bool prepared = false, committed = false;
   DockDecision finish;
+  bool commit_sent = false;
   try {
     if (!co_await product_peer(peer)) co_return false;
     GUnixFDList *fds = nullptr;
     auto reply = co_await call(peer, path, interface, "Prepare", g_variant_new("(s)", key.c_str()),
-        G_VARIANT_TYPE("(ua(sssssssaybhisuuu))"), &fds);
+        G_VARIANT_TYPE("(ua(ssssssssaybhisuuu(asaybb)))"), &fds);
     prepared = true;
     DockBatch batch;
     if (!fds) throw std::runtime_error("Missing terminal descriptors");
     batch.descriptors.reset(fds, g_object_unref);
     GVariant *array;
-    g_variant_get(reply.get(), "(u@a(sssssssaybhisuuu))", &batch.active, &array);
+    g_variant_get(reply.get(), "(u@a(ssssssssaybhisuuu(asaybb)))", &batch.active, &array);
     auto pages = take_variant(array);
     for (gsize i = 0; i < g_variant_n_children(array); ++i) {
       auto item = take_variant(g_variant_get_child_value(array, i));
-      const char *id, *config, *startup, *title, *launcher, *settings, *log;
-      GVariant *bytes;
+      const char *id, *config, *startup, *title, *launcher, *settings, *log, *sftp;
+      GVariant *bytes, *host_state;
       gboolean eof;
       gint fd, control_fd;
       const char *encoding;
       guint child, capacity, chunk;
-      g_variant_get(item.get(), "(&s&s&s&s&s&s&s@aybhi&suuu)", &id, &config, &startup, &title, &launcher, &settings, &log,
-          &bytes, &eof, &fd, &control_fd, &encoding, &child, &capacity, &chunk);
+      g_variant_get(item.get(), "(&s&s&s&s&s&s&s&s@aybhi&suuu@(asaybb))", &id, &config, &startup, &title, &launcher, &settings, &log, &sftp,
+          &bytes, &eof, &fd, &control_fd, &encoding, &child, &capacity, &chunk, &host_state);
+      auto host = take_variant(host_state);
       auto checkpoint = take_variant(bytes);
       gsize size;
       auto *data = static_cast<const std::uint8_t *>(g_variant_get_fixed_array(bytes, &size, 1));
       if (size == 0 || size > 64 * 1024 * 1024 || fd < 0 || fd >= g_unix_fd_list_get_length(fds) ||
           control_fd < -1 || control_fd >= g_unix_fd_list_get_length(fds) ||
           !g_uuid_string_is_valid(id)) throw std::runtime_error("Invalid terminal checkpoint");
-      batch.pages.push_back({id, config, startup, title, launcher, settings, log, {data, data + size}, eof != FALSE, fd, control_fd, encoding, child, capacity, chunk});
+      batch.pages.push_back({id, config, startup, title, launcher, settings, log, sftp, {data, data + size}, eof != FALSE, fd, control_fd, encoding, child, capacity, chunk, std::move(host)});
     }
     if (batch.active >= batch.pages.size()) throw std::runtime_error("Missing active tab");
     finish = stage(batch);
     if (finish) {
+      commit_sent = true;
       co_await call(peer, path, interface, "Finish", g_variant_new("(sb)", key.c_str(), TRUE), G_VARIANT_TYPE_UNIT);
       committed = true;
     }
   } catch (const std::exception &error) {
     g_message("Terminal docking: %s", error.what());
   }
+  if (commit_sent && !committed) {
+    // A lost acknowledgement must never revive the previous reader.
+    bool state_known = false;
+    try {
+      auto state = co_await call(peer, path, interface, "State", g_variant_new("(s)", key.c_str()), G_VARIANT_TYPE("(b)"));
+      gboolean accepted;
+      g_variant_get(state.get(), "(b)", &accepted);
+      committed = accepted;
+      state_known = true;
+    } catch (const std::exception &) {}
+    if (!state_known) {
+      try {
+        auto answer = co_await call("org.freedesktop.DBus", "/org/freedesktop/DBus", "org.freedesktop.DBus",
+            "NameHasOwner", g_variant_new("(s)", peer.c_str()), G_VARIANT_TYPE("(b)"));
+        gboolean alive;
+        g_variant_get(answer.get(), "(b)", &alive);
+        // Once the old process is gone its descriptors cannot be read again.
+        committed = !alive;
+      } catch (const std::exception &) {}
+    }
+  }
   if (prepared && !committed) {
     try { co_await call(peer, path, interface, "Finish", g_variant_new("(sb)", key.c_str(), FALSE), G_VARIANT_TYPE_UNIT); }
     catch (const std::exception &) {}
   }
   if (finish) finish(committed);
+  if (committed) g_dbus_connection_call(bus, peer.c_str(), path, interface, "Release", g_variant_new("(s)", key.c_str()),
+      G_VARIANT_TYPE_UNIT, G_DBUS_CALL_FLAGS_NO_AUTO_START, 2000, nullptr, nullptr, nullptr);
   co_return committed;
 }
 }

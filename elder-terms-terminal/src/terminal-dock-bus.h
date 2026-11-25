@@ -9,12 +9,23 @@
 namespace elder_terms {
 /** Properties and checkpoint of one paused terminal. The batch FD list owns its master. */
 struct DockPageImage {
-  std::string id, config, startup, title, launcher, settings, log;
-  std::vector<std::uint8_t> checkpoint;
-  bool eof;
-  int descriptor, control_descriptor;
-  std::string encoding;
-  unsigned child, capacity, chunk;
+  std::string id;                  /**< Stable session UUID. */
+  std::string config;              /**< Original connection settings path. */
+  std::string startup;             /**< Startup settings path. */
+  std::string title;               /**< Current title supplied by the shell. */
+  std::string launcher;            /**< Unique name of the originating launcher. */
+  std::string settings;            /**< Effective connection settings, including unsaved changes. */
+  std::string log;                 /**< Open log path, or an empty string if inactive. */
+  std::string sftp_origin;         /**< SSH process hosting shared SFTP operations. */
+  std::vector<std::uint8_t> checkpoint; /**< Serialized boxrig terminal and parser state. */
+  bool eof;                        /**< Whether boxrig input was finalized. */
+  int descriptor;                  /**< FD list index of the PTY master or SSH data socket. */
+  int control_descriptor;          /**< SSH control socket index, or -1 for a local PTY. */
+  std::string encoding;            /**< Terminal text encoding. */
+  unsigned child;                  /**< Original local shell PID. */
+  unsigned capacity;               /**< Bounded communication queue size in bytes. */
+  unsigned chunk;                  /**< Preferred maximum I/O chunk size in bytes. */
+  std::shared_ptr<GVariant> host_state; /**< Frozen title history and macro line context. */
 };
 /** Prepared group in tab order. A staged receiver may start reading only after commit. */
 struct DockBatch {
@@ -32,6 +43,8 @@ void initialize_terminal_dock_bus();
 void shutdown_terminal_dock_bus();
 /** Advertises a visible product window for peer-aware native pointer gestures. */
 void publish_terminal_dock_window(bool visible);
+/** Returns the borrowed desktop session bus, or nullptr when unavailable. */
+GDBusConnection *terminal_dock_connection();
 /** Claims a stable session address, replacing its paused owner during staging. */
 bool track_terminal_dock_page(const std::string &id, std::string launcher, std::function<void(guint, const std::string &)> present);
 /** Releases the current or queued D-Bus ownership on close or rollback. */

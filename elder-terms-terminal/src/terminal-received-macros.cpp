@@ -236,4 +236,17 @@ void terminal_received_macros_reset(TerminalReceivedMacros *macros, std::uint64_
 
 void destroy_terminal_received_macros(TerminalReceivedMacros *macros) { delete macros; }
 
+std::optional<ReceivedMacroLine> terminal_received_macros_snapshot(const TerminalReceivedMacros *macros) {
+  if (macros->matching || !macros->notifications.empty() || !macros->send.empty()) return std::nullopt;
+  return ReceivedMacroLine{macros->line, macros->pending_carriage_return, macros->action_executed};
+}
+
+void terminal_received_macros_restore(TerminalReceivedMacros *macros, std::uint64_t generation,
+    const ReceivedMacroLine &line) {
+  terminal_received_macros_reset(macros, generation);
+  macros->line = line.bytes;
+  macros->pending_carriage_return = line.pending_carriage_return;
+  macros->action_executed = line.action_executed;
+}
+
 }

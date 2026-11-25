@@ -22,7 +22,15 @@ for tab in Alpha Beta; do
   cat >"$scratch/$tab.sh" <<SCRIPT
 #!/bin/sh
 echo \$\$ > "$scratch/$tab.pid"
-while IFS= read -r line; do echo "\$\$:\$line" >> "$scratch/$tab.input"; done
+echo 'Select this line before docking'
+while IFS= read -r line; do
+  case "\$line" in
+    save-title) printf '\033]2;Saved title\007\033[22;2t\033]2;elder-terms\007';;
+    pop-title) printf '\033[23;2t';;
+    reset-title) printf '\033]2;elder-terms\007';;
+  esac
+  echo "\$\$:\$line" >> "$scratch/$tab.input"
+done
 SCRIPT
   chmod +x "$scratch/$tab.sh"
   cat >"$scratch/$tab.ini" <<SETTINGS
@@ -59,8 +67,23 @@ drag() {
   xdotool mouseup 1
 }
 # The connection icon starts a whole-window move. Drop on the terminal surface.
+xdotool mousemove --window "$beta" 25 67 click --repeat 3 1
+drag "$((bx+26))" "$((by+28))" "$((ax+200))" "$((ay+150))"
+xdotool windowactivate --sync "$beta" type 'selection-kept'
+xdotool key Return
+wait_until grep -qx "$(cat "$scratch/Beta.pid"):selection-kept" "$scratch/Beta.input"
+xdotool mousemove --window "$beta" 25 67 click 1
+xdotool windowactivate --sync "$beta" type 'save-title'
+xdotool key Return
+wait_until grep -qx "$(cat "$scratch/Beta.pid"):save-title" "$scratch/Beta.input"
 drag "$((bx+26))" "$((by+28))" "$((ax+200))" "$((ay+150))"
 merged() { [[ -z $(window Alpha || true) && $(window Beta) == "$alpha" ]]; }
+wait_until merged
+xdotool windowactivate --sync "$alpha" type 'pop-title'
+xdotool key Return
+wait_until xdotool search --onlyvisible --name 'Saved title .* Beta$'
+xdotool type 'reset-title'
+xdotool key Return
 wait_until merged
 xdotool windowactivate --sync "$alpha" type 'docked'
 xdotool key Return
