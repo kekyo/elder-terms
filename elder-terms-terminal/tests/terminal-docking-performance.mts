@@ -17,7 +17,10 @@ interface Measurements {
 }
 
 const binary = fileURLToPath(
-  new URL('../../.build/elder-terms-terminal/elder-terms-terminal', import.meta.url)
+  new URL(
+    '../../.build/elder-terms-terminal/elder-terms-terminal',
+    import.meta.url
+  )
 );
 const script = fileURLToPath(
   new URL('./terminal-docking-performance.sh', import.meta.url)
@@ -113,17 +116,25 @@ for (;;) {
       rows.some((row) => row.pid !== rows[0].pid) ||
       rows.map((row) => row.phase).join(',') !== 'before,docked,undocked'
     ) {
-      throw new Error('Terminal peer did not survive the three measurement phases');
+      throw new Error(
+        'Terminal peer did not survive the three measurement phases'
+      );
     }
     const median = (values: number[]): number => {
       const sorted = [...values].sort((left, right) => left - right);
-      return (sorted[(sorted.length - 1) >> 1] + sorted[sorted.length >> 1]) / 2;
+      return (
+        (sorted[(sorted.length - 1) >> 1] + sorted[sorted.length >> 1]) / 2
+      );
     };
     const baselineDsr = median(rows[0].dsrMicroseconds.slice(4));
     const baselineBulk = median(rows[0].bulkMicroseconds.slice(1));
     console.log(`Same ${mode} shell PID:`, rows[0].pid);
-    console.log('64 KiB samples disable terminal line wrapping. Warm-up samples are excluded.');
-    console.log('Phase        DSR median (ms)   Relative   64 KiB + DSR median (ms)   Relative');
+    console.log(
+      '64 KiB samples disable terminal line wrapping. Warm-up samples are excluded.'
+    );
+    console.log(
+      'Phase        DSR median (ms)   Relative   64 KiB + DSR median (ms)   Relative'
+    );
     for (const row of rows) {
       const dsr = median(row.dsrMicroseconds.slice(4));
       const bulk = median(row.bulkMicroseconds.slice(1));

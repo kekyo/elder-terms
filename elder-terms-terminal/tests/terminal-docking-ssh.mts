@@ -3,18 +3,27 @@
 // Under MIT.
 
 import { spawn } from 'node:child_process';
-import { appendFile, chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import {
+  appendFile,
+  chmod,
+  mkdir,
+  mkdtemp,
+  rm,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { startSshLatencyFixture } from '../../shared/tests/ssh-latency-fixture.mts';
 
-const binary = process.argv[2] ?? fileURLToPath(
-  new URL(
-    '../../.build/elder-terms-terminal/elder-terms-terminal',
-    import.meta.url
-  )
-);
+const binary =
+  process.argv[2] ??
+  fileURLToPath(
+    new URL(
+      '../../.build/elder-terms-terminal/elder-terms-terminal',
+      import.meta.url
+    )
+  );
 const script = fileURLToPath(
   new URL('./terminal-docking-ssh.sh', import.meta.url)
 );
