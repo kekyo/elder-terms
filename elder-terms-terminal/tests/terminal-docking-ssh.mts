@@ -3,7 +3,7 @@
 // Under MIT.
 
 import { spawn } from 'node:child_process';
-import { chmod, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { appendFile, chmod, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -20,12 +20,17 @@ const script = fileURLToPath(
 );
 const directory = await mkdtemp(join(tmpdir(), 'elder-terms-dock-ssh-'));
 const peer = join(directory, 'peer.sh');
+const sharedFile = join(directory, 'remote', 'shared.txt');
 const quote = (value: string): string => `'${value.split("'").join("'\\''")}'`;
 let fixture: Awaited<ReturnType<typeof startSshLatencyFixture>> | undefined;
+let failed = false;
 try {
   await writeFile(
     peer,
     `#!/bin/sh
+case "$SSH_ORIGINAL_COMMAND" in
+  /usr/lib/openssh/sftp-server*) exec /usr/lib/openssh/sftp-server ;;
+esac
 stty -echo
 echo $$ > ${quote(join(directory, 'shell.pid'))}
 echo SSH_DOCK_READY
@@ -37,7 +42,13 @@ done
 `
   );
   await chmod(peer, 0o700);
+  await mkdir(join(directory, 'remote'));
+  await writeFile(sharedFile, 'SFTP_DOCK_SHARED\n');
   fixture = await startSshLatencyFixture(directory, [peer]);
+  await appendFile(
+    join(directory, 'ssh-fixture', 'sshd_config'),
+    'Subsystem sftp /usr/lib/openssh/sftp-server\n'
+  );
   const child = spawn(
     'bash',
     [
@@ -55,8 +66,13 @@ done
     child.once('error', reject);
     child.once('exit', (code, signal) => resolve(code ?? (signal ? 1 : 0)));
   });
-  if (status !== 0) process.exitCode = status;
+  if (status !== 0) {
+    failed = true;
+    process.exitCode = status;
+  }
 } finally {
   if (fixture) await fixture.stop();
-  await rm(directory, { recursive: true, force: true });
+  if (failed || process.env.ELDER_DOCK_KEEP_ARTIFACTS)
+    console.error(`Docking SSH artifacts: ${directory}`);
+  else await rm(directory, { recursive: true, force: true });
 }
