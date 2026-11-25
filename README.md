@@ -195,7 +195,7 @@ Drag a row onto another terminal window to move just that session. Press `Ctrl+S
 
 Hover over a row and click its close button to end that session. The list disappears when one session remains. Closing the window ends all the sessions it contains.
 
-UTF-8 local shells and authenticated SSH shells can move between processes. Finish an active file transfer before moving its session.
+UTF-8 local shells and authenticated SSH shells can move between processes. Clear any text selection and let file transfers running inside the terminal finish before moving it. A separate SFTP window stays connected during the move.
 
 ## INI File Locations
 
