@@ -540,6 +540,114 @@ static cardio::promise<void> scenarios(Test *test) {
       "a different process drives the same shell and the original process reaps it");
   destroy_terminal_local_child_reaper(process_reaper);
   ::close(channel[0]);
+
+  std::string peer_input;
+  std::string peer_output;
+  cardio::primitives::conditional peer_changed;
+  bool peer_eof = false;
+  std::size_t resized_rows = 0;
+  std::size_t resized_columns = 0;
+  TerminalTransportRequest remote;
+  remote.open = [&](std::size_t, std::size_t, cardio::cancellation) -> cardio::promise<TerminalTransport> {
+    co_return TerminalTransport{
+        [&](std::span<unsigned char> bytes, cardio::cancellation stop) -> cardio::promise<std::size_t> {
+          while (peer_input.empty() && !peer_eof) co_await peer_changed.wait(stop);
+          const auto count = std::min(bytes.size(), peer_input.size());
+          std::memcpy(bytes.data(), peer_input.data(), count);
+          peer_input.erase(0, count);
+          co_return count;
+        },
+        [&](std::span<const unsigned char> bytes, cardio::cancellation) -> cardio::promise<void> {
+          peer_output.append(reinterpret_cast<const char *>(bytes.data()), bytes.size());
+          peer_input.append(reinterpret_cast<const char *>(bytes.data()), bytes.size());
+          peer_changed.trigger();
+          co_return;
+        },
+        [&](std::size_t rows, std::size_t columns, cardio::cancellation) -> cardio::promise<void> {
+          resized_rows = rows;
+          resized_columns = columns;
+          co_return;
+        },
+        []() -> cardio::promise<void> { co_return; }};
+  };
+  expect(terminal_connection_start_transport(test->connection, std::move(remote)),
+      "start mock nonlocal channel");
+  while (terminal_connection_state(test->connection).phase != TerminalConnectionPhase::connected)
+    co_await test->changed.wait();
+  auto remote_handoff = co_await terminal_connection_prepare_transport_handoff(test->connection);
+  expect(remote_handoff.has_value() && remote_handoff->data_fd >= 0 &&
+      remote_handoff->control_fd >= 0, "prepare original remote proxy sockets");
+  ::close(remote_handoff->data_fd);
+  ::close(remote_handoff->control_fd);
+  terminal_connection_rollback_transport_handoff(test->connection);
+  expect(boxrig_terminal_send_text(test->core, "REMOTE_ROLLBACK\n", 16) == BOXRIG_STATUS_OK,
+      "send after remote handoff rollback");
+  wake(test);
+  while (contents(test).find("REMOTE_ROLLBACK") == std::string::npos) co_await test->changed.wait();
+  remote_handoff = co_await terminal_connection_prepare_transport_handoff(test->connection);
+  expect(remote_handoff.has_value(), "prepare remote channel again after rollback");
+  Test remote_destination;
+  expect(boxrig_terminal_import_checkpoint(remote_handoff->checkpoint.data(),
+      remote_handoff->checkpoint.size(), 64 * 1024 * 1024, &remote_destination.core) == BOXRIG_STATUS_OK,
+      "restore remote checkpoint");
+  remote_destination.connection = create_terminal_connection(remote_destination.core,
+      [&remote_destination] { wake(&remote_destination); },
+      [&remote_destination](std::span<const unsigned char>, std::span<const unsigned char>) {
+        remote_destination.changed.trigger();
+      });
+  expect(terminal_connection_resume_transport(remote_destination.connection,
+      remote_handoff->data_fd, remote_handoff->control_fd, remote_handoff->input_finished,
+      remote_handoff->encoding, remote_handoff->queue_capacity, remote_handoff->io_chunk_size),
+      "adopt remote proxy sockets");
+  remote_handoff->data_fd = -1;
+  remote_handoff->control_fd = -1;
+  auto *remote_origin = co_await terminal_connection_commit_transport_handoff(test->connection);
+  expect(remote_origin != nullptr &&
+      terminal_connection_state(test->connection).phase == TerminalConnectionPhase::closed,
+      "source terminal releases independent origin channel");
+  expect(boxrig_terminal_send_text(remote_destination.core, "REMOTE_ONE\n", 11) == BOXRIG_STATUS_OK,
+      "send through remote proxy");
+  wake(&remote_destination);
+  while (contents(&remote_destination).find("REMOTE_ONE") == std::string::npos)
+    co_await remote_destination.changed.wait();
+  expect(peer_output.find("REMOTE_ONE") != std::string::npos,
+      "remote origin receives proxy output");
+  expect(co_await terminal_connection_resize(remote_destination.connection, 9, 90),
+      "resize through control socket");
+  expect(resized_rows == 9 && resized_columns == 90, "origin receives requested grid");
+  auto remote_second = co_await terminal_connection_prepare_transport_handoff(remote_destination.connection);
+  expect(remote_second.has_value(), "prepare second remote transfer without new origin");
+  Test remote_third;
+  expect(boxrig_terminal_import_checkpoint(remote_second->checkpoint.data(),
+      remote_second->checkpoint.size(), 64 * 1024 * 1024, &remote_third.core) == BOXRIG_STATUS_OK,
+      "restore reexported remote checkpoint");
+  remote_third.connection = create_terminal_connection(remote_third.core,
+      [&remote_third] { wake(&remote_third); },
+      [&remote_third](std::span<const unsigned char>, std::span<const unsigned char>) {
+        remote_third.changed.trigger();
+      });
+  expect(terminal_connection_resume_transport(remote_third.connection,
+      remote_second->data_fd, remote_second->control_fd, remote_second->input_finished,
+      remote_second->encoding, remote_second->queue_capacity, remote_second->io_chunk_size),
+      "resume remote proxy on a third terminal");
+  remote_second->data_fd = -1;
+  remote_second->control_fd = -1;
+  expect(co_await terminal_connection_commit_transport_handoff(remote_destination.connection) == nullptr,
+      "a proxy reexport keeps the original channel instead of adding a relay");
+  destroy_terminal_connection(remote_destination.connection);
+  boxrig_terminal_destroy(remote_destination.core);
+  expect(boxrig_terminal_send_text(remote_third.core, "REMOTE_TWO\n", 11) == BOXRIG_STATUS_OK,
+      "send after remote reexport");
+  wake(&remote_third);
+  while (contents(&remote_third).find("REMOTE_TWO") == std::string::npos)
+    co_await remote_third.changed.wait();
+  peer_eof = true;
+  peer_changed.trigger();
+  co_await terminal_connection_wait_stopped(remote_third.connection);
+  co_await terminal_transport_origin_wait(remote_origin);
+  destroy_terminal_transport_origin(remote_origin);
+  destroy_terminal_connection(remote_third.connection);
+  boxrig_terminal_destroy(remote_third.core);
 }
 
 static cardio::promise<void> run(Test *test, cardio::dispatcher_group_glib *group, std::exception_ptr *failure) {

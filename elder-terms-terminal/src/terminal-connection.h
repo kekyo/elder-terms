@@ -80,6 +80,27 @@ struct TerminalLocalChildExit {
 /** Independent child reaper retained after the source terminal is destroyed. */
 struct TerminalLocalChildReaper;
 
+/** Snapshot of a paused nonlocal channel for a remote transport proxy. */
+struct TerminalTransportHandoff {
+  /** Versioned terminal image. */
+  std::vector<std::uint8_t> checkpoint;
+  /** Whether terminal input has already reached EOF. */
+  bool input_finished = false;
+  /** Peer-side text encoding. */
+  std::string encoding;
+  /** Application queue capacity. */
+  std::size_t queue_capacity = 0;
+  /** Maximum source I/O chunk. */
+  std::size_t io_chunk_size = 0;
+  /** Duplicate of the full-duplex proxy data socket, owned by the caller. */
+  int data_fd = -1;
+  /** Duplicate of the resize/BREAK control socket, owned by the caller. */
+  int control_fd = -1;
+};
+
+/** Original live channel retained independently of the old terminal. */
+struct TerminalTransportOrigin;
+
 /** Snapshot separating spawn diagnostics, process exit, and resource recovery. */
 struct TerminalConnectionState {
   /** Monotonically increasing accepted connection number. */
@@ -191,6 +212,39 @@ void destroy_terminal_local_child_reaper(TerminalLocalChildReaper *reaper);
  */
 bool terminal_connection_resume_local(TerminalConnection *connection, int master_fd,
     bool input_finished, pid_t child, std::size_t queue_capacity, std::size_t io_chunk_size);
+
+/** Pauses a connected SSH or other nonlocal transport at a checkpoint boundary. */
+cardio::promise<std::optional<TerminalTransportHandoff>> terminal_connection_prepare_transport_handoff(
+    TerminalConnection *connection);
+
+/** Restores the old nonlocal session after a failed handoff. */
+void terminal_connection_rollback_transport_handoff(TerminalConnection *connection);
+
+/**
+ * Commits a prepared nonlocal handoff and returns the original channel.
+ * @remarks Returns nullptr after a proxy connection is moved again; the
+ * original owner keeps its existing handle, so no relay hop is added.
+ */
+cardio::promise<TerminalTransportOrigin *> terminal_connection_commit_transport_handoff(
+    TerminalConnection *connection);
+
+/** Starts a resumed terminal over an already opened proxy channel. */
+bool terminal_connection_resume_transport(TerminalConnection *connection, int data_fd,
+    int control_fd, bool input_finished, std::string encoding,
+    std::size_t queue_capacity, std::size_t io_chunk_size);
+
+/** Shares the SSH connection used by a still-live origin channel. */
+std::shared_ptr<AuthenticatedSshTransport> terminal_transport_origin_authenticated_ssh(
+    TerminalTransportOrigin *origin);
+
+/** Closes the original channel after destination tabs and transfers finish. */
+cardio::promise<void> terminal_transport_origin_close(TerminalTransportOrigin *origin);
+
+/** Waits for the last proxy endpoint to close, then recovers the original channel. */
+cardio::promise<void> terminal_transport_origin_wait(TerminalTransportOrigin *origin);
+
+/** Releases an origin after terminal_transport_origin_close completes. */
+void destroy_terminal_transport_origin(TerminalTransportOrigin *origin);
 
 /**
  * Starts a channel factory using the confirmed core grid and bounded queues.
