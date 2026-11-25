@@ -194,7 +194,7 @@ void terminal_connection_rollback_local_handoff(TerminalConnection *connection);
  */
 TerminalLocalChildReaper *terminal_connection_commit_local_handoff(TerminalConnection *connection);
 
-/** Awaits the original shell's exit without retaining the old terminal. */
+/** Awaits pidfd readiness and reaps the original shell without retaining the old terminal. */
 cardio::promise<TerminalLocalChildExit> terminal_local_child_reaper_wait(TerminalLocalChildReaper *reaper);
 
 /** Releases a reaper after terminal_local_child_reaper_wait has completed. */

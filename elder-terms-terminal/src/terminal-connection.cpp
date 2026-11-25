@@ -88,6 +88,7 @@ struct ConnectionOperation {
   int local_fd = -1;
   std::shared_ptr<ProxyEndpoint> proxy;
   std::unique_ptr<TerminalTransportOrigin> pending_origin;
+  TerminalLocalChildReaper *handoff_reaper = nullptr;
   TerminalTransport transport;
   boxrig_session *session = nullptr;
   ByteQueue incoming;
@@ -147,6 +148,9 @@ struct TerminalConnection {
 };
 
 struct TerminalLocalChildReaper {
+  int process_fd = -1;
+  pid_t child = 0;
+  cardio::primitives::conditional ready;
   std::optional<cardio::promise<TerminalLocalChildExit>> completion;
 };
 
@@ -652,6 +656,27 @@ static void terminate_child(pid_t child) {
   (void)::kill(child, SIGKILL);
 }
 
+static cardio::promise<TerminalLocalChildExit> reap_transferred_child(TerminalLocalChildReaper *reaper) {
+  TerminalLocalChildExit exit;
+  exit.child = reaper->child;
+  try {
+    co_await cardio::from_fd(reaper->process_fd, cardio::fd_event::read, {});
+    int status = 0;
+    pid_t result = -1;
+    do result = ::waitpid(reaper->child, &status, WNOHANG);
+    while (result < 0 && errno == EINTR);
+    if (result < 0) exit.error = errno;
+    else if (result == 0) exit.error = EAGAIN;
+    else if (WIFEXITED(status)) exit.exit_code = WEXITSTATUS(status);
+    else if (WIFSIGNALED(status)) exit.signal_number = WTERMSIG(status);
+  } catch (const std::system_error &error) {
+    exit.error = error.code().value();
+  } catch (...) {
+    exit.error = EIO;
+  }
+  co_return exit;
+}
+
 static bool finish_input(TerminalConnection *connection) {
   discard_outgoing(connection->terminal);
   const auto status = boxrig_terminal_finish_input(connection->terminal);
@@ -808,6 +833,12 @@ static cardio::promise<void> run_local(TerminalConnection *connection, TerminalL
       else if (WIFSIGNALED(reaped.first)) connection->state.signal_number = WTERMSIG(reaped.first);
     }
     boxrig_posix_pty_get_spawn_result(operation.pty, &connection->state.spawn);
+  }
+  if (operation.handoff_committed && operation.handoff_reaper) {
+    operation.handoff_reaper->process_fd = process;
+    process = -1;
+    operation.handoff_reaper->completion.emplace(reap_transferred_child(operation.handoff_reaper));
+    operation.handoff_reaper->ready.trigger();
   }
   if (process >= 0) ::close(process);
   if (operation.handoff_committed) {
@@ -1344,18 +1375,8 @@ TerminalLocalChildReaper *terminal_connection_commit_local_handoff(TerminalConne
   auto &operation = *connection->operation;
   if (operation.pty) {
     reaper = std::make_unique<TerminalLocalChildReaper>();
-    const auto child = connection->state.child;
-    reaper->completion.emplace(cardio::promises::start_new([child] {
-      int status = 0;
-      pid_t result = -1;
-      do result = ::waitpid(child, &status, 0); while (result < 0 && errno == EINTR);
-      TerminalLocalChildExit exit;
-      exit.child = child;
-      if (result < 0) exit.error = errno;
-      else if (WIFEXITED(status)) exit.exit_code = WEXITSTATUS(status);
-      else if (WIFSIGNALED(status)) exit.signal_number = WTERMSIG(status);
-      return exit;
-    }));
+    reaper->child = connection->state.child;
+    operation.handoff_reaper = reaper.get();
   }
   operation.handoff_prepared = false;
   operation.handoff_committed = true;
@@ -1367,10 +1388,12 @@ TerminalLocalChildReaper *terminal_connection_commit_local_handoff(TerminalConne
 }
 
 cardio::promise<TerminalLocalChildExit> terminal_local_child_reaper_wait(TerminalLocalChildReaper *reaper) {
+  while (!reaper->completion) co_await reaper->ready.wait();
   co_return co_await *reaper->completion;
 }
 
 void destroy_terminal_local_child_reaper(TerminalLocalChildReaper *reaper) {
+  if (reaper && reaper->process_fd >= 0) ::close(reaper->process_fd);
   delete reaper;
 }
 

@@ -522,6 +522,8 @@ static cardio::promise<void> scenarios(Test *test) {
   expect(ready == 'R', "destination restored transferred terminal");
   auto *process_reaper = terminal_connection_commit_local_handoff(test->connection);
   expect(process_reaper != nullptr, "commit interprocess transfer");
+  expect(terminal_connection_commit_local_handoff(test->connection) == nullptr,
+      "a repeated commit does not create another child reaper");
   co_await terminal_connection_wait_stopped(test->connection);
   destroy_terminal_connection(test->connection);
   test->connection = create_terminal_connection(test->core, [&] { wake(test); },
@@ -540,6 +542,63 @@ static cardio::promise<void> scenarios(Test *test) {
       "a different process drives the same shell and the original process reaps it");
   destroy_terminal_local_child_reaper(process_reaper);
   ::close(channel[0]);
+
+  expect(terminal_connection_start_local(test->connection, command(
+      "stty -echo; echo ABANDON_READY; while read value; do echo \"$value\"; done")),
+      "start rollback shell");
+  while (contents(test).find("ABANDON_READY") == std::string::npos)
+    co_await test->changed.wait();
+  auto abandoned = co_await terminal_connection_prepare_local_handoff(test->connection);
+  expect(abandoned.has_value(), "prepare destination-abandon scenario");
+  int lost_channel[2]{};
+  expect(::socketpair(AF_UNIX, SOCK_STREAM, 0, lost_channel) == 0,
+      "create failed-destination socket");
+  const auto abandoned_receiver = ::fork();
+  expect(abandoned_receiver >= 0, "fork abandoning destination");
+  if (abandoned_receiver == 0) {
+    ::close(lost_channel[0]);
+    const auto descriptor = std::to_string(lost_channel[1]);
+    char *arguments[] = {const_cast<char *>("boxrig-connection-test"),
+        const_cast<char *>("--handoff-abandon"), const_cast<char *>(descriptor.c_str()), nullptr};
+    ::execv("/proc/self/exe", arguments);
+    _exit(127);
+  }
+  ::close(lost_channel[1]);
+  socket_master(lost_channel[0], &abandoned->master_fd, true);
+  ::close(abandoned->master_fd);
+  HandoffWireHeader lost_wire{static_cast<std::uint32_t>(abandoned->checkpoint.size()),
+      static_cast<std::uint32_t>(abandoned->child),
+      static_cast<std::uint32_t>(abandoned->queue_capacity),
+      static_cast<std::uint32_t>(abandoned->io_chunk_size),
+      static_cast<std::uint8_t>(abandoned->input_finished)};
+  socket_bytes(lost_channel[0], &lost_wire, sizeof(lost_wire), true);
+  socket_bytes(lost_channel[0], abandoned->checkpoint.data(), abandoned->checkpoint.size(), true);
+  char lost_ready = 0;
+  socket_bytes(lost_channel[0], &lost_ready, 1, false);
+  expect(lost_ready == 'R', "destination prepared before disappearing");
+  char closed_byte = 0;
+  expect(::read(lost_channel[0], &closed_byte, 1) == 0,
+      "destination closes its socket before commit");
+  ::close(lost_channel[0]);
+  const auto abandoned_status = co_await cardio::promises::start_new([abandoned_receiver] {
+    int status = 0;
+    if (::waitpid(abandoned_receiver, &status, 0) != abandoned_receiver)
+      throw std::runtime_error("wait abandoning destination");
+    return status;
+  });
+  expect(WIFEXITED(abandoned_status) && WEXITSTATUS(abandoned_status) == 0,
+      "prepared destination exited cleanly");
+  terminal_connection_rollback_local_handoff(test->connection);
+  expect(boxrig_terminal_send_text(test->core, "STILL_LIVE\n", 11) == BOXRIG_STATUS_OK,
+      "source continues after destination disappears");
+  wake(test);
+  while (contents(test).find("STILL_LIVE") == std::string::npos)
+    co_await test->changed.wait();
+  terminal_connection_stop(test->connection);
+  co_await terminal_connection_wait_stopped(test->connection);
+  expect(terminal_connection_state(test->connection).reaped &&
+      terminal_connection_state(test->connection).child == static_cast<pid_t>(lost_wire.child),
+      "rolled-back original owner reaps its shell");
 
   std::string peer_input;
   std::string peer_output;
@@ -680,7 +739,7 @@ static cardio::promise<void> run_handoff_receiver(Test *test, cardio::dispatcher
   group->shutdown();
 }
 
-static int handoff_receiver_main(int socket) {
+static int handoff_receiver_main(int socket, bool abandon) {
   int master = -1;
   socket_master(socket, &master, false);
   HandoffWireHeader wire{};
@@ -689,11 +748,19 @@ static int handoff_receiver_main(int socket) {
       "bounded handoff image");
   std::vector<std::uint8_t> checkpoint(wire.size);
   socket_bytes(socket, checkpoint.data(), checkpoint.size(), false);
-  cardio::dispatcher_group_glib group;
-  cardio::dispatcher_host_glib dispatcher(group);
   Test test;
   expect(boxrig_terminal_import_checkpoint(checkpoint.data(), checkpoint.size(),
       64 * 1024 * 1024, &test.core) == BOXRIG_STATUS_OK, "restore in receiving process");
+  if (abandon) {
+    char ready = 'R';
+    socket_bytes(socket, &ready, 1, true);
+    boxrig_terminal_destroy(test.core);
+    ::close(master);
+    ::close(socket);
+    return 0;
+  }
+  cardio::dispatcher_group_glib group;
+  cardio::dispatcher_host_glib dispatcher(group);
   test.connection = create_terminal_connection(test.core, [&] { wake(&test); },
       [&test](std::span<const unsigned char>, std::span<const unsigned char>) { test.changed.trigger(); });
   expect(terminal_connection_resume_local(test.connection, master, wire.input_finished != 0,
@@ -715,8 +782,10 @@ static int handoff_receiver_main(int socket) {
 }
 
 int main(int argc, char **argv) {
-  if (argc == 3 && std::string(argv[1]) == "--handoff-receiver") {
-    try { return handoff_receiver_main(std::stoi(argv[2])); }
+  if (argc == 3 && (std::string(argv[1]) == "--handoff-receiver" ||
+      std::string(argv[1]) == "--handoff-abandon")) {
+    try { return handoff_receiver_main(std::stoi(argv[2]),
+        std::string(argv[1]) == "--handoff-abandon"); }
     catch (const std::exception &error) {
       std::fprintf(stderr, "handoff receiver: %s\n", error.what());
       return 1;
