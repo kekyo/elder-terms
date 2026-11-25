@@ -1,4 +1,5 @@
 #include "session.h"
+#include "tearoff.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -8,6 +9,7 @@ typedef struct Tab {
     Window *owner;
     PilotSession *session;
     GtkWidget *row, *pick, *close;
+    TearoffGesture *tearoff;
 } Tab;
 
 struct Window {
@@ -26,6 +28,21 @@ static GtkTargetEntry formats[] = {
 };
 
 static Window *open_window(void);
+
+static void configure_row_drag(Tab *t)
+{
+    GtkTargetEntry targets[] = {formats[0], {"application/x-rootwindow-drop", 0, 3}};
+    // With one toplevel there is no other pilot window to negotiate a drop with.
+    gtk_drag_source_set(t->pick, live == 1 ? 0 : GDK_BUTTON1_MASK,
+        targets, G_N_ELEMENTS(targets), GDK_ACTION_MOVE);
+    tearoff_gesture_set_enabled(t->tearoff, live == 1);
+}
+
+static void update_row_drags(void)
+{
+    for (guint i = 0; i < G_N_ELEMENTS(tabs); ++i)
+        if (tabs[i].owner) configure_row_drag(&tabs[i]);
+}
 
 static void rect(Window *w, GtkWidget *widget, const char *name)
 {
@@ -127,7 +144,8 @@ static void destroyed(GtkWidget *widget, Window *w)
     }
     w->win = NULL;
     printf("closed %u\n", w->id);
-    if (!--live) gtk_main_quit();
+    if (--live == 1) update_row_drags();
+    if (!live) gtk_main_quit();
 }
 
 static void move(Window *src, Window *dst, Tab *only)
@@ -169,6 +187,12 @@ static void queue_move(Window *src, Window *dst, Tab *only)
     g_idle_add_full(G_PRIORITY_DEFAULT_IDLE, finish_move, pending, g_free);
 }
 
+static void undock_row(void *data)
+{
+    Tab *t = data;
+    if (t->owner) queue_move(t->owner, NULL, t);
+}
+
 static Window *source_window(GtkWidget *widget, Tab **tab)
 {
     *tab = g_object_get_data(G_OBJECT(widget), "tab");
@@ -206,24 +230,28 @@ static void provide(GtkWidget *widget, GdkDragContext *ctx, GtkSelectionData *da
 static gboolean drag_failed(GtkWidget *widget, GdkDragContext *ctx,
     GtkDragResult result, gpointer unused)
 {
-    (void)ctx; (void)unused;
+    (void)unused;
     Tab *tab;
     Window *src = source_window(widget, &tab);
+    if (!src || !src->win) return TRUE;
     GEnumClass *values = g_type_class_ref(GTK_TYPE_DRAG_RESULT);
     printf("drag-failed %u %c %s\n", src->id, tab ? tab->name : '*',
         g_enum_get_value(values, result)->value_nick);
     g_type_class_unref(values);
-
+    // X11 distinguishes a release without a compatible target from cancellation.
+    if (tab && result == GTK_DRAG_RESULT_NO_TARGET &&
+        gdk_drag_context_get_protocol(ctx) == GDK_DRAG_PROTO_XDND) {
+        GdkWindow *native = gtk_widget_get_window(src->win);
+        int x, y;
+        gdk_window_get_device_position(native, gdk_drag_context_get_device(ctx), &x, &y, NULL);
+        if (x < 0 || y < 0 || x >= gdk_window_get_width(native) || y >= gdk_window_get_height(native))
+            queue_move(src, NULL, tab);
+    }
     return TRUE;
 }
 
-static void source(GtkWidget *widget)
+static void connect_drag_signals(GtkWidget *widget)
 {
-    GtkTargetEntry targets[] = {
-        formats[0], {"application/x-rootwindow-drop", 0, 3}
-    };
-    gboolean row = g_object_get_data(G_OBJECT(widget), "tab") != NULL;
-    gtk_drag_source_set(widget, GDK_BUTTON1_MASK, targets, row ? 2 : 1, GDK_ACTION_MOVE);
     g_signal_connect(widget, "drag-begin", G_CALLBACK(drag_begin), NULL);
     g_signal_connect(widget, "drag-data-get", G_CALLBACK(provide), NULL);
     g_signal_connect(widget, "drag-failed", G_CALLBACK(drag_failed), NULL);
@@ -285,6 +313,7 @@ static Window *open_window(void)
     Window *w = g_new0(Window, 1);
     g_ptr_array_add(windows, w);
     ++live;
+    if (live == 2) update_row_drags();
     w->id = windows->len;
     w->win = gtk_window_new(GTK_WINDOW_TOPLEVEL);
     char name[40];
@@ -296,7 +325,8 @@ static Window *open_window(void)
     snprintf(name, sizeof(name), "dock-title-%u", w->id);
     gtk_widget_set_name(w->title, name);
     g_object_set_data(G_OBJECT(w->title), "window", w);
-    source(w->title);
+    gtk_drag_source_set(w->title, GDK_BUTTON1_MASK, formats, 1, GDK_ACTION_MOVE);
+    connect_drag_signals(w->title);
     gtk_header_bar_pack_start(GTK_HEADER_BAR(header), w->title);
     w->native = gtk_label_new(NULL);
     gtk_widget_set_size_request(w->native, 90, 30);
@@ -360,7 +390,9 @@ static void add_tab(Window *w, Tab *t, char label, gboolean fixture)
     gtk_box_pack_end(GTK_BOX(line), t->close, FALSE, FALSE, 0);
     gtk_container_add(GTK_CONTAINER(t->row), line);
     g_object_set_data(G_OBJECT(t->pick), "tab", t);
-    source(t->pick);
+    t->tearoff = tearoff_gesture_bind(t->pick, undock_row, t);
+    configure_row_drag(t);
+    connect_drag_signals(t->pick);
     g_signal_connect(t->pick, "clicked", G_CALLBACK(select_tab), t);
     g_signal_connect(t->close, "clicked", G_CALLBACK(close_clicked), t);
     gtk_widget_show_all(t->row);

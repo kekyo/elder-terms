@@ -23,6 +23,22 @@ int main(int argc, char **argv)
 {
     gtk_init(&argc, &argv);
     GtkWidget *w = gtk_window_new(GTK_WINDOW_TOPLEVEL);
+    GtkTargetEntry uri = {"text/uri-list", 0, 0};
+    if (argc == 2 && g_str_equal(argv[1], "--desktop")) {
+        // An icon manager covers the X root and only accepts file drops.
+        gtk_window_set_title(GTK_WINDOW(w), "Dock pilot desktop");
+        gtk_window_set_type_hint(GTK_WINDOW(w), GDK_WINDOW_TYPE_HINT_DESKTOP);
+        gtk_window_set_decorated(GTK_WINDOW(w), FALSE);
+        gtk_window_set_accept_focus(GTK_WINDOW(w), FALSE);
+        gtk_window_set_default_size(GTK_WINDOW(w), 260, 140);
+        GtkWidget *icon = gtk_image_new_from_icon_name("folder", GTK_ICON_SIZE_DIALOG);
+        gtk_container_add(GTK_CONTAINER(w), icon);
+        gtk_drag_dest_set(w, GTK_DEST_DEFAULT_ALL, &uri, 1, GDK_ACTION_COPY);
+        g_signal_connect(w, "destroy", G_CALLBACK(gtk_main_quit), NULL);
+        gtk_widget_show_all(w);
+        gtk_main();
+        return 0;
+    }
     gtk_window_set_title(GTK_WINDOW(w), "Dock pilot peer");
     GtkWidget *box = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
     GtkWidget *file = gtk_button_new_with_label("File");
@@ -31,7 +47,6 @@ int main(int argc, char **argv)
     gtk_box_pack_start(GTK_BOX(box), reject, TRUE, TRUE, 0);
     gtk_container_add(GTK_CONTAINER(w), box);
     gtk_window_set_default_size(GTK_WINDOW(w), 240, 90);
-    GtkTargetEntry uri = {"text/uri-list", 0, 0};
     GtkTargetEntry tab = {"application/x-elder-terms-dock-pilot", 0, 0};
     gtk_drag_source_set(file, GDK_BUTTON1_MASK, &uri, 1, GDK_ACTION_COPY);
     gtk_drag_dest_set(reject, GTK_DEST_DEFAULT_MOTION, &tab, 1, GDK_ACTION_MOVE);

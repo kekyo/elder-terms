@@ -24,8 +24,9 @@ static void finish(TearoffGesture *gesture)
     gesture->window = NULL;
     gesture->key_handler = 0;
     gesture->pressed = FALSE;
+    if (gesture->dragging)
+        gtk_widget_set_opacity(gesture->button, gesture->previous_opacity);
     gesture->dragging = FALSE;
-    gtk_widget_set_opacity(gesture->button, gesture->previous_opacity);
 }
 
 static gboolean escape(GtkWidget *widget, GdkEventKey *event, TearoffGesture *gesture)
@@ -121,7 +122,6 @@ TearoffGesture *tearoff_gesture_bind(
     gesture->button = button;
     gesture->undock = undock;
     gesture->context = context;
-    gesture->previous_opacity = gtk_widget_get_opacity(button);
     gtk_widget_add_events(button, GDK_BUTTON_PRESS_MASK | GDK_BUTTON_RELEASE_MASK |
         GDK_POINTER_MOTION_MASK);
     g_signal_connect(button, "button-press-event", G_CALLBACK(press), gesture);

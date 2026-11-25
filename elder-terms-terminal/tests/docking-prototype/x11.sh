@@ -13,8 +13,10 @@ gdbus wait --session --timeout=20 org.kde.KWin
 build/dock-pilot --fixture >"$out/pilot.log" 2>&1 & pilot=$!
 build/dock-peer >"$out/peer.log" 2>&1 & peer=$!
 recorder=
+desktop=
 cleanup() {
   if [[ -n $recorder ]]; then kill -INT "$recorder" 2>/dev/null || true; wait "$recorder" || true; fi
+  if [[ -n $desktop ]]; then kill "$desktop" 2>/dev/null || true; wait "$desktop" 2>/dev/null || true; fi
   kill "$pilot" "$peer" "$wm" 2>/dev/null || true
   wait "$pilot" "$peer" "$wm" 2>/dev/null || true
 }
@@ -23,7 +25,7 @@ log="$out/pilot.log"
 from=1
 expect() {
   for ((i=0; i<120; i++)); do
-    if tail -n +"$from" "$log" | grep -E "$1" >/dev/null; then return; fi
+    if tail -n +"$from" "$log" | grep -E "$1" | grep -Ev "${2:-^$}" >/dev/null; then return; fi
     kill -0 "$pilot" 2>/dev/null || break
     sleep .05
   done
@@ -48,6 +50,7 @@ drag_points() {
   done
   sleep .1
   if [[ ${5:-} == cancel ]]; then xdotool key Escape; fi
+  if [[ ${5:-} == return ]]; then xdotool mousemove --sync "$sx" "$sy"; fi
   if [[ ${5:-} == title ]]; then
     # A successful GTK drop uses a drag icon while the source toplevel stays put.
     [[ "$(origin 1 | xargs)" == "$source_origin" ]]
@@ -168,9 +171,12 @@ xdotool windowmove "$(wid 4)" 30 420
 mark
 drag 4 title $(point 2 content)
 expect '^state 2 tabs=CBA active=A sidebar=1$'
+input size
+expect '^pty A size-'
+old_rows=$(sed -nE 's/^pty A size-([0-9]+) [0-9]+$/\1/p' "$log" | tail -1)
 mark
 xdotool windowsize "$(wid 2)" 580 425
-expect '^grid A '
+expect '^grid A ' "^grid A $old_rows "
 read -r rows cols < <(awk '/^grid A / {size=$3" "$4} END{print size}' "$log")
 input size
 expect "^pty A size-$rows $cols$"
@@ -197,20 +203,63 @@ from=1
 build/dock-pilot >"$log" 2>&1 & pilot=$!
 expect '^rect 2 content '
 xdotool windowmove "$(wid 1)" 40 100 windowmove "$(wid 2)" 760 140
+build/dock-peer --desktop >"$out/desktop.log" 2>&1 & desktop=$!
+desktop_id=$(timeout 10 xdotool search --sync --onlyvisible --name '^Dock pilot desktop$' | tail -1)
+xdotool windowmove "$desktop_id" 520 530
+xprop -id "$desktop_id" _NET_WM_WINDOW_TYPE | grep -q _NET_WM_WINDOW_TYPE_DESKTOP
+xprop -id "$desktop_id" XdndAware | grep -q ' = '
+read -r dx dy < <(origin desktop | xargs)
+read -r dw dh < <(xwininfo -id "$desktop_id" | awk '/^  (Width|Height):/{print $2}' | xargs)
+click 2 content
+input 'printf "\033]0;session-c-%s-before\007" "$$"'
+expect '^pty C session-c-[0-9]+-before$'
+c_pid=$(sed -nE 's/^pty C session-c-([0-9]+)-before$/\1/p' "$log")
+drag 2 title $(point 1 content)
+expect '^state 1 tabs=ABC active=C sidebar=1$'
+expect '^closed 2$'
+expect '^rect 1 tabC '
+drag 1 tabC "$((dx+dw/2))" "$((dy+dh/2))" cancel
+input 'printf "\033]0;session-c-%s-cancelled\007" "$$"'
+expect "^pty C session-c-$c_pid-cancelled$"
+if wid 3 >/dev/null; then echo "Escape undocked Session C" >&2; exit 1; fi
+drag 1 tabC "$((dx+dw/2))" "$((dy+dh/2))" return
+input 'printf "\033]0;session-c-%s-returned\007" "$$"'
+expect "^pty C session-c-$c_pid-returned$"
+if wid 3 >/dev/null; then echo "Returning to the source undocked Session C" >&2; exit 1; fi
+drag 1 tabC "$((dx+dw/2))" "$((dy+dh/2))"
+expect '^state 3 tabs=C active=C sidebar=0$'
+expect '^state 1 tabs=AB active=B sidebar=1$'
+xdotool windowmove "$(wid 3)" 760 140
+click 3 content
+input 'printf "\033]0;session-c-%s-after\007" "$$"'
+expect "^pty C session-c-$c_pid-after$"
+import -window root "$out/undocked-c.png"
+drag 3 title $(point 1 content)
+expect '^state 1 tabs=ABC active=C sidebar=1$'
+expect '^closed 3$'
+drag 1 tabC "$((dx+12))" "$((dy+12))"
+expect '^state 4 tabs=C active=C sidebar=0$'
+xdotool windowmove "$(wid 4)" 760 140
 click 1 tabB
 input 'printf "\033]0;shell-%s-%s\007" "$$" "$((6*7))"'
 expect '^pty B shell-[0-9]+-42$'
 interactive_pid=$(sed -nE 's/^pty B shell-([0-9]+)-42$/\1/p' "$log")
-drag 1 tabB $(point 2 content)
-expect '^state 2 tabs=CB active=B sidebar=1$'
+drag 1 tabB $(point 4 content)
+expect '^state 4 tabs=CB active=B sidebar=1$'
 input 'printf "\033]0;shell-%s-%s\007" "$$" "$((6*8))"'
 expect "^pty B shell-$interactive_pid-48$"
+# A desktop managed by an icon process also receives releases while a dock peer exists.
+drag 4 tabC "$((dx+dw/2))" "$((dy+dh/2))"
+expect '^state 4 tabs=B active=B sidebar=0$'
+expect '^state 5 tabs=C active=C sidebar=0$'
+xdotool windowactivate --sync "$(wid 4)"
+click 4 content
 input exit
-expect '^state 2 tabs=C active=C sidebar=0$'
+expect '^closed 4$'
 xdotool windowactivate --sync "$(wid 1)" key alt+F4
 expect '^closed 1$'
-xdotool windowactivate --sync "$(wid 2)" key alt+F4
-expect '^closed 2$'
+xdotool windowactivate --sync "$(wid 5)" key alt+F4
+expect '^closed 5$'
 wait "$pilot"
 if grep -Eq 'CRITICAL|WARNING|ERROR' "$log"; then cat "$log" >&2; exit 1; fi
 echo "PASS X11 docking gestures, shell PID $pid, hidden output, resizing and close"

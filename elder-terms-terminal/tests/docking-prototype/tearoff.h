@@ -15,7 +15,7 @@ typedef void (*TearoffUndock)(void *context);
  * Binds a tab button to a native pointer gesture.
  * @param button Existing tab button.
  * @param undock Called after the pointer is released outside that toplevel.
- * @param context Forwarded to owner and undock.
+ * @param context Passed to undock when the tab is released outside the window.
  * @return Gesture owned by button. Do not free the returned pointer.
  */
 TearoffGesture *tearoff_gesture_bind(
