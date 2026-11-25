@@ -1,15 +1,17 @@
 #!/bin/bash
-# Measure a live SSH shell before docking, while docked, and after undocking.
+# Measure one local or SSH shell before docking, while docked, and after undocking.
 set -euo pipefail
 if [[ ${1:-} != --inside ]]; then
   exec xvfb-run -a -s '-screen 0 1800x1000x24' dbus-run-session -- bash "$0" --inside "$@"
 fi
 binary=$2
-port=$3
-username=$4
-client_key=$5
-known_hosts=$6
-scratch=$7
+mode=$3
+port=$4
+username=$5
+client_key=$6
+known_hosts=$7
+scratch=$8
+peer=$9
 pids=()
 finish() {
   if ((${#pids[@]})); then kill "${pids[@]}" 2>/dev/null || true; fi
@@ -31,7 +33,20 @@ command_line=/bin/sh
 width=60
 height=20
 SETTINGS
-cat >"$scratch/Remote.ini" <<SETTINGS
+if [[ $mode == local ]]; then
+  cat >"$scratch/Remote.ini" <<SETTINGS
+[general]
+name=Remote
+type=local
+auto_close=false
+[local]
+command_line=$peer
+[terminal]
+width=60
+height=20
+SETTINGS
+else
+  cat >"$scratch/Remote.ini" <<SETTINGS
 [general]
 name=Remote
 type=ssh
@@ -45,8 +60,13 @@ identity_file=$client_key
 width=60
 height=20
 SETTINGS
+fi
 "$binary" -c "$scratch/Local.ini" >"$scratch/Local.log" 2>&1 & pids+=($!)
-"$binary" "--test-ssh-known-hosts-file=$known_hosts" -c "$scratch/Remote.ini" >"$scratch/Remote.log" 2>&1 & pids+=($!)
+if [[ $mode == local ]]; then
+  "$binary" -c "$scratch/Remote.ini" >"$scratch/Remote.log" 2>&1 & pids+=($!)
+else
+  "$binary" "--test-ssh-known-hosts-file=$known_hosts" -c "$scratch/Remote.ini" >"$scratch/Remote.log" 2>&1 & pids+=($!)
+fi
 window() { xdotool search --onlyvisible --name "elder-terms .* $1$" | tail -1; }
 wait_until() {
   for ((attempt=0;attempt<600;attempt++)); do if "$@"; then return; fi; sleep .05; done
@@ -64,9 +84,11 @@ benchmark() {
   wait_until measured "$2"
 }
 wait_until window Remote
-xdotool windowactivate --sync "$(window Remote)"
-sleep .3
-xdotool key Return
+if [[ $mode == ssh ]]; then
+  xdotool windowactivate --sync "$(window Remote)"
+  sleep .3
+  xdotool key Return
+fi
 wait_until test -s "$scratch/ready"
 wait_until window Local
 local_window=$(window Local)
