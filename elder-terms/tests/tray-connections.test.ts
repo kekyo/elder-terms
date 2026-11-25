@@ -3,7 +3,7 @@
 // Under MIT.
 // https://github.com/kekyo/elder-terms/
 
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import {
   chmod,
   mkdtemp,
@@ -383,6 +383,138 @@ it('presents only the ready tracked child and removes it after exit', async (con
     if (pid !== undefined) {
       try {
         process.kill(pid, 'SIGTERM');
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
+      }
+    }
+    await rm(directory, { recursive: true, force: true });
+  }
+}, 60_000);
+
+it('keeps a transferred tab selectable after its launching process exits', async (context) => {
+  const directory = await mkdtemp(join(tmpdir(), 'elder-tray-tab-transfer-'));
+  const capture = join(directory, 'present.txt');
+  const pidPath = join(directory, 'pid');
+  const session = '123e4567-e89b-12d3-a456-426614174000';
+  const tabName = `net.kekyo.ElderTerms.Tab.t${session.replace(/-/gu, '')}`;
+  const fixture = fileURLToPath(
+    new URL('../../.build/elder-terms/tracked-window-child', import.meta.url)
+  );
+  let sourcePid: number | undefined;
+  let receiver: ReturnType<typeof spawn> | undefined;
+  try {
+    await runLauncherGtkTest(
+      context,
+      async (connections) => {
+        await writeFile(
+          join(connections, '..', 'global.ini'),
+          '[general]\nstartup_mode=tray\nopen_application=\n'
+        );
+        await writeFile(
+          join(connections, 'Terminal.ini'),
+          '[general]\ntype=local\n'
+        );
+      },
+      async ({ app }) => {
+        await app.getTrayItem({ id: 'elder-terms' });
+        const registered = await callBus(
+          app,
+          'org.kde.StatusNotifierWatcher',
+          '/StatusNotifierWatcher',
+          'org.freedesktop.DBus.Properties.Get',
+          ['org.kde.StatusNotifierWatcher', 'RegisteredStatusNotifierItems']
+        );
+        const bus = registered.match(
+          /['"]([^'"]+)\/StatusNotifierItem['"]/u
+        )?.[1];
+        expect(bus).toBeDefined();
+        const menu = async (method: string, args: string[]): Promise<string> =>
+          await callBus(
+            app,
+            bus!,
+            '/StatusNotifierMenu',
+            `com.canonical.dbusmenu.${method}`,
+            args
+          );
+        const layout = async (): Promise<string> =>
+          await menu('GetLayout', ['0', '-1', "['label', 'enabled']"]);
+        const connection = menuItems(await layout()).find(
+          (item) => item.label === 'Terminal'
+        );
+        expect(connection).toBeDefined();
+        await menu('Event', [connection!.id, 'clicked', '<0>', '0']);
+        sourcePid = await waitForResult(async () =>
+          Number(await readFile(pidPath, 'utf8'))
+        );
+        const entry = await waitForResult(async () => {
+          const item = menuItems(await layout()).find(
+            (row) => row.label === 'Terminal (Terminal)'
+          );
+          expect(item).toBeDefined();
+          return item!;
+        });
+        const receiverEnv = {
+          ...process.env,
+          ...(await app.environment()),
+          ELDER_TERMS_TRACKED_TAB_RECEIVER: '1',
+          ELDER_TERMS_TRACKED_TAB_SESSION: session,
+          ELDER_TERMS_TRACKED_WINDOW_CAPTURE: capture,
+        };
+        receiver = spawn(fixture, [], { env: receiverEnv, stdio: 'ignore' });
+        await waitForResult(async () => {
+          const owner = await callBus(
+            app,
+            'org.freedesktop.DBus',
+            '/org/freedesktop/DBus',
+            'org.freedesktop.DBus.GetNameOwner',
+            [tabName]
+          );
+          const uniqueName = owner.match(/'(:[\d.]+)'/u)?.[1];
+          expect(uniqueName).toBeDefined();
+          const processReply = await callBus(
+            app,
+            'org.freedesktop.DBus',
+            '/org/freedesktop/DBus',
+            'org.freedesktop.DBus.GetConnectionUnixProcessID',
+            [uniqueName!]
+          );
+          expect(Number(processReply.match(/uint32 (\d+)/u)?.[1])).toBe(
+            receiver!.pid
+          );
+        });
+        process.kill(sourcePid!, 'SIGTERM');
+        await waitForResult(async () => {
+          expect(
+            menuItems(await layout()).some((row) => row.id === entry.id)
+          ).toBe(true);
+        });
+        await menu('Event', [entry.id, 'clicked', '<0>', '0']);
+        await waitForResult(async () => {
+          expect(await readFile(capture, 'utf8')).toBe('tab-present\n');
+        });
+        receiver!.kill('SIGTERM');
+        await waitForResult(async () => {
+          expect(menuItems(await layout()).map((row) => row.label)).toContain(
+            'No open windows'
+          );
+        });
+      },
+      {
+        args: [],
+        env: {
+          G_DEBUG: 'fatal-criticals',
+          ELDER_TERMS_TERMINAL_PATH: fixture,
+          ELDER_TERMS_TRACKED_TAB_SESSION: session,
+          ELDER_TERMS_TRACKED_WINDOW_CAPTURE: capture,
+          ELDER_TERMS_TRACKED_WINDOW_PID: pidPath,
+        },
+      }
+    );
+  } finally {
+    receiver?.kill('SIGTERM');
+    if (sourcePid !== undefined) {
+      try {
+        process.kill(sourcePid, 'SIGTERM');
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code !== 'ESRCH') throw error;
       }
