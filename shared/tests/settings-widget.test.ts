@@ -2064,6 +2064,11 @@ describe.concurrent('shared settings widget', () => {
             'settings_terminal_send_break_key_entry',
             'Disabled (built-in default)'
           );
+          await waitForEntryPlaceholder(
+            app,
+            'settings_terminal_undock_key_entry',
+            'ctrl+shift+u (built-in default)'
+          );
         },
         differsFrom: undefined,
         fixtureName: 'settings-widget-terminal-page-default',
