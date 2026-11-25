@@ -47,45 +47,14 @@ const colors = {
   3: [0x39, 0x83, 0x49],
   4: [0x8b, 0x47, 0x89],
 };
-const binary = join(here, 'build/dock-pilot');
+const binary = process.env.DOCK_PILOT_BINARY ?? join(here, 'build/dock-pilot');
 try {
   await stat(binary);
 } catch {
   throw new Error(`Build the pilot first: make -C ${here}`);
 }
 
-await withWaylandHarness(binary, async (h) => {
-  const recorder = spawn(
-    'ffmpeg',
-    [
-      '-nostdin',
-      '-loglevel',
-      'error',
-      '-y',
-      '-f',
-      'x11grab',
-      '-video_size',
-      '1280x720',
-      '-framerate',
-      '15',
-      '-i',
-      process.env.DISPLAY,
-      '-c:v',
-      'libx264',
-      '-threads',
-      '2',
-      '-preset',
-      'ultrafast',
-      '-pix_fmt',
-      'yuv420p',
-      join(evidence, 'gestures.mp4'),
-    ],
-    { stdio: ['ignore', 'ignore', 'pipe'] }
-  );
-  let recorderError = '';
-  recorder.stderr.on('data', (bytes) => {
-    recorderError += bytes.toString();
-  });
+const createUi = (h) => {
   let checkedAt = 0;
   const expectLine = async (expression) => {
     await h.waitUntil(
@@ -96,6 +65,7 @@ await withWaylandHarness(binary, async (h) => {
   const mark = () => {
     checkedAt = h.output.length;
   };
+  const sinceMark = () => h.output.slice(checkedAt);
   const rect = (id, name) => {
     const records = [
       ...h.output.matchAll(/^rect (\d+) (\w+) (\d+) (\d+) (\d+) (\d+)$/gm),
@@ -160,6 +130,43 @@ await withWaylandHarness(binary, async (h) => {
   const drag = async (id, name, to, cancel = false) => {
     await h.drag(await point(id, name), to, 12, cancel);
   };
+  return { expectLine, mark, sinceMark, locate, point, click, drag };
+};
+
+await withWaylandHarness(binary, async (h) => {
+  const recorder = spawn(
+    'ffmpeg',
+    [
+      '-nostdin',
+      '-loglevel',
+      'error',
+      '-y',
+      '-f',
+      'x11grab',
+      '-video_size',
+      '1280x720',
+      '-framerate',
+      '15',
+      '-i',
+      process.env.DISPLAY,
+      '-c:v',
+      'libx264',
+      '-threads',
+      '2',
+      '-preset',
+      'ultrafast',
+      '-pix_fmt',
+      'yuv420p',
+      join(evidence, 'gestures.mp4'),
+    ],
+    { stdio: ['ignore', 'ignore', 'pipe'] }
+  );
+  let recorderError = '';
+  recorder.stderr.on('data', (bytes) => {
+    recorderError += bytes.toString();
+  });
+  const { expectLine, mark, sinceMark, locate, point, click, drag } =
+    createUi(h);
   try {
     await expectLine(/^backend GdkWaylandDisplay$/m);
     await expectLine(/^state 1 tabs=AB active=A sidebar=1$/m);
@@ -184,7 +191,7 @@ await withWaylandHarness(binary, async (h) => {
     mark();
     await drag(1, 'tabA', { x: 1200, y: 680 }, true);
     await expectLine(/^drag-failed 1 A (error|user-cancelled)$/m);
-    if (/^state 3 /m.test(h.output.slice(checkedAt)))
+    if (/^state 3 /m.test(sinceMark()))
       throw new Error('Escape unexpectedly undocked the tab');
     mark();
     await drag(1, 'tabB', await point(2, 'content'));
@@ -197,7 +204,7 @@ await withWaylandHarness(binary, async (h) => {
     mark();
     await drag(2, 'tabB', { x: 800, y: 100 });
     await expectLine(/^drag-failed 2 B \S+$/m);
-    if (/^state 3 /m.test(h.output.slice(checkedAt)))
+    if (/^state 3 /m.test(sinceMark()))
       throw new Error('Desktop drop unexpectedly undocked the tab');
     await click(2, 'tabB');
     mark();
@@ -268,6 +275,137 @@ const frames = Number(
 );
 if (frames < 30)
   throw new Error(`Gesture video recorded only ${frames} frames`);
+
+// Exercise the one-window path after docking an entire peer window.
+await withWaylandHarness(binary, async (h) => {
+  const { expectLine, mark, sinceMark, point, click } = createUi(h);
+  const recorder = spawn(
+    'ffmpeg',
+    [
+      '-nostdin',
+      '-loglevel',
+      'error',
+      '-y',
+      '-f',
+      'x11grab',
+      '-video_size',
+      '1280x720',
+      '-framerate',
+      '15',
+      '-i',
+      process.env.DISPLAY,
+      '-c:v',
+      'libx264',
+      '-threads',
+      '2',
+      '-preset',
+      'ultrafast',
+      '-pix_fmt',
+      'yuv420p',
+      join(evidence, 'tearoff-gestures.mp4'),
+    ],
+    { stdio: ['ignore', 'ignore', 'pipe'] }
+  );
+  let recorderError = '';
+  recorder.stderr.on('data', (bytes) => {
+    recorderError += bytes.toString();
+  });
+  const input = async (value) => {
+    await h.run('xdotool', ['type', value]);
+    await h.run('xdotool', ['key', 'Return']);
+  };
+  try {
+    await expectLine(/^state 1 tabs=AB active=A sidebar=1$/m);
+    await expectLine(/^state 2 tabs=C active=C sidebar=0$/m);
+    await expectLine(/^rect 2 content /m);
+    await h.pause(200);
+    const secondContent = await point(2, 'content');
+    await h.point(secondContent.x, secondContent.y);
+    await input('before');
+    await expectLine(/^pty C ack-\d+-before$/m);
+    const pid = /^pty C ack-(\d+)-before$/m.exec(h.output)?.[1];
+    if (!pid) throw new Error('Missing C shell PID');
+    const native = await point(2, 'native');
+    await h.drag(native, { x: native.x + 260, y: native.y + 65 });
+    await h.pause(150);
+
+    mark();
+    const titleSource = await point(2, 'title');
+    const contentTarget = await point(1, 'content');
+    await h.drag(titleSource, contentTarget);
+    await expectLine(/^state 1 tabs=ABC active=C sidebar=1$/m);
+    await expectLine(/^closed 2$/m);
+    await input('after');
+    await expectLine(new RegExp(`^pty C ack-${pid}-after$`, 'm'));
+    await h.capture('tearoff-docked');
+    await click(1, 'tabA');
+    await expectLine(/^state 1 tabs=ABC active=A sidebar=1$/m);
+    await click(1, 'tabC');
+    await expectLine(/^state 1 tabs=ABC active=C sidebar=1$/m);
+
+    mark();
+    await h.drag(await point(1, 'tabC'), { x: 1050, y: 600 }, 12, true);
+    await h.pause(100);
+    if (/^state 3 /m.test(sinceMark()))
+      throw new Error('Escape unexpectedly undocked C');
+    mark();
+    await h.drag(await point(1, 'tabC'), await point(1, 'content'));
+    await h.pause(100);
+    if (/^state 3 /m.test(sinceMark()))
+      throw new Error('Inside release unexpectedly undocked C');
+    await h.capture('tearoff-inside');
+
+    mark();
+    await h.drag(await point(1, 'tabC'), { x: 1050, y: 600 });
+    await expectLine(/^state 1 tabs=AB active=B sidebar=1$/m);
+    await expectLine(/^state 3 tabs=C active=C sidebar=0$/m);
+    await h.capture('tearoff-outside');
+    const detachedContent = await point(3, 'content');
+    await h.point(detachedContent.x, detachedContent.y);
+    await input('outside');
+    await expectLine(new RegExp(`^pty C ack-${pid}-outside$`, 'm'));
+  } finally {
+    if (recorder.exitCode === null) recorder.kill('SIGINT');
+    if (recorder.exitCode === null) await once(recorder, 'close');
+    await writeFile(join(evidence, 'tearoff-ffmpeg.log'), recorderError);
+    await writeFile(join(evidence, 'tearoff.log'), h.output + h.errors);
+    for (const name of [
+      'tearoff-docked',
+      'tearoff-inside',
+      'tearoff-outside',
+    ]) {
+      try {
+        await copyFile(
+          join(h.directory, `${name}.png`),
+          join(evidence, `${name}.png`)
+        );
+      } catch {
+        // The failing step may not have produced its frame.
+      }
+    }
+  }
+});
+const tearoffFrames = Number(
+  execFileSync('ffprobe', [
+    '-v',
+    'error',
+    '-select_streams',
+    'v:0',
+    '-count_frames',
+    '-show_entries',
+    'stream=nb_read_frames',
+    '-of',
+    'default=nw=1:nk=1',
+    join(evidence, 'tearoff-gestures.mp4'),
+  ])
+    .toString()
+    .trim()
+);
+if (tearoffFrames < 30)
+  throw new Error(`Tear-off video recorded only ${tearoffFrames} frames`);
+console.log(
+  `PASS Wayland C tab tear-off after complete window docking; ${tearoffFrames} video frames; evidence: ${evidence}`
+);
 console.log(
   `PASS Wayland native move, Escape, desktop drop, tab and title docking, key undock, PTY continuity and close; ${frames} video frames; evidence: ${evidence}`
 );
