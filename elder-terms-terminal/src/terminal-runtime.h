@@ -53,7 +53,13 @@ using TerminalZmodemAutoStart = std::function<cardio::promise<std::optional<Term
  * @return An owned runtime, or nullptr after a reported initialization failure.
  */
 TerminalRuntime *create_terminal_runtime(GtkWindow *window, GtkBox *content, GtkBox *attachment,
-    TerminalAmbiguousWidth ambiguous_width);
+    TerminalAmbiguousWidth ambiguous_width, std::span<const std::uint8_t> checkpoint = {});
+
+/** Binds size and window-state notifications to the current tray. */
+void terminal_runtime_set_window(TerminalRuntime *runtime, GtkWindow *window, GtkBox *content, bool selected);
+
+/** Borrows the communication owner for a negotiated handoff on its dispatcher. */
+TerminalConnection *terminal_runtime_connection(TerminalRuntime *runtime);
 
 /**
  * Replaces application hooks for native attachment and terminal host events.

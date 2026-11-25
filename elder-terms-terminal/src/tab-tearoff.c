@@ -1,4 +1,4 @@
-#include "tearoff.h"
+#include "tab-tearoff.h"
 
 struct TearoffGesture {
     GtkWidget *button;

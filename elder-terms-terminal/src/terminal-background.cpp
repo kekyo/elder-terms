@@ -15,6 +15,7 @@ namespace elder_terms {
 
 struct TerminalBackground {
   MainWindow *window;
+  GtkWidget *effect_window = nullptr;
   GtkCssProvider *provider;
   GdkScreen *screen;
   std::vector<GtkWidget *> paths;
@@ -179,6 +180,25 @@ static void clear_paths(TerminalBackground *background) {
 }
 
 void attach_terminal_background(TerminalBackground *background) {
+  auto *host = background->window->window;
+  if (background->effect_window != host) {
+    if (background->effect_window) {
+      g_signal_handlers_disconnect_by_data(background->effect_window, background);
+      boxrig_gtk3_background_effect_destroy(background->effect);
+    }
+    background->effect = nullptr;
+    background->effect_window = host;
+    background->effect_request = BOXRIG_UI_BACKGROUND_EFFECT_NONE;
+    background->effect_rectangle = {};
+    boxrig_gtk3_background_effect_create(GTK_WINDOW(host), +[](void *data) {
+      // The adapter retains requests across map/unmap and capability changes.
+      // Refresh status through the normal frame notification, never destroy here.
+      auto *background = static_cast<TerminalBackground *>(data);
+      terminal_runtime_refresh(background->window->runtime);
+    }, background, &background->effect);
+    g_signal_connect(host, "style-updated", G_CALLBACK(update_opaque_region), background);
+    g_signal_connect(host, "realize", G_CALLBACK(update_opaque_region), background);
+  }
   clear_paths(background);
   auto *widget = GTK_WIDGET(terminal_runtime_widget(background->window->runtime));
   for (auto *parent = gtk_widget_get_parent(widget); parent; parent = gtk_widget_get_parent(parent)) {
@@ -199,12 +219,6 @@ TerminalBackground *create_terminal_background(MainWindow *window, TerminalBackg
   background->screen = GDK_SCREEN(g_object_ref(gtk_widget_get_screen(window->window)));
   background->loader = std::move(loader);
   background->owner = std::make_shared<TerminalBackground *>(background);
-  boxrig_gtk3_background_effect_create(GTK_WINDOW(window->window), +[](void *data) {
-    // The adapter retains requests across map/unmap and capability changes.
-    // Refresh status through the normal frame notification, never destroy here.
-    auto *background = static_cast<TerminalBackground *>(data);
-    terminal_runtime_refresh(background->window->runtime);
-  }, background, &background->effect);
   gtk_css_provider_load_from_data(background->provider,
       ".terminal-background-path { background-color: transparent; background-image: none; }", -1, nullptr);
   g_signal_connect(window->root_box, "draw", G_CALLBACK(draw_backing), background);
@@ -212,8 +226,6 @@ TerminalBackground *create_terminal_background(MainWindow *window, TerminalBackg
     auto *background = static_cast<TerminalBackground *>(data);
     if (!update_effect(background, background->settings.mode)) g_printerr("Failed to resize terminal background effect\n");
   }), background);
-  g_signal_connect(window->window, "style-updated", G_CALLBACK(update_opaque_region), background);
-  g_signal_connect(window->window, "realize", G_CALLBACK(update_opaque_region), background);
   g_signal_connect(background->screen, "composited-changed", G_CALLBACK(+[](GdkScreen *, gpointer data) {
     auto *background = static_cast<TerminalBackground *>(data);
     if (!apply_native(background, background->settings, background->backing, background->image, background->image_settings, false))

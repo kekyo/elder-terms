@@ -35,6 +35,7 @@ static constexpr char terminal_bell_sound_key[] = "bell_sound";
 static constexpr char terminal_zoom_in_key_name[] = "zoom_in_key";
 static constexpr char terminal_zoom_out_key_name[] = "zoom_out_key";
 static constexpr char terminal_send_break_key_name[] = "send_break_key";
+static constexpr char terminal_undock_key_name[] = "undock_key";
 static constexpr char terminal_encoding_key[] = "encoding";
 static constexpr char terminal_backspace_code_key[] = "backspace_code";
 static constexpr char terminal_cursor_key_mode_key[] = "cursor_key_mode";
@@ -42,6 +43,7 @@ static constexpr char terminal_return_code_key[] = "return_code";
 static constexpr char default_terminal_zoom_in_key[] = "ctrl+equal";
 static constexpr char default_terminal_zoom_out_key[] = "ctrl+minus";
 static constexpr char default_terminal_send_break_key[] = "";
+static constexpr char default_terminal_undock_key[] = "ctrl+shift+u";
 static constexpr char default_terminal_encoding[] = "UTF-8";
 static constexpr char default_terminal_backspace_code[] = "auto";
 static constexpr char default_terminal_cursor_key_mode[] = "normal";
@@ -480,6 +482,9 @@ SettingKey terminal_zoom_out_key_setting_key() {
 SettingKey terminal_send_break_key_setting_key() {
   return terminal_key(terminal_send_break_key_name);
 }
+SettingKey terminal_undock_key_setting_key() {
+  return terminal_key(terminal_undock_key_name);
+}
 
 SettingKey terminal_encoding_setting_key() {
   return terminal_key(terminal_encoding_key);
@@ -666,6 +671,12 @@ terminal_setting_definitions(TerminalDisplaySettings terminal_defaults) {
           .validate = validate_key_binding,
       },
       {
+          .key = terminal_undock_key_setting_key(),
+          .default_value =
+              SettingValue{std::string(default_terminal_undock_key)},
+          .validate = validate_key_binding,
+      },
+      {
           .key = terminal_encoding_setting_key(),
           .default_value =
               SettingValue{std::string(default_terminal_encoding)},
@@ -751,6 +762,11 @@ std::string terminal_send_break_key(const SettingsStore &store) {
       store, terminal_send_break_key_setting_key(),
       default_terminal_send_break_key);
 }
+std::string terminal_undock_key(const SettingsStore &store) {
+  return setting_string_value_or_default(
+      store, terminal_undock_key_setting_key(),
+      default_terminal_undock_key);
+}
 
 TerminalKeyBindings terminal_key_bindings(const SettingsStore &store) {
   const KeyBindingParseResult zoom_in =
@@ -759,10 +775,13 @@ TerminalKeyBindings terminal_key_bindings(const SettingsStore &store) {
       parse_key_binding(terminal_zoom_out_key(store));
   const KeyBindingParseResult send_break =
       parse_key_binding(terminal_send_break_key(store));
+  const KeyBindingParseResult undock =
+      parse_key_binding(terminal_undock_key(store));
   return {
       .zoom_in = zoom_in.binding,
       .zoom_out = zoom_out.binding,
       .send_break = send_break.binding,
+      .undock = undock.binding,
   };
 }
 
@@ -775,7 +794,9 @@ bool terminal_key_bindings_conflict(const SettingsStore &store) {
   };
   return conflict(bindings.zoom_in, bindings.zoom_out) ||
          conflict(bindings.zoom_in, bindings.send_break) ||
-         conflict(bindings.zoom_out, bindings.send_break);
+         conflict(bindings.zoom_out, bindings.send_break) ||
+         conflict(bindings.zoom_in, bindings.undock) || conflict(bindings.zoom_out, bindings.undock) ||
+         conflict(bindings.send_break, bindings.undock);
 }
 
 } // namespace elder_terms

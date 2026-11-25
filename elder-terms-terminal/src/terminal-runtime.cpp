@@ -70,6 +70,7 @@ struct TerminalRuntime {
   BoxrigGtk3TerminalWidget *widget = nullptr;
   GtkWidget *scroll = nullptr;
   GtkWindow *window = nullptr;
+  bool selected = true;
   GtkBox *content = nullptr;
   GtkBox *attachment = nullptr;
   TerminalRuntimeHostCallbacks host;
@@ -913,7 +914,7 @@ static bool process_layout(TerminalRuntime *runtime) {
 }
 
 static boxrig_ui_status apply_host_grid(TerminalRuntime *runtime, boxrig_grid_size_request request) {
-  if (runtime->ui_failed || !runtime->widget_allocated || runtime->window_state != BOXRIG_UI_WINDOW_NORMAL)
+  if (!runtime->selected || runtime->ui_failed || !runtime->widget_allocated || runtime->window_state != BOXRIG_UI_WINDOW_NORMAL)
     return BOXRIG_UI_OK;
   auto *widget = GTK_WIDGET(runtime->widget);
   auto *native_window = gtk_widget_get_window(GTK_WIDGET(runtime->window));
@@ -1046,7 +1047,7 @@ static gboolean dispatch_frame(gpointer context) {
   runtime->links_pending = runtime->links && terminal_links_dispatch(runtime->links.get(), link_budget);
   if (runtime->links_pending) request_continuation(runtime);
   // Communication and stream finalization continue while the window is hidden.
-  if (!runtime->widget_allocated || !gtk_widget_get_mapped(GTK_WIDGET(runtime->widget))) return G_SOURCE_REMOVE;
+  if (!runtime->selected || !runtime->widget_allocated || !gtk_widget_get_mapped(GTK_WIDGET(runtime->widget))) return G_SOURCE_REMOVE;
   boxrig_ui_component_frame_result result{};
   if (!process_layout(runtime) ||
       !ui_result(boxrig_ui_model_synchronize(runtime->model), "synchronize")) {
@@ -1153,7 +1154,7 @@ static gboolean window_state_changed(GtkWidget *, GdkEventWindowState *event, gp
   runtime->window_state = (flags & GDK_WINDOW_STATE_FULLSCREEN) ? BOXRIG_UI_WINDOW_FULLSCREEN :
       (flags & GDK_WINDOW_STATE_MAXIMIZED) ? BOXRIG_UI_WINDOW_MAXIMIZED :
       (flags & GDK_WINDOW_STATE_TILED) ? BOXRIG_UI_WINDOW_TILED : BOXRIG_UI_WINDOW_NORMAL;
-  if (!runtime->ui_failed) {
+  if (runtime->selected && !runtime->ui_failed) {
     ui_result(boxrig_gtk3_terminal_widget_set_window_state(runtime->widget, runtime->window_state), "window state");
     ui_result(boxrig_gtk3_terminal_widget_set_geometry_hints(runtime->widget, runtime->window, runtime->cell_geometry_hints), "geometry hints");
   }
@@ -1243,7 +1244,7 @@ static bool attach_widget(TerminalRuntime *runtime) {
 }
 
 TerminalRuntime *create_terminal_runtime(GtkWindow *window, GtkBox *content, GtkBox *attachment,
-    TerminalAmbiguousWidth ambiguous_width) {
+    TerminalAmbiguousWidth ambiguous_width, std::span<const std::uint8_t> checkpoint) {
   auto *runtime = new (std::nothrow) TerminalRuntime;
   if (!runtime) return nullptr;
   runtime->window = window;
@@ -1255,7 +1256,9 @@ TerminalRuntime *create_terminal_runtime(GtkWindow *window, GtkBox *content, Gtk
   config.ambiguous_width = ambiguous_width == TerminalAmbiguousWidth::font
       ? BOXRIG_AMBIGUOUS_WIDTH_FONT : ambiguous_width == TerminalAmbiguousWidth::wide
       ? BOXRIG_AMBIGUOUS_WIDTH_WIDE : BOXRIG_AMBIGUOUS_WIDTH_NARROW;
-  if (boxrig_terminal_create(&config, &runtime->terminal) != BOXRIG_STATUS_OK ||
+  const auto status = checkpoint.empty() ? boxrig_terminal_create(&config, &runtime->terminal) :
+      boxrig_terminal_import_checkpoint(checkpoint.data(), checkpoint.size(), 64U * 1024 * 1024, &runtime->terminal);
+  if (status != BOXRIG_STATUS_OK ||
       !ui_result(boxrig_ui_model_create(runtime->terminal, &runtime->model), "create model") ||
       !attach_widget(runtime)) {
     destroy_terminal_runtime(runtime);
@@ -1280,6 +1283,22 @@ TerminalRuntime *create_terminal_runtime(GtkWindow *window, GtkBox *content, Gtk
   g_signal_connect(window, "size-allocate", G_CALLBACK(allocated), runtime);
   g_signal_connect(window, "window-state-event", G_CALLBACK(window_state_changed), runtime);
   return runtime;
+}
+
+TerminalConnection *terminal_runtime_connection(TerminalRuntime *runtime) { return runtime->connection; }
+
+void terminal_runtime_set_window(TerminalRuntime *runtime, GtkWindow *window, GtkBox *content, bool selected) {
+  runtime->content = content;
+  if (runtime->window == window && runtime->selected == selected) return;
+  g_signal_handlers_disconnect_by_data(runtime->window, runtime);
+  runtime->window = window;
+  runtime->selected = selected;
+  if (!selected) return;
+  g_signal_connect(window, "size-allocate", G_CALLBACK(allocated), runtime);
+  g_signal_connect(window, "window-state-event", G_CALLBACK(window_state_changed), runtime);
+  GdkEventWindowState state{};
+  if (auto *native = gtk_widget_get_window(GTK_WIDGET(window))) state.new_window_state = gdk_window_get_state(native);
+  window_state_changed(GTK_WIDGET(window), &state, runtime);
 }
 
 void destroy_terminal_runtime(TerminalRuntime *runtime) {

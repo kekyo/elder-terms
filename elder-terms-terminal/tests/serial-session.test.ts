@@ -492,7 +492,7 @@ describe.concurrent('elder-terms-terminal serial session', () => {
         await runGtkTest(context, ['-c', configPath], async (app, evidence) => {
           await waitForActivityIndicatorImageState(app, 'conn', 'on');
           const closeButton = expectElementKind(
-            await app.getByPath('main_window.0.0.3'),
+            await app.getByPath('header_bar.0.3'),
             'button'
           );
           await closeButton.click();
@@ -545,7 +545,7 @@ describe.concurrent('elder-terms-terminal serial session', () => {
         await waitForActivityIndicatorImageState(app, 'conn', 'off');
 
         const closeButton = expectElementKind(
-          await app.getByPath('main_window.0.0.3'),
+          await app.getByPath('header_bar.0.3'),
           'button'
         );
         await closeButton.click();

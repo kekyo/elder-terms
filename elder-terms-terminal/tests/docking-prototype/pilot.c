@@ -1,5 +1,5 @@
 #include "session.h"
-#include "tearoff.h"
+#include "tab-tearoff.h"
 #include <stdio.h>
 #include <string.h>
 

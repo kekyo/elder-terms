@@ -3,12 +3,12 @@ SDK ?= ../../../.build/dock-pilot-sdk
 SDK_LIB := $(abspath $(SDK))/lib
 PKGS := boxrig-gtk3 boxrig-posix boxrig-session
 PC := PKG_CONFIG_PATH="$(SDK_LIB)/pkgconfig:$(PKG_CONFIG_PATH)" pkg-config
-CFLAGS += -std=c99 -O2 -g -Wall -Wextra -Werror
+CFLAGS += -I../../src -std=c99 -O2 -g -Wall -Wextra -Werror
 
-build/dock-pilot: pilot.c session.c session.h tearoff.c tearoff.h
+build/dock-pilot: pilot.c session.c session.h ../../src/tab-tearoff.c ../../src/tab-tearoff.h
 	$(PC) --exact-version=0.16.0 boxrig-gtk3
 	mkdir -p $(@D)
-	$(CC) $(CFLAGS) $$($(PC) --cflags $(PKGS)) pilot.c session.c tearoff.c -o $@ \
+	$(CC) $(CFLAGS) $$($(PC) --cflags $(PKGS)) pilot.c session.c ../../src/tab-tearoff.c -o $@ \
 	  $$($(PC) --libs $(PKGS)) -Wl,-rpath,"$(SDK_LIB)"
 
 build/dock-peer: peer.c

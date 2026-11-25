@@ -1737,7 +1737,7 @@ describe.concurrent('elder-terms-terminal main window', () => {
 
           await mainWindow.activate();
           await expectElementKind(
-            await app.getByPath('main_window.0.0.3'),
+            await app.getByPath('header_bar.0.3'),
             'button'
           ).click();
           await waitForResult(
@@ -2108,7 +2108,7 @@ describe.concurrent('elder-terms-terminal main window', () => {
   it('exits when the main window is closed', async (context) => {
     await runGtkTest(context, ['--test-fixture'], async (app, evidence) => {
       const closeButton = expectElementKind(
-        await app.getByPath('main_window.0.0.3'),
+        await app.getByPath('header_bar.0.3'),
         'button'
       );
       await closeButton.click();

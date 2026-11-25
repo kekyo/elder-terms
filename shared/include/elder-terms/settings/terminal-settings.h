@@ -201,6 +201,8 @@ struct TerminalKeyBindings {
   std::optional<KeyBinding> zoom_out;
   /** BREAK binding, or no value when the action is disabled. */
   std::optional<KeyBinding> send_break;
+  /** Detaches the selected terminal, or no value when disabled. */
+  std::optional<KeyBinding> undock;
 };
 
 /**
@@ -362,6 +364,9 @@ ELDER_TERMS_API SettingKey terminal_zoom_out_key_setting_key();
  */
 ELDER_TERMS_API SettingKey terminal_send_break_key_setting_key();
 
+/** Returns the setting key for the terminal undock shortcut. */
+ELDER_TERMS_API SettingKey terminal_undock_key_setting_key();
+
 /**
  * Returns the setting key for [terminal] encoding.
  *
@@ -501,6 +506,9 @@ terminal_zoom_out_key(const SettingsStore &store);
  */
 ELDER_TERMS_API std::string
 terminal_send_break_key(const SettingsStore &store);
+
+/** Returns the configured shortcut to detach the selected tab. */
+ELDER_TERMS_API std::string terminal_undock_key(const SettingsStore &store);
 
 /**
  * Extracts parsed terminal keyboard bindings from a store.

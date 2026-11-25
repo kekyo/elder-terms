@@ -1,6 +1,7 @@
 #pragma once
 
 #include <gtk/gtk.h>
+G_BEGIN_DECLS
 
 /** One tab's native pointer gesture, owned by its button. */
 typedef struct TearoffGesture TearoffGesture;
@@ -27,3 +28,4 @@ TearoffGesture *tearoff_gesture_bind(
  * @param enabled Whether to handle pointer and Escape events.
  */
 void tearoff_gesture_set_enabled(TearoffGesture *gesture, gboolean enabled);
+G_END_DECLS

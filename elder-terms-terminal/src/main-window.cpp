@@ -886,7 +886,7 @@ static std::string display_title(const MainWindow &main_window) {
 
 static void apply_main_window_title(MainWindow *main_window) {
   const std::string title = display_title(*main_window);
-  if (main_window->window != nullptr) {
+  if (main_window->selected && main_window->window != nullptr) {
     gtk_window_set_title(GTK_WINDOW(main_window->window), title.c_str());
   }
   if (main_window->header_bar != nullptr) {
@@ -935,9 +935,10 @@ static void on_transfer_cancel_clicked(GtkButton *, gpointer data) {
   }
 }
 
-static gboolean on_status_bar_button_press(GtkWidget *,
+static gboolean on_status_bar_button_press(GtkWidget *widget,
                                            GdkEventButton *event,
-                                           gpointer data) {
+                                           gpointer) {
+  auto *data = gtk_widget_get_toplevel(widget);
   if (event == nullptr || event->type != GDK_BUTTON_PRESS ||
       event->button != GDK_BUTTON_PRIMARY || data == nullptr ||
       !GTK_IS_WINDOW(data)) {
@@ -987,7 +988,7 @@ static void start_main_window_transfer_progress_pulse(MainWindow *main_window) {
                     pulse_main_window_transfer_progress, main_window);
 }
 
-std::optional<MainWindow> load_main_window(TerminalAmbiguousWidth ambiguous_width) {
+std::optional<MainWindow> load_main_window(TerminalAmbiguousWidth ambiguous_width, std::span<const std::uint8_t> checkpoint) {
   MainWindow main_window;
   GError *error = nullptr;
   main_window.builder = gtk_builder_new();
@@ -1117,7 +1118,7 @@ std::optional<MainWindow> load_main_window(TerminalAmbiguousWidth ambiguous_widt
   gtk_widget_show_all(main_window.header_title_box);
   if (main_window.window && main_window.root_box && main_window.terminal_attachment) {
     main_window.runtime = create_terminal_runtime(GTK_WINDOW(main_window.window), GTK_BOX(main_window.root_box),
-        GTK_BOX(main_window.terminal_attachment), ambiguous_width);
+        GTK_BOX(main_window.terminal_attachment), ambiguous_width, checkpoint);
     if (main_window.runtime) main_window.terminal = GTK_WIDGET(terminal_runtime_widget(main_window.runtime));
   }
   if (!main_window_has_required_widgets(main_window)) {

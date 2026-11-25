@@ -547,12 +547,14 @@ static void resolve_terminal_key_binding_conflict(
 
   warnings->push_back(
       "Warning: conflicting terminal key bindings among [terminal] "
-      "zoom_in_key, [terminal] zoom_out_key, and [terminal] send_break_key; "
+      "zoom_in_key, [terminal] zoom_out_key, [terminal] send_break_key, and [terminal] undock_key; "
       "using fallbacks");
   restore_setting_entry(store, previous, terminal_zoom_in_key_setting_key());
   restore_setting_entry(store, previous, terminal_zoom_out_key_setting_key());
   restore_setting_entry(store, previous,
                         terminal_send_break_key_setting_key());
+  restore_setting_entry(store, previous,
+                        terminal_undock_key_setting_key());
 }
 
 static bool is_connection_only_key(const SettingKey &key) {
@@ -928,8 +930,8 @@ load_global_settings(const std::filesystem::path &global_config_path,
   return result;
 }
 
-SettingsLoadResult
-load_settings(const SettingsLoadOptions &options, gdouble default_terminal_font_size_dip) {
+static SettingsLoadResult load_connection_settings(const SettingsLoadOptions &options,
+    gdouble default_terminal_font_size_dip, GKeyFile *snapshot) {
   SettingsLoadResult result{
       .store = create_default_settings(
           default_terminal_display_settings(default_terminal_font_size_dip),
@@ -959,10 +961,11 @@ load_settings(const SettingsLoadOptions &options, gdouble default_terminal_font_
   // layers into an isolated store keeps their explicit values above the theme.
   auto overrides = result.store;
   for (const auto &path : {options.config_path, options.startup_config_path}) {
-    if (!path) continue;
+    if (!path || snapshot) continue;
     std::vector<std::string> warnings;
     load_settings_file(&overrides, *path, false, false, nullptr, &warnings);
   }
+  if (snapshot) load_settings_store_from_key_file(&overrides, snapshot, &result.warnings);
   for (auto &entry : result.store.entries) {
     if (entry.definition.key.section == "general" && entry.definition.key.name == "theme") {
       for (const auto &value : overrides.entries)
@@ -970,7 +973,13 @@ load_settings(const SettingsLoadOptions &options, gdouble default_terminal_font_
     }
   }
   const bool theme_resolved = rebase_settings_theme(&result.store, context);
-  if (options.config_path.has_value()) {
+  if (snapshot) {
+    const SettingsStore previous = result.store;
+    load_settings_store_from_key_file(&result.store, snapshot, &result.warnings);
+    load_hyperlink_settings_from_key_file(&result.store, snapshot, &result.warnings);
+    result.store.macro_rules = load_macro_rules_from_key_file(snapshot, &result.warnings);
+    resolve_terminal_key_binding_conflict(&result.store, previous, &result.warnings);
+  } else if (options.config_path.has_value()) {
     const SettingsStore previous = result.store;
     std::vector<MacroRule> macros;
     const bool loaded = load_settings_file(
@@ -983,7 +992,7 @@ load_settings(const SettingsLoadOptions &options, gdouble default_terminal_font_
     resolve_terminal_key_binding_conflict(&result.store, previous,
                                           &result.warnings);
   }
-  if (options.startup_config_path.has_value()) {
+  if (!snapshot && options.startup_config_path.has_value()) {
     const SettingsStore previous = result.store;
     std::vector<MacroRule> macros;
     const bool loaded = load_settings_file(
@@ -1038,6 +1047,29 @@ load_settings(const SettingsLoadOptions &options, gdouble default_terminal_font_
     append_serial_connection_warnings(result.store, &result.warnings);
   }
   return result;
+}
+
+SettingsLoadResult load_settings(const SettingsLoadOptions &options, gdouble default_terminal_font_size_dip) {
+  return load_connection_settings(options, default_terminal_font_size_dip, nullptr);
+}
+
+std::string snapshot_connection_settings(const SettingsStore &store) {
+  auto *file = serialize_settings(store, false);
+  auto *text = g_key_file_to_data(file, nullptr, nullptr);
+  std::string snapshot(text);
+  g_free(text);
+  g_key_file_unref(file);
+  return snapshot;
+}
+
+SettingsLoadResult restore_connection_settings(const SettingsLoadOptions &options,
+    const std::string &snapshot, gdouble default_terminal_font_size_dip) {
+  auto *file = g_key_file_new();
+  const bool valid = g_key_file_load_from_data(file, snapshot.c_str(), snapshot.size(), G_KEY_FILE_NONE, nullptr);
+  auto settings = load_connection_settings(options, default_terminal_font_size_dip, file);
+  settings.loaded = settings.loaded && valid;
+  g_key_file_unref(file);
+  return settings;
 }
 
 SettingsSaveResult save_settings(const SettingsStore &store,

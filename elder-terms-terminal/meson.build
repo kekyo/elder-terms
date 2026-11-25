@@ -79,6 +79,9 @@ telnet_protocol_source = 'src/terminal-sessions/telnet-session/telnet-protocol.c
 elder_terms_sources = [
   'src/gtk-initialization.cpp',
   'src/main.cpp',
+  'src/terminal-tabs.cpp',
+  'src/terminal-dock-bus.cpp',
+  'src/tab-tearoff.c',
   'src/main-window.cpp',
   'src/terminal-background.cpp',
   'src/terminal-background-image.cpp',
@@ -129,6 +132,10 @@ test('titlebar-effects-gtk-test', find_program('xvfb-run'),
   args: ['-a', titlebar_effects_gtk_test], timeout: 30,
   env: ['G_DEBUG=fatal-criticals', 'NO_AT_BRIDGE=1'])
 if find_program('kwin_x11', required: false).found()
+  if find_program('xdotool', required: false).found()
+    test('terminal-tab-docking', find_program('bash'),
+      args: [meson.current_source_dir() / 'tests/terminal-docking.sh', elder_terms_terminal], timeout: 90)
+  endif
   test('titlebar-effects-window-manager-test', find_program('xvfb-run'),
     args: ['-a', 'dbus-run-session', '--', 'bash',
       meson.current_source_dir() / 'tests/titlebar-window-manager.sh', titlebar_effects_gtk_test],

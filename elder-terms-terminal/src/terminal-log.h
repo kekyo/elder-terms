@@ -95,6 +95,11 @@ void write_terminal_log(TerminalLogState *state,
                         std::span<const unsigned char> raw_bytes,
                         std::span<const unsigned char> cooked_bytes);
 
+/** Waits for accepted log writes and returns the currently open append path. */
+cardio::promise<std::string> terminal_log_handoff_path(TerminalLogState *state);
+/** Uses the existing session log on the next connection activation. */
+void terminal_log_resume_path(TerminalLogState *state, std::string path);
+
 /**
  * Stops accepting data and asynchronously closes the current log file after
  * queued writes complete.

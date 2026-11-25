@@ -3425,3 +3425,6 @@ msgstr "上寄せ"
 
 msgid "Bottom"
 msgstr "下寄せ"
+
+msgid "Undock terminal shortcut"
+msgstr "端末を分離するショートカット"
