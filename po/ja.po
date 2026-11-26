@@ -3425,3 +3425,12 @@ msgstr "上寄せ"
 
 msgid "Bottom"
 msgstr "下寄せ"
+
+msgid "Undock terminal shortcut"
+msgstr "端末を分離するショートカット"
+
+msgid "Clear the text selection to move this terminal"
+msgstr "文字の選択を解除すると、この端末を移せます"
+
+msgid "Drag to dock all tabs in another terminal window"
+msgstr "別の端末ウインドウにドラッグして、すべてのタブをドッキング"

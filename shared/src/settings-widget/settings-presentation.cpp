@@ -156,6 +156,7 @@ static constexpr std::array setting_labels{
     SettingLabelEntry{"general", "receive_effect", N_("Titlebar receive effect")},
     SettingLabelEntry{"terminal", "zoom_in_key", N_("Zoom in shortcut")},
     SettingLabelEntry{"terminal", "zoom_out_key", N_("Zoom out shortcut")},
+    SettingLabelEntry{"terminal", "undock_key", N_("Undock terminal shortcut")},
     SettingLabelEntry{"terminal", "send_break_key",
                       N_("Send BREAK shortcut")},
     SettingLabelEntry{"telnet", "address", N_("Address")},

@@ -209,9 +209,11 @@ struct SettingsWidgetState {
   KeyBindingInputWidgetState *terminal_zoom_in_key_input = nullptr;
   KeyBindingInputWidgetState *terminal_zoom_out_key_input = nullptr;
   KeyBindingInputWidgetState *terminal_send_break_key_input = nullptr;
+  KeyBindingInputWidgetState *terminal_undock_key_input = nullptr;
   GtkWidget *terminal_zoom_in_key_reset_button = nullptr;
   GtkWidget *terminal_zoom_out_key_reset_button = nullptr;
   GtkWidget *terminal_send_break_key_reset_button = nullptr;
+  GtkWidget *terminal_undock_key_reset_button = nullptr;
   GtkWidget *macro_list = nullptr;
   GtkWidget *macro_editor = nullptr;
   GtkWidget *macro_id_entry = nullptr;
@@ -1501,7 +1503,7 @@ static bool terminal_key_binding_inputs_conflict(
                ? key_binding_input_widget_text(input)
                : effective;
   };
-  const std::array<KeyBindingParseResult, 3> bindings = {
+  const std::array<KeyBindingParseResult, 4> bindings = {
       parse_key_binding(binding_text(
           state->terminal_zoom_in_key_input,
           terminal_zoom_in_key_setting_key(),
@@ -1514,6 +1516,10 @@ static bool terminal_key_binding_inputs_conflict(
           state->terminal_send_break_key_input,
           terminal_send_break_key_setting_key(),
           terminal_send_break_key(state->draft_store))),
+      parse_key_binding(binding_text(
+          state->terminal_undock_key_input,
+          terminal_undock_key_setting_key(),
+          terminal_undock_key(state->draft_store))),
   };
   for (std::size_t left = 0; left < bindings.size(); ++left) {
     if (!bindings[left].error.empty() ||
@@ -1539,7 +1545,8 @@ static bool terminal_key_binding_inputs_valid(
          key_binding_input_widget_is_valid(
              state->terminal_zoom_out_key_input) &&
          key_binding_input_widget_is_valid(
-             state->terminal_send_break_key_input);
+             state->terminal_send_break_key_input) &&
+         key_binding_input_widget_is_valid(state->terminal_undock_key_input);
 }
 
 static bool connection_hotkey_input_valid(
@@ -1669,6 +1676,9 @@ static void update_terminal_key_binding_validation(
   set_key_binding_input_widget_external_error(
       state->terminal_send_break_key_input,
       conflict ? conflict_error : std::string());
+  set_key_binding_input_widget_external_error(
+      state->terminal_undock_key_input,
+      conflict ? conflict_error : std::string());
   update_action_sensitivity(state);
 }
 
@@ -1706,6 +1716,17 @@ static void update_terminal_send_break_key_from_widget(
       &state->draft_store, terminal_send_break_key_setting_key(),
       SettingValue{key_binding_input_widget_text(
           state->terminal_send_break_key_input)});
+}
+static void update_terminal_undock_key_from_widget(
+    SettingsWidgetState *state) {
+  if (!key_binding_input_widget_is_valid(
+          state->terminal_undock_key_input)) {
+    return;
+  }
+  set_explicit_setting_value(
+      &state->draft_store, terminal_undock_key_setting_key(),
+      SettingValue{key_binding_input_widget_text(
+          state->terminal_undock_key_input)});
 }
 
 static void update_local_command_line_from_widget(
@@ -3684,6 +3705,15 @@ static void sync_widgets_from_draft(SettingsWidgetState *state, bool preserve_in
         state, state->terminal_send_break_key_reset_button,
         terminal_send_break_key_setting_key());
   }
+  if (state->terminal_undock_key_input != nullptr) {
+    sync_key_binding_widget(
+        state, state->terminal_undock_key_input,
+        terminal_undock_key_setting_key(),
+        terminal_undock_key(state->draft_store));
+    sync_key_binding_reset_button(
+        state, state->terminal_undock_key_reset_button,
+        terminal_undock_key_setting_key());
+  }
   if (state->telnet_address_entry != nullptr) {
     sync_inheritable_entry(state->telnet_address_entry, state->draft_store,
                            telnet_address_setting_key(), telnet.address);
@@ -4611,6 +4641,8 @@ enum class TerminalKeyBindingField {
   zoom_in,
   zoom_out,
   send_break,
+
+  undock,
 };
 
 static KeyBindingInputWidgetState *terminal_key_binding_input(
@@ -4622,6 +4654,8 @@ static KeyBindingInputWidgetState *terminal_key_binding_input(
     return state->terminal_zoom_out_key_input;
   case TerminalKeyBindingField::send_break:
     return state->terminal_send_break_key_input;
+  case TerminalKeyBindingField::undock:
+    return state->terminal_undock_key_input;
   }
   return nullptr;
 }
@@ -4635,6 +4669,8 @@ static GtkWidget *terminal_key_binding_reset_button(
     return state->terminal_zoom_out_key_reset_button;
   case TerminalKeyBindingField::send_break:
     return state->terminal_send_break_key_reset_button;
+  case TerminalKeyBindingField::undock:
+    return state->terminal_undock_key_reset_button;
   }
   return nullptr;
 }
@@ -4648,6 +4684,8 @@ static SettingKey terminal_key_binding_setting_key(
     return terminal_zoom_out_key_setting_key();
   case TerminalKeyBindingField::send_break:
     return terminal_send_break_key_setting_key();
+  case TerminalKeyBindingField::undock:
+    return terminal_undock_key_setting_key();
   }
   return {};
 }
@@ -4661,6 +4699,8 @@ static std::string terminal_key_binding_effective_text(
     return terminal_zoom_out_key(state->draft_store);
   case TerminalKeyBindingField::send_break:
     return terminal_send_break_key(state->draft_store);
+  case TerminalKeyBindingField::undock:
+    return terminal_undock_key(state->draft_store);
   }
   return {};
 }
@@ -4676,6 +4716,9 @@ static void update_terminal_key_binding_from_widget(
     return;
   case TerminalKeyBindingField::send_break:
     update_terminal_send_break_key_from_widget(state);
+    return;
+  case TerminalKeyBindingField::undock:
+    update_terminal_undock_key_from_widget(state);
     return;
   }
 }
@@ -4745,6 +4788,12 @@ static void on_terminal_send_break_key_reset_clicked(GtkButton *,
   reset_terminal_key_binding(
       static_cast<SettingsWidgetState *>(data),
       TerminalKeyBindingField::send_break);
+}
+static void on_terminal_undock_key_reset_clicked(GtkButton *,
+                                                     gpointer data) {
+  reset_terminal_key_binding(
+      static_cast<SettingsWidgetState *>(data),
+      TerminalKeyBindingField::undock);
 }
 
 static void on_local_command_line_changed(GtkEditable *, gpointer data) {
@@ -5654,6 +5703,37 @@ create_terminal_pages(SettingsWidgetState *state) {
                      FALSE, 0);
   attach_row(page, 10, terminal_send_break_key_setting_key(),
              send_break_row);
+
+  const std::string undock_id =
+      widget_id(state, "terminal_undock_key_entry");
+  state->terminal_undock_key_input = create_key_binding_input_widget({
+      .text = "",
+      .accessible_id = undock_id,
+      .changed = [state]() {
+        on_terminal_key_binding_changed(
+            state, TerminalKeyBindingField::undock);
+      },
+  });
+  GtkWidget *undock_row =
+      gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
+  gtk_box_pack_start(
+      GTK_BOX(undock_row),
+      key_binding_input_widget_root(state->terminal_undock_key_input),
+      TRUE, TRUE, 0);
+  state->terminal_undock_key_reset_button =
+      gtk_button_new_with_label(settings_ui_text(SettingsUiText::reset));
+  const std::string undock_reset_id =
+      widget_id(state, "terminal_undock_key_reset_button");
+  assign_accessible_id(state->terminal_undock_key_reset_button,
+                       undock_reset_id.c_str());
+  g_signal_connect(state->terminal_undock_key_reset_button, "clicked",
+                   G_CALLBACK(on_terminal_undock_key_reset_clicked),
+                   state);
+  gtk_box_pack_start(GTK_BOX(undock_row),
+                     state->terminal_undock_key_reset_button, FALSE,
+                     FALSE, 0);
+  attach_row(page, 14, terminal_undock_key_setting_key(),
+             undock_row);
 
   auto *font_panel = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
   auto *font_actions = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 8);
@@ -7440,6 +7520,7 @@ void destroy_settings_widget(SettingsWidgetState *state) {
   destroy_key_binding_input_widget(state->terminal_zoom_in_key_input);
   destroy_key_binding_input_widget(state->terminal_zoom_out_key_input);
   destroy_key_binding_input_widget(state->terminal_send_break_key_input);
+  destroy_key_binding_input_widget(state->terminal_undock_key_input);
   destroy_key_binding_input_widget(
       state->general_open_connection_input);
   destroy_hyperlink_settings_editor(state->hyperlink_editor);

@@ -94,6 +94,9 @@ struct ChildLaunch {
   std::filesystem::path temporary_startup_path;
   elder_terms::TrayWindowItem window;
   std::string bus_name;
+  std::string session_id;
+  std::string tab_bus_name;
+  bool tab_closed = false;
 };
 
 // The asynchronous launch borrows its arguments until its completion callback.
@@ -183,6 +186,8 @@ struct ApplicationState {
   std::vector<ChildLaunch *> child_launches;
   GDBusConnection *tracked_window_bus = nullptr;
   guint tracked_window_ready_subscription = 0;
+  guint tracked_tab_subscription = 0;
+  guint tracked_tab_owner_subscription = 0;
   std::vector<EditorLaunch *> editor_launches;
   std::vector<ConnectionHotkeyTarget> connection_hotkey_targets;
   elder_terms::StartupMode startup_mode =
@@ -1683,12 +1688,15 @@ create_temporary_startup_profile(ApplicationState *state,
 }
 
 static void refresh_tracked_windows(ApplicationState *state) {
+  std::vector<const ChildLaunch *> visible;
+  for (const auto *launch : state->child_launches)
+    if (!launch->tab_closed) visible.push_back(launch);
   std::vector<elder_terms::TrayWindowItem> windows;
-  for (const auto *launch : state->child_launches) windows.push_back(launch->window);
+  for (const auto *launch : visible) windows.push_back(launch->window);
   for (std::size_t i = 0; i < windows.size(); ++i) {
     std::size_t total = 0, ordinal = 0;
-    for (std::size_t j = 0; j < state->child_launches.size(); ++j) {
-      if (state->child_launches[j]->window.name == state->child_launches[i]->window.name) {
+    for (std::size_t j = 0; j < visible.size(); ++j) {
+      if (visible[j]->window.name == visible[i]->window.name) {
         ++total;
         if (j <= i) ++ordinal;
       }
@@ -1696,6 +1704,57 @@ static void refresh_tracked_windows(ApplicationState *state) {
     if (total > 1) windows[i].name += " #" + std::to_string(ordinal);
   }
   elder_terms::update_tray_windows(state->tray_backend, std::move(windows));
+}
+
+static void on_tracked_tab(GDBusConnection *, const gchar *sender,
+    const gchar *, const gchar *, const gchar *, GVariant *parameters,
+    gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  if (sender == nullptr || sender[0] != ':' ||
+      !g_variant_is_of_type(parameters, G_VARIANT_TYPE("(ss)"))) return;
+  const gchar *launch_id = nullptr;
+  const gchar *session_id = nullptr;
+  g_variant_get(parameters, "(&s&s)", &launch_id, &session_id);
+  if (!g_uuid_string_is_valid(launch_id) || !g_uuid_string_is_valid(session_id)) return;
+  const auto found = std::find_if(state->child_launches.begin(), state->child_launches.end(),
+      [launch_id](const ChildLaunch *launch) { return launch->window.key == launch_id; });
+  if (found == state->child_launches.end() || (*found)->tab_closed ||
+      !(*found)->window.ready || (*found)->bus_name != sender ||
+      !(*found)->session_id.empty()) return;
+  (*found)->session_id = session_id;
+  (*found)->tab_bus_name = "net.kekyo.ElderTerms.Tab.t";
+  for (const char *cursor = session_id; *cursor; ++cursor)
+    if (*cursor != '-') (*found)->tab_bus_name.push_back(*cursor);
+}
+
+static void on_tracked_tab_owner(GDBusConnection *, const gchar *,
+    const gchar *, const gchar *, const gchar *, GVariant *parameters,
+    gpointer user_data) {
+  auto *state = static_cast<ApplicationState *>(user_data);
+  if (!g_variant_is_of_type(parameters, G_VARIANT_TYPE("(sss)"))) return;
+  const gchar *name = nullptr;
+  const gchar *previous = nullptr;
+  const gchar *next = nullptr;
+  g_variant_get(parameters, "(&s&s&s)", &name, &previous, &next);
+  if (name == nullptr || previous == nullptr || previous[0] == '\0' ||
+      next == nullptr || next[0] != '\0') return;
+  bool changed = false;
+  auto &launches = state->child_launches;
+  for (auto it = launches.begin(); it != launches.end();) {
+    auto *launch = *it;
+    if (launch->tab_bus_name != name || launch->tab_closed) {
+      ++it;
+      continue;
+    }
+    launch->tab_closed = true;
+    launch->window.ready = false;
+    changed = true;
+    if (launch->process == nullptr) {
+      it = launches.erase(it);
+      delete launch;
+    } else ++it;
+  }
+  if (changed) refresh_tracked_windows(state);
 }
 
 static void on_tracked_window_ready(GDBusConnection *, const gchar *sender,
@@ -1729,6 +1788,14 @@ static bool ensure_tracked_window_bus(ApplicationState *state) {
       connection, nullptr, "net.kekyo.ElderTerms.TrackedWindow", "Ready",
       "/net/kekyo/ElderTerms/TrackedWindow", nullptr,
       G_DBUS_SIGNAL_FLAGS_NONE, on_tracked_window_ready, state, nullptr);
+  state->tracked_tab_subscription = g_dbus_connection_signal_subscribe(
+      connection, nullptr, "net.kekyo.ElderTerms.Dock", "Tracked",
+      "/net/kekyo/ElderTerms/Dock", nullptr,
+      G_DBUS_SIGNAL_FLAGS_NONE, on_tracked_tab, state, nullptr);
+  state->tracked_tab_owner_subscription = g_dbus_connection_signal_subscribe(
+      connection, "org.freedesktop.DBus", "org.freedesktop.DBus", "NameOwnerChanged",
+      "/org/freedesktop/DBus", nullptr,
+      G_DBUS_SIGNAL_FLAGS_NONE, on_tracked_tab_owner, state, nullptr);
   state->tracked_window_bus = connection;
   return true;
 }
@@ -1750,12 +1817,16 @@ static void show_tracked_window(ApplicationState *state, const std::string &key,
       state->child_launches.end(), [&key](const ChildLaunch *launch) {
         return launch->window.key == key;
       });
-  if (found == state->child_launches.end() || !(*found)->window.ready ||
+  if (found == state->child_launches.end() || (*found)->tab_closed || !(*found)->window.ready ||
       (*found)->bus_name.empty()) return;
-  const std::string bus_name = (*found)->bus_name;
+  const bool tracked_tab = !(*found)->session_id.empty();
+  const std::string bus_name = tracked_tab ? (*found)->tab_bus_name : (*found)->bus_name;
   g_dbus_connection_call(state->tracked_window_bus, bus_name.c_str(),
-      "/net/kekyo/ElderTerms/TrackedWindow", "net.kekyo.ElderTerms.TrackedWindow",
-      "Present", g_variant_new("(us)", context.activation_time.value_or(0), ""),
+      tracked_tab ? "/net/kekyo/ElderTerms/Dock" : "/net/kekyo/ElderTerms/TrackedWindow",
+      tracked_tab ? "net.kekyo.ElderTerms.Dock" : "net.kekyo.ElderTerms.TrackedWindow",
+      "Present", tracked_tab ? g_variant_new("(sus)", (*found)->session_id.c_str(),
+          context.activation_time.value_or(0), "") :
+          g_variant_new("(us)", context.activation_time.value_or(0), ""),
       G_VARIANT_TYPE_UNIT, G_DBUS_CALL_FLAGS_NONE, 3000, nullptr,
       on_tracked_window_presented, nullptr);
 }
@@ -1774,9 +1845,13 @@ static void on_child_finished(GObject *source, GAsyncResult *result,
     g_remove(launch->temporary_startup_path.c_str());
   }
   if (launch->application != nullptr) {
+    if (!launch->session_id.empty() && !launch->tab_closed) {
+      g_object_unref(launch->process);
+      launch->process = nullptr;
+      return;
+    }
     auto &launches = launch->application->child_launches;
-    launches.erase(std::remove(launches.begin(), launches.end(), launch),
-                   launches.end());
+    launches.erase(std::remove(launches.begin(), launches.end(), launch), launches.end());
     refresh_tracked_windows(launch->application);
   }
   g_object_unref(launch->process);
@@ -1850,6 +1925,9 @@ static void launch_child_process(
           (file_transfer ? _("File transfer") : _("Terminal")) + ")",
           elder_terms::general_connection_icon(settings), false},
       .bus_name = {},
+      .session_id = {},
+      .tab_bus_name = {},
+      .tab_closed = false,
   };
   g_free(launch_id);
   state->child_launches.push_back(launch);
@@ -2771,6 +2849,12 @@ static void on_window_destroy(GtkWidget *, gpointer user_data) {
       launch->temporary_startup_path.clear();
     }
   }
+  state->child_launches.erase(std::remove_if(state->child_launches.begin(),
+      state->child_launches.end(), [](ChildLaunch *launch) {
+        if (launch->process != nullptr) return false;
+        delete launch;
+        return true;
+      }), state->child_launches.end());
   close_application_dialog(state);
   if (state->settings_widget != nullptr) {
     elder_terms::destroy_settings_widget(state->settings_widget);
@@ -3371,9 +3455,15 @@ static void on_application_shutdown(GApplication *,
   if (state->tracked_window_bus != nullptr) {
     g_dbus_connection_signal_unsubscribe(
         state->tracked_window_bus, state->tracked_window_ready_subscription);
+    g_dbus_connection_signal_unsubscribe(
+        state->tracked_window_bus, state->tracked_tab_subscription);
+    g_dbus_connection_signal_unsubscribe(
+        state->tracked_window_bus, state->tracked_tab_owner_subscription);
     g_object_unref(state->tracked_window_bus);
     state->tracked_window_bus = nullptr;
     state->tracked_window_ready_subscription = 0;
+    state->tracked_tab_subscription = 0;
+    state->tracked_tab_owner_subscription = 0;
   }
   elder_terms::destroy_control_server(state->control_server);
   state->control_server = nullptr;

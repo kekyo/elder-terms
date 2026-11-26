@@ -237,20 +237,23 @@ static void on_terminal_context_break_activate(GtkMenuItem *, gpointer data) {
   }
 }
 
+bool terminal_widget_has_selected_text(BoxrigGtk3TerminalWidget *terminal) {
+  boxrig_ui_selection selection{};
+  if (!boxrig_ui_view_get_selection(boxrig_gtk3_terminal_widget_view(terminal), &selection) ||
+      selection.stale) return false;
+  return selection.shape == BOXRIG_UI_SELECTION_RECTANGULAR
+      ? selection.row_count != 0 && selection.visual_column_count != 0
+      : selection.range_valid && (selection.range.start.line_id.epoch != selection.range.end.line_id.epoch ||
+          selection.range.start.line_id.serial != selection.range.end.line_id.serial ||
+          selection.range.start.column != selection.range.end.column);
+}
+
 static void show_terminal_context_menu(TerminalContextMenuState *state, const boxrig_mouse_event &event,
     std::optional<std::string> link_text) {
   state->link_text = std::move(link_text);
   gtk_widget_set_visible(state->copy_link_item, state->link_text.has_value());
   // Copy is a view action and remains available when screen-reader text is off.
-  boxrig_ui_selection selection{};
-  const bool selected = boxrig_ui_view_get_selection(
-      boxrig_gtk3_terminal_widget_view(state->terminal), &selection) && !selection.stale;
-  const bool nonempty = selection.shape == BOXRIG_UI_SELECTION_RECTANGULAR
-      ? selection.row_count != 0 && selection.visual_column_count != 0
-      : selection.range_valid && (selection.range.start.line_id.epoch != selection.range.end.line_id.epoch ||
-          selection.range.start.line_id.serial != selection.range.end.line_id.serial ||
-          selection.range.start.column != selection.range.end.column);
-  gtk_widget_set_sensitive(state->copy_item, selected && nonempty);
+  gtk_widget_set_sensitive(state->copy_item, terminal_widget_has_selected_text(state->terminal));
   update_terminal_context_paste_sensitivity(state);
   gtk_widget_set_sensitive(state->break_item,
       state->break_callbacks.can_send && state->break_callbacks.send && state->break_callbacks.can_send());
@@ -608,7 +611,7 @@ static void clear_main_window_exterior_background(MainWindow *main_window) {
   GtkCssProvider *component_provider =
       main_window->exterior_component_background_provider;
   if (component_provider != nullptr) {
-    GdkScreen *screen = gtk_widget_get_screen(main_window->window);
+    GdkScreen *screen = main_window->style_screen;
     if (screen != nullptr) {
       gtk_style_context_remove_provider_for_screen(
           screen, GTK_STYLE_PROVIDER(component_provider));
@@ -676,7 +679,7 @@ static void clear_main_window_component_background(
   GtkCssProvider *popup_provider =
       main_window->popup_component_background_provider;
   if (popup_provider != nullptr) {
-    GdkScreen *screen = gtk_widget_get_screen(main_window->window);
+    GdkScreen *screen = main_window->style_screen;
     if (screen != nullptr) {
       gtk_style_context_remove_provider_for_screen(
           screen, GTK_STYLE_PROVIDER(popup_provider));
@@ -709,7 +712,7 @@ static void set_main_window_component_background(
   if (popup_provider == nullptr) {
     return;
   }
-  GdkScreen *screen = gtk_widget_get_screen(main_window->window);
+  GdkScreen *screen = main_window->style_screen;
   if (screen == nullptr) {
     g_object_unref(popup_provider);
     return;
@@ -782,7 +785,7 @@ static void set_main_window_exterior_background(
     update_widget_style_class(
         main_window->status_bar,
         main_exterior_component_style_class, true);
-    GdkScreen *screen = gtk_widget_get_screen(main_window->window);
+    GdkScreen *screen = main_window->style_screen;
     if (screen != nullptr) {
       gtk_style_context_add_provider_for_screen(
           screen, GTK_STYLE_PROVIDER(component_provider),
@@ -886,7 +889,7 @@ static std::string display_title(const MainWindow &main_window) {
 
 static void apply_main_window_title(MainWindow *main_window) {
   const std::string title = display_title(*main_window);
-  if (main_window->window != nullptr) {
+  if (main_window->selected && main_window->window != nullptr) {
     gtk_window_set_title(GTK_WINDOW(main_window->window), title.c_str());
   }
   if (main_window->header_bar != nullptr) {
@@ -935,9 +938,10 @@ static void on_transfer_cancel_clicked(GtkButton *, gpointer data) {
   }
 }
 
-static gboolean on_status_bar_button_press(GtkWidget *,
+static gboolean on_status_bar_button_press(GtkWidget *widget,
                                            GdkEventButton *event,
-                                           gpointer data) {
+                                           gpointer) {
+  auto *data = gtk_widget_get_toplevel(widget);
   if (event == nullptr || event->type != GDK_BUTTON_PRESS ||
       event->button != GDK_BUTTON_PRIMARY || data == nullptr ||
       !GTK_IS_WINDOW(data)) {
@@ -987,7 +991,7 @@ static void start_main_window_transfer_progress_pulse(MainWindow *main_window) {
                     pulse_main_window_transfer_progress, main_window);
 }
 
-std::optional<MainWindow> load_main_window(TerminalAmbiguousWidth ambiguous_width) {
+std::optional<MainWindow> load_main_window(TerminalAmbiguousWidth ambiguous_width, std::span<const std::uint8_t> checkpoint) {
   MainWindow main_window;
   GError *error = nullptr;
   main_window.builder = gtk_builder_new();
@@ -1007,6 +1011,10 @@ std::optional<MainWindow> load_main_window(TerminalAmbiguousWidth ambiguous_widt
   gestament_gtk_assign_accessible_ids_from_builder(main_window.builder);
 
   main_window.window = required_widget(main_window.builder, "main_window");
+  if (main_window.window) {
+    if (auto *screen = gtk_widget_get_screen(main_window.window))
+      main_window.style_screen = GDK_SCREEN(g_object_ref(screen));
+  }
   if (main_window.window) prepare_terminal_background_window(main_window.window);
   main_window.header_bar = required_widget(main_window.builder, "header_bar");
   main_window.header_connection_icon =
@@ -1117,7 +1125,7 @@ std::optional<MainWindow> load_main_window(TerminalAmbiguousWidth ambiguous_widt
   gtk_widget_show_all(main_window.header_title_box);
   if (main_window.window && main_window.root_box && main_window.terminal_attachment) {
     main_window.runtime = create_terminal_runtime(GTK_WINDOW(main_window.window), GTK_BOX(main_window.root_box),
-        GTK_BOX(main_window.terminal_attachment), ambiguous_width);
+        GTK_BOX(main_window.terminal_attachment), ambiguous_width, checkpoint);
     if (main_window.runtime) main_window.terminal = GTK_WIDGET(terminal_runtime_widget(main_window.runtime));
   }
   if (!main_window_has_required_widgets(main_window)) {
@@ -1423,7 +1431,7 @@ void set_main_window_terminal_interactive(MainWindow *main_window,
 }
 
 void focus_main_window_terminal_if_interactive(MainWindow *main_window) {
-  if (main_window == nullptr || !main_window->terminal_interactive ||
+  if (main_window == nullptr || !main_window->selected || !main_window->terminal_interactive ||
       main_window->terminal == nullptr ||
       !gtk_widget_get_visible(main_window->terminal) ||
       !gtk_widget_get_mapped(main_window->terminal)) {
@@ -1697,9 +1705,10 @@ void release_main_window(MainWindow *main_window) {
   deactivate_main_window_activity_indicators(main_window);
   clear_main_window_compact_header(main_window);
   if (main_window->header_provider != nullptr) {
-    gtk_style_context_remove_provider_for_screen(
-        gtk_widget_get_screen(main_window->header_bar),
-        GTK_STYLE_PROVIDER(main_window->header_provider));
+    if (main_window->style_screen)
+      gtk_style_context_remove_provider_for_screen(
+          main_window->style_screen,
+          GTK_STYLE_PROVIDER(main_window->header_provider));
     g_clear_object(&main_window->header_provider);
   }
   clear_main_window_exterior_background(main_window);
@@ -1713,6 +1722,7 @@ void release_main_window(MainWindow *main_window) {
   if (main_window->builder != nullptr) {
     g_object_unref(main_window->builder);
   }
+  g_clear_object(&main_window->style_screen);
   *main_window = {};
 }
 

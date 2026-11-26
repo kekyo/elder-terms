@@ -2681,3 +2681,6 @@ msgstr "위쪽"
 
 msgid "Bottom"
 msgstr "아래쪽"
+
+msgid "Drag to dock all tabs in another terminal window"
+msgstr "다른 터미널 창으로 끌어서 모든 탭 도킹"

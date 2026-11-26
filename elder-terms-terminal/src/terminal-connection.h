@@ -9,6 +9,7 @@
 #include <cardio.h>
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -47,6 +48,58 @@ struct TerminalLocalCommand {
   /** Observes completed local I/O; true denotes outgoing bytes. */
   std::function<void(bool outgoing)> activity = {};
 };
+
+/** One prepared local PTY handoff; the caller owns and closes master_fd. */
+struct TerminalLocalHandoff {
+  /** Versioned boxrig terminal image, including unsent core output. */
+  std::vector<std::uint8_t> checkpoint;
+  /** Whether the old session had accepted peer EOF. */
+  bool input_finished = false;
+  /** Duplicate of the PTY master for SCM_RIGHTS transfer. */
+  int master_fd = -1;
+  /** Original shell PID; only its spawning process can reap it. */
+  pid_t child = 0;
+  /** Capacity of each bounded application queue. */
+  std::size_t queue_capacity = 0;
+  /** Maximum operating-system I/O chunk size. */
+  std::size_t io_chunk_size = 0;
+};
+
+/** Final child status collected by the original spawning process. */
+struct TerminalLocalChildExit {
+  /** Original child PID. */
+  pid_t child = 0;
+  /** Normal exit code, or -1 when unavailable. */
+  int exit_code = -1;
+  /** Terminating signal, or zero. */
+  int signal_number = 0;
+  /** waitpid errno, or zero after successful reaping. */
+  int error = 0;
+};
+
+/** Independent child reaper retained after the source terminal is destroyed. */
+struct TerminalLocalChildReaper;
+
+/** Snapshot of a paused nonlocal channel for a remote transport proxy. */
+struct TerminalTransportHandoff {
+  /** Versioned terminal image. */
+  std::vector<std::uint8_t> checkpoint;
+  /** Whether terminal input has already reached EOF. */
+  bool input_finished = false;
+  /** Peer-side text encoding. */
+  std::string encoding;
+  /** Application queue capacity. */
+  std::size_t queue_capacity = 0;
+  /** Maximum source I/O chunk. */
+  std::size_t io_chunk_size = 0;
+  /** Duplicate of the full-duplex proxy data socket, owned by the caller. */
+  int data_fd = -1;
+  /** Duplicate of the resize/BREAK control socket, owned by the caller. */
+  int control_fd = -1;
+};
+
+/** Original live channel retained independently of the old terminal. */
+struct TerminalTransportOrigin;
 
 /** Snapshot separating spawn diagnostics, process exit, and resource recovery. */
 struct TerminalConnectionState {
@@ -117,6 +170,81 @@ void destroy_terminal_connection(TerminalConnection *connection);
  * @return False while previous resources are still being recovered or limits are invalid.
  */
 bool terminal_connection_start_local(TerminalConnection *connection, TerminalLocalCommand command);
+
+/**
+ * Pauses a UTF-8 local connection at a boxrig checkpoint boundary.
+ * @param connection Connected local owner; callers must inhibit new terminal input.
+ * @return Handoff with a duplicated master FD, or nullopt if the state is busy.
+ * @remarks On failure the connection resumes automatically. The returned FD is
+ * owned by the caller, including after commit or rollback.
+ */
+cardio::promise<std::optional<TerminalLocalHandoff>> terminal_connection_prepare_local_handoff(
+    TerminalConnection *connection);
+
+/** Restores normal I/O after an uncommitted local handoff. */
+void terminal_connection_rollback_local_handoff(TerminalConnection *connection);
+
+/**
+ * Ends source I/O after the destination has acknowledged the handoff.
+ * @return Owned reaper for the original spawning process, or nullptr when a
+ * previously received descriptor is moved again or no handoff was prepared.
+ * The caller must await and destroy a nonnull reaper.
+ * @remarks The spawning process must keep its dispatcher alive until reaping
+ * completes, even if its last GTK window has closed.
+ */
+TerminalLocalChildReaper *terminal_connection_commit_local_handoff(TerminalConnection *connection);
+
+/** Awaits pidfd readiness and reaps the original shell without retaining the old terminal. */
+cardio::promise<TerminalLocalChildExit> terminal_local_child_reaper_wait(TerminalLocalChildReaper *reaper);
+
+/** Releases a reaper after terminal_local_child_reaper_wait has completed. */
+void destroy_terminal_local_child_reaper(TerminalLocalChildReaper *reaper);
+
+/**
+ * Starts direct PTY I/O over a transferred descriptor and imported terminal.
+ * @param connection Inactive owner borrowing the already imported core.
+ * @param master_fd Nonblocking received FD; ownership transfers only on success.
+ * @param input_finished EOF flag from the handoff.
+ * @param child Original child PID, monitored but never reaped here.
+ * @param queue_capacity Bounded queue size from the source.
+ * @param io_chunk_size Maximum I/O chunk size from the source.
+ * @return True if the descriptor was adopted.
+ */
+bool terminal_connection_resume_local(TerminalConnection *connection, int master_fd,
+    bool input_finished, pid_t child, std::size_t queue_capacity, std::size_t io_chunk_size);
+
+/** Pauses a connected SSH or other nonlocal transport at a checkpoint boundary. */
+cardio::promise<std::optional<TerminalTransportHandoff>> terminal_connection_prepare_transport_handoff(
+    TerminalConnection *connection);
+
+/** Restores the old nonlocal session after a failed handoff. */
+void terminal_connection_rollback_transport_handoff(TerminalConnection *connection);
+
+/**
+ * Commits a prepared nonlocal handoff and returns the original channel.
+ * @remarks Returns nullptr after a proxy connection is moved again; the
+ * original owner keeps its existing handle, so no relay hop is added.
+ */
+cardio::promise<TerminalTransportOrigin *> terminal_connection_commit_transport_handoff(
+    TerminalConnection *connection);
+
+/** Starts a resumed terminal over an already opened proxy channel. */
+bool terminal_connection_resume_transport(TerminalConnection *connection, int data_fd,
+    int control_fd, bool input_finished, std::string encoding,
+    std::size_t queue_capacity, std::size_t io_chunk_size);
+
+/** Shares the SSH connection used by a still-live origin channel. */
+std::shared_ptr<AuthenticatedSshTransport> terminal_transport_origin_authenticated_ssh(
+    TerminalTransportOrigin *origin);
+
+/** Closes the original channel after destination tabs and transfers finish. */
+cardio::promise<void> terminal_transport_origin_close(TerminalTransportOrigin *origin);
+
+/** Waits for the last proxy endpoint to close, then recovers the original channel. */
+cardio::promise<void> terminal_transport_origin_wait(TerminalTransportOrigin *origin);
+
+/** Releases an origin after terminal_transport_origin_close completes. */
+void destroy_terminal_transport_origin(TerminalTransportOrigin *origin);
 
 /**
  * Starts a channel factory using the confirmed core grid and bounded queues.

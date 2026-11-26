@@ -2703,3 +2703,6 @@ msgstr "По верхнему краю"
 
 msgid "Bottom"
 msgstr "По нижнему краю"
+
+msgid "Drag to dock all tabs in another terminal window"
+msgstr "Перетащите, чтобы присоединить все вкладки к другому окну терминала"

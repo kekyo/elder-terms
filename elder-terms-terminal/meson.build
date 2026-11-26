@@ -79,6 +79,12 @@ telnet_protocol_source = 'src/terminal-sessions/telnet-session/telnet-protocol.c
 elder_terms_sources = [
   'src/gtk-initialization.cpp',
   'src/main.cpp',
+  'src/terminal-tabs.cpp',
+  'src/titlebar-dock.cpp',
+  'src/dock-feedback.c',
+  'src/terminal-dock-bus.cpp',
+  'src/sftp-origin-bus.cpp',
+  'src/tab-tearoff.c',
   'src/main-window.cpp',
   'src/terminal-background.cpp',
   'src/terminal-background-image.cpp',
@@ -109,6 +115,9 @@ elder_terms_terminal = executable(
     libudev_dep,
     boxrig_runtime_dep,
     boxrig_background_dep,
+    dependency('x11'),
+    dependency('xext'),
+    dependency('xtst'),
   ],
   link_with: [
     libxyzm_async_static_library,
@@ -119,6 +128,14 @@ elder_terms_terminal = executable(
 )
 
 if get_option('build_tests')
+tab_tearoff_cursor_test = executable('tab-tearoff-cursor-test',
+  ['tests/cpp/tab-tearoff-cursor-test.c', 'src/tab-tearoff.c', 'src/dock-feedback.c'],
+  dependencies: [gtk_dep, dependency('x11'), dependency('xfixes')])
+test('tab-tearoff-cursor-test', find_program('xvfb-run'), args: ['-a', tab_tearoff_cursor_test],
+  env: ['G_DEBUG=fatal-criticals', 'GDK_BACKEND=x11'])
+sftp_origin_bus_test = executable('sftp-origin-bus-test',
+  ['tests/cpp/sftp-origin-bus-test.cpp', 'src/sftp-origin-bus.cpp'], dependencies: gio_dep)
+test('sftp-origin-bus-test', find_program('dbus-run-session'), args: ['--', sftp_origin_bus_test])
 titlebar_effect_state_test = executable('titlebar-effect-state-test',
   ['tests/cpp/titlebar-effect-state-test.cpp', '../shared/src/connection-runtime/titlebar-effect-state.cpp'], dependencies: elder_terms_dep)
 test('titlebar-effect-state-test', titlebar_effect_state_test)
@@ -129,10 +146,50 @@ test('titlebar-effects-gtk-test', find_program('xvfb-run'),
   args: ['-a', titlebar_effects_gtk_test], timeout: 30,
   env: ['G_DEBUG=fatal-criticals', 'NO_AT_BRIDGE=1'])
 if find_program('kwin_x11', required: false).found()
+  if find_program('xdotool', required: false).found()
+    test('terminal-tab-docking', find_program('bash'),
+      args: [meson.current_source_dir() / 'tests/terminal-docking.sh', elder_terms_terminal], timeout: 90, is_parallel: false)
+    if find_program('ffmpeg', required: false).found() and find_program('xmessage', required: false).found()
+      test('terminal-title-native-docking', find_program('bash'),
+        args: [meson.current_source_dir() / 'tests/terminal-title-native-docking.sh', elder_terms_terminal],
+        timeout: 90, is_parallel: false)
+    endif
+    if find_program('import', required: false).found() and find_program('xmessage', required: false).found()
+      test('terminal-tab-drag-feedback-x11', find_program('bash'),
+        args: [meson.current_source_dir() / 'tests/terminal-tab-feedback-x11.sh', elder_terms_terminal],
+        timeout: 90, is_parallel: false)
+    endif
+    test('terminal-tab-docking-blur', find_program('bash'),
+      args: [meson.current_source_dir() / 'tests/terminal-docking-blur.sh', elder_terms_terminal],
+      timeout: 90, is_parallel: false)
+    if find_program('xwd', required: false).found() and find_program('convert', required: false).found()
+      test('terminal-tab-docking-layout', find_program('bash'),
+        args: [meson.current_source_dir() / 'tests/terminal-docking-layout.sh', elder_terms_terminal],
+        timeout: 90, is_parallel: false)
+      test('terminal-tab-docking-layout-compact', find_program('bash'),
+        args: [meson.current_source_dir() / 'tests/terminal-docking-layout.sh', elder_terms_terminal],
+        env: ['ELDER_TERMS_LAYOUT_COMPACT=1'], timeout: 90, is_parallel: false)
+    endif
+    test('terminal-tab-docking-colored-close', find_program('bash'),
+      args: [meson.current_source_dir() / 'tests/terminal-docking-group.sh', elder_terms_terminal],
+      env: ['ELDER_TERMS_GROUP_COLOR_CLOSE=1'], timeout: 90, is_parallel: false)
+    if find_program('/usr/sbin/sshd', required: false).found() and find_program('socat', required: false).found() and find_program('/usr/lib/openssh/sftp-server', required: false).found()
+      test('terminal-tab-docking-ssh', find_program('node'),
+        args: [meson.current_source_dir() / 'tests/terminal-docking-ssh.mts', elder_terms_terminal],
+        timeout: 120, is_parallel: false)
+    endif
+  endif
   test('titlebar-effects-window-manager-test', find_program('xvfb-run'),
     args: ['-a', 'dbus-run-session', '--', 'bash',
       meson.current_source_dir() / 'tests/titlebar-window-manager.sh', titlebar_effects_gtk_test],
     timeout: 45, env: ['G_DEBUG=fatal-criticals', 'NO_AT_BRIDGE=1'])
+endif
+if find_program('weston', required: false).found() and find_program('xdotool', required: false).found() and find_program('import', required: false).found()
+  foreach mode : ['regular', 'compact']
+    test('terminal-tab-docking-wayland-' + mode, find_program('node'),
+      args: [meson.current_source_dir() / 'tests/terminal-docking-wayland.mjs', elder_terms_terminal, mode],
+      timeout: 90, is_parallel: false)
+  endforeach
 endif
 executable('titlebar-effects-demo',
   ['tests/cpp/titlebar-effects-demo.cpp'],
@@ -786,3 +843,15 @@ configure_file(
   output: 'green-off.png',
   copy: true,
 )
+
+if get_option('build_tests') and find_program('xvfb-run', required: false).found() and find_program('xdotool', required: false).found()
+  test('terminal-tab-group-docking', find_program('bash'),
+    args: [meson.current_source_dir() / 'tests/terminal-docking-group.sh', elder_terms_terminal],
+    timeout: 90, is_parallel: false)
+endif
+
+if get_option('build_tests')
+  terminal_dock_resume_test = executable('terminal-dock-resume-test',
+    'tests/cpp/terminal-dock-resume-test.cpp')
+  test('terminal-dock-resume-test', terminal_dock_resume_test)
+endif

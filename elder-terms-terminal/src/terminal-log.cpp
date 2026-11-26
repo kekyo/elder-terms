@@ -42,6 +42,7 @@ struct TerminalLogState {
   std::optional<cardio::io_uring> io;
   std::optional<cardio::promise<void>> processor_task;
   std::deque<TerminalLogCommand> commands;
+  std::filesystem::path path, resume_path;
   int fd = -1;
   bool connected = false;
   bool accepting = false;
@@ -117,6 +118,7 @@ static cardio::promise<void> open_log_file_async(
     state->fd = co_await cardio::io_urings::open(
         *state->io, path.string(),
         O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0644);
+    state->path = path;
     set_writer_active(state, true);
   } catch (const std::exception &error) {
     state->fd = -1;
@@ -201,7 +203,8 @@ static void begin_connection_log(TerminalLogState *state) {
 
   try {
     const std::filesystem::path path =
-        resolve_terminal_log_path(state->settings, state->now());
+        state->resume_path.empty() ? resolve_terminal_log_path(state->settings, state->now()) :
+        std::exchange(state->resume_path, {});
     state->accepting = true;
     enqueue_log_command(state, TerminalLogCommand{
                                    .kind = TerminalLogCommandKind::open,
@@ -305,6 +308,14 @@ cardio::promise<void> stop_terminal_log_async(TerminalLogState *state) {
   if (state->processor_task.has_value()) {
     co_await *state->processor_task;
   }
+}
+
+cardio::promise<std::string> terminal_log_handoff_path(TerminalLogState *state) {
+  if (state->processor_task) co_await *state->processor_task;
+  co_return state->fd >= 0 ? state->path.string() : std::string();
+}
+void terminal_log_resume_path(TerminalLogState *state, std::string path) {
+  state->resume_path = std::move(path);
 }
 
 void destroy_terminal_log(TerminalLogState *state) {

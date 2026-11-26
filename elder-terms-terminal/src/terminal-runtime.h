@@ -20,6 +20,13 @@ namespace elder_terms {
 /** Owns a terminal, its model, and the GTK attachment on the GTK thread. */
 struct TerminalRuntime;
 
+/** Stops GTK input and reports whether accepted paste output can be drained by the connection. */
+bool terminal_runtime_pause_input_for_handoff(TerminalRuntime *runtime);
+/** Copies the title stack and received-line context after transport quiescence. Null requests a rollback. */
+std::shared_ptr<GVariant> terminal_runtime_save_host_state(const TerminalRuntime *runtime);
+/** Restores host state on a resumed connection before its first input dispatch. */
+void terminal_runtime_restore_host_state(TerminalRuntime *runtime, const std::string &title, GVariant *state);
+
 /** Application integration retained when a failed GTK attachment is replaced. */
 struct TerminalRuntimeHostCallbacks {
   /** Installs application input routing, widget identity and UI signal handlers. */
@@ -53,7 +60,13 @@ using TerminalZmodemAutoStart = std::function<cardio::promise<std::optional<Term
  * @return An owned runtime, or nullptr after a reported initialization failure.
  */
 TerminalRuntime *create_terminal_runtime(GtkWindow *window, GtkBox *content, GtkBox *attachment,
-    TerminalAmbiguousWidth ambiguous_width);
+    TerminalAmbiguousWidth ambiguous_width, std::span<const std::uint8_t> checkpoint = {});
+
+/** Binds size and window-state notifications to the current tray. */
+void terminal_runtime_set_window(TerminalRuntime *runtime, GtkWindow *window, GtkBox *content, bool selected);
+
+/** Borrows the communication owner for a negotiated handoff on its dispatcher. */
+TerminalConnection *terminal_runtime_connection(TerminalRuntime *runtime);
 
 /**
  * Replaces application hooks for native attachment and terminal host events.

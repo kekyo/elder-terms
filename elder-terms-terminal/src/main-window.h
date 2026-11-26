@@ -65,6 +65,10 @@ struct MainWindow {
   GtkBuilder *builder = nullptr;
   /** Top-level application window. */
   GtkWidget *window = nullptr;
+  /** Screen retained for CSS providers after a docked window is destroyed. */
+  GdkScreen *style_screen = nullptr;
+  /** Whether this session supplies the native tray title and controls. */
+  bool selected = true;
   /** Header bar widget. */
   GtkWidget *header_bar = nullptr;
   /** Connection icon at the start of the header bar. */
@@ -223,7 +227,8 @@ struct MainWindow {
  * @param ambiguous_width Column width used when creating the terminal.
  * @returns Loaded window widgets, or std::nullopt after logging an error.
  */
-std::optional<MainWindow> load_main_window(TerminalAmbiguousWidth ambiguous_width);
+std::optional<MainWindow> load_main_window(TerminalAmbiguousWidth ambiguous_width,
+    std::span<const std::uint8_t> checkpoint = {});
 
 /**
  * Applies optional connection colors to the window and terminal.
@@ -375,6 +380,9 @@ void set_main_window_terminal_interactive(MainWindow *main_window,
  * @remarks Hidden, unmapped, and read-only terminal states are left unchanged.
  */
 void focus_main_window_terminal_if_interactive(MainWindow *main_window);
+
+/** Reports whether the view owns a nonempty linear or rectangular text selection. */
+bool terminal_widget_has_selected_text(BoxrigGtk3TerminalWidget *terminal);
 
 /**
  * Displays one SSH question as an overlay on the dimmed terminal surface.

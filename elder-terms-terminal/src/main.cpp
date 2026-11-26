@@ -42,6 +42,10 @@
 #include "../../shared/src/connection-runtime/launch-options.h"
 #include "gtk-initialization.h"
 #include "main-window.h"
+#include "terminal-tabs.h"
+#include "terminal-dock-bus.h"
+#include "terminal-dock-resume.h"
+#include "sftp-origin-bus.h"
 #include "../../elder-terms-file-transfer/src/file-transfer/file-hash.h"
 #include "../../elder-terms-file-transfer/src/file-transfer/file-transfer-paths.h"
 #include "../../elder-terms-file-transfer/src/file-transfer/file-transfer-window.h"
@@ -64,6 +68,17 @@ static constexpr char terminal_application_id[] =
     "net.kekyo.elder-terms-terminal";
 
 struct ApplicationState {
+  std::optional<elder_terms::MainWindow> owned_window;
+  elder_terms::TerminalTab *tab = nullptr;
+  std::optional<std::filesystem::path> startup_path;
+  bool transferring = false;
+  bool origin_active = false;
+  bool owns_desktop_entry = false;
+  std::string session_id, launcher, sftp_origin;
+  elder_terms::SftpOriginService *sftp_service = nullptr;
+  elder_terms::TerminalTransportOrigin *ssh_origin = nullptr;
+  bool cleanup_queued = false;
+  gulong sensitivity_handler = 0;
   elder_terms::MainWindow *main_window = nullptr;
   elder_terms::TerminalRuntime *runtime = nullptr;
   elder_terms::TerminalPresentation *presentation = nullptr;
@@ -77,7 +92,6 @@ struct ApplicationState {
   elder_terms::TerminalLogState *log_state = nullptr;
   elder_terms::TerminalBellPlayer *bell_player = nullptr;
   elder_terms::TerminalBellState *bell_state = nullptr;
-  cardio::dispatcher_group_glib *dispatcher_group = nullptr;
   std::optional<cardio::promise<void>> shutdown_task;
   std::optional<cardio::promise<void>> ssh_prompt_fixture_task;
   std::optional<cardio::promise<void>> sftp_open_task;
@@ -106,6 +120,19 @@ struct ApplicationState {
   elder_terms::SettingsWidgetState *settings_widget = nullptr;
   GtkWidget *log_enabled_menu_item = nullptr;
 };
+
+static std::vector<std::unique_ptr<ApplicationState>> sessions;
+static cardio::dispatcher_group_glib *process_dispatcher;
+static unsigned int background_operations = 0;
+static void dispose_session(ApplicationState *state);
+static void update_peer_presence();
+static std::string offer_terminal_pages(const std::vector<elder_terms::TerminalTab *> &, elder_terms::TerminalTab *);
+static void receive_terminal_pages(ApplicationState *, std::string, std::function<void(bool)>);
+static bool can_transfer_terminal(const ApplicationState *state);
+static gboolean on_main_window_delete(GtkWidget *, GdkEvent *, gpointer);
+static void stop_if_finished() {
+  if (sessions.empty() && background_operations == 0) process_dispatcher->shutdown();
+}
 
 struct TransferMenuAction {
   elder_terms::TerminalTransferProtocol protocol =
@@ -286,11 +313,18 @@ static std::string format_translated_string(const char *format, ...) {
 static void maybe_shutdown_application(ApplicationState *state) {
   if (state == nullptr || !state->terminal_shutdown_complete ||
       state->window != nullptr || state->sftp_window != nullptr ||
-      state->sftp_opening) {
+      state->sftp_opening || state->origin_active) {
     return;
   }
-  elder_terms::shutdown_connection_desktop_session();
-  state->dispatcher_group->shutdown();
+  if (state->cleanup_queued) return;
+  state->cleanup_queued = true;
+  g_idle_add_full(G_PRIORITY_DEFAULT_IDLE, +[](gpointer data) -> gboolean {
+    auto *state = static_cast<ApplicationState *>(data);
+    dispose_session(state);
+    std::erase_if(sessions, [state](const auto &entry) { return entry.get() == state; });
+    stop_if_finished();
+    return G_SOURCE_REMOVE;
+  }, state, nullptr);
 }
 
 static cardio::promise<void>
@@ -399,6 +433,8 @@ static gboolean destroy_terminal_window_idle(gpointer context) {
   auto *state = static_cast<ApplicationState *>(context);
   elder_terms::terminal_runtime_set_changed_callback(state->runtime, nullptr, nullptr);
   elder_terms::terminal_runtime_set_host_callbacks(state->runtime, {});
+  if (state->sensitivity_handler) g_signal_handler_disconnect(state->window, state->sensitivity_handler);
+  state->sensitivity_handler = 0;
   elder_terms::destroy_terminal_presentation(state->presentation);
   state->presentation = nullptr;
   elder_terms::destroy_terminal_runtime(state->runtime);
@@ -406,7 +442,11 @@ static gboolean destroy_terminal_window_idle(gpointer context) {
   state->main_window->runtime = nullptr;
   state->main_window->terminal = nullptr;
   state->terminal_shutdown_complete = true;
-  if (state->window) gtk_widget_destroy(state->window);
+  elder_terms::untrack_terminal_dock_page(state->session_id);
+  elder_terms::destroy_terminal_tab(state->tab);
+  state->tab = nullptr;
+  update_peer_presence();
+  state->window = nullptr;
   maybe_shutdown_application(state);
   return G_SOURCE_REMOVE;
 }
@@ -511,12 +551,12 @@ static void update_application_terminal_presentation(
 
   update_application_reconnect_presentation(state);
 
-  const bool terminal_interactive =
+  const bool terminal_interactive = !state->transferring &&
       state->connection_active && !state->transfer_active &&
       !elder_terms::has_modal_dialog(state->window);
   elder_terms::set_main_window_terminal_interactive(
       state->main_window, terminal_interactive);
-  if (terminal_interactive) {
+  if (terminal_interactive && state->main_window->selected) {
     elder_terms::focus_main_window_terminal_if_interactive(
         state->main_window);
   }
@@ -634,36 +674,9 @@ static void restore_terminal_focus(ApplicationState *state) {
   }
 }
 
-static gboolean on_main_window_focus_in(
-    GtkWidget *, GdkEventFocus *, gpointer user_data) {
-  auto *state = static_cast<ApplicationState *>(user_data);
-  if (state != nullptr && !elder_terms::has_modal_dialog(state->window)) {
-    elder_terms::focus_main_window_terminal_if_interactive(
-        state->main_window);
-  }
-  return GDK_EVENT_PROPAGATE;
-}
-
-static void on_main_window_destroy(GtkWidget *, gpointer user_data) {
-  auto *state = static_cast<ApplicationState *>(user_data);
-  state->window = nullptr;
-  elder_terms::cancel_main_window_ssh_prompt(state->main_window);
-  elder_terms::set_main_window_transfer_progress_visible(state->main_window,
-                                                         false);
-  elder_terms::deactivate_main_window_activity_indicators(state->main_window);
-  close_settings_dialog(state);
-  close_transfer_file_dialog(state);
-  elder_terms::set_terminal_log_connection_active(state->log_state, false);
-  if (!state->closing) {
-    state->closing = true;
-    state->shutdown_task.emplace(stop_application_async(state));
-  }
-  maybe_shutdown_application(state);
-}
-
 static gboolean on_main_window_delete(GtkWidget *, GdkEvent *, gpointer data) {
   auto *state = static_cast<ApplicationState *>(data);
-  if (!state->closing) {
+  if (!state->closing && !state->transferring) {
     state->closing = true;
     elder_terms::cancel_main_window_ssh_prompt(state->main_window);
     close_settings_dialog(state);
@@ -680,9 +693,9 @@ static bool connect_application_terminal(ApplicationState *state) {
   state->active_profile = *profile;
   state->transport.reset();
   elder_terms::TerminalSessionCallbacks callbacks;
-  callbacks.activity = [state](elder_terms::ActivityIndicatorId id) { elder_terms::note_main_window_activity(state->main_window, id); };
+  callbacks.activity = [state](elder_terms::ActivityIndicatorId id) { if (state->window && !state->closing) elder_terms::note_main_window_activity(state->main_window, id); };
   callbacks.indicator_state = [state](elder_terms::ActivityIndicatorId id, bool active) {
-    elder_terms::set_main_window_indicator_state(state->main_window, id, active);
+    if (state->window && !state->closing) elder_terms::set_main_window_indicator_state(state->main_window, id, active);
   };
   callbacks.connection_phase = [state](elder_terms::TerminalSessionConnectionPhase phase) {
     if (!state->closing) set_application_connection_phase(state, phase);
@@ -784,7 +797,7 @@ static void application_terminal_changed(void *context) {
     }
     set_application_connection_phase(state, elder_terms::TerminalSessionConnectionPhase::disconnected);
     if (should_auto_close_terminal(state))
-      gtk_window_close(GTK_WINDOW(state->window));
+      on_main_window_delete(nullptr, nullptr, state);
   }
   update_application_reconnect_presentation(state);
 }
@@ -852,7 +865,8 @@ static bool apply_runtime_settings(ApplicationState *state,
     return false;
   }
   state->settings_store = store;
-  elder_terms::update_connection_desktop_session(state->settings_store);
+  if (state->owns_desktop_entry)
+    elder_terms::update_connection_desktop_session(state->settings_store);
   elder_terms::set_connection_window_icon(GTK_WINDOW(state->main_window->window),
       GTK_IMAGE(state->main_window->header_connection_icon),
       elder_terms::general_connection_icon(state->settings_store),
@@ -1486,7 +1500,9 @@ static void install_terminal_file_drop(ApplicationState *state) {
   gtk_drag_dest_add_uri_targets(owner);
   g_signal_connect(owner, "drag-data-received", G_CALLBACK(+[](GtkWidget *widget,
       GdkDragContext *context, gint x, gint y, GtkSelectionData *data, guint, guint time, gpointer user) {
+    if (gtk_selection_data_get_target(data) != gdk_atom_intern_static_string("text/uri-list")) return;
     auto *state = static_cast<ApplicationState *>(user);
+    gtk_drag_finish(context, can_paste_terminal_text(state), FALSE, time);
     if (!can_paste_terminal_text(state)) {
       elder_terms::set_main_window_status_text(state->main_window, _("Transfer unavailable"));
       return;
@@ -1772,18 +1788,28 @@ static void on_sftp_menu_item_activate(GtkMenuItem *,
   if (state == nullptr) {
     return;
   }
+  if (!state->sftp_service && !state->sftp_origin.empty()) {
+    const auto id = state->session_id;
+    elder_terms::request_sftp_origin(elder_terms::terminal_dock_connection(), state->sftp_origin, id,
+        [id](bool shown) {
+          if (!shown) for (auto &s : sessions) if (s->session_id == id && s->tab && !s->closing)
+            elder_terms::set_main_window_status_text(s->main_window, _("SFTP unavailable"));
+        });
+    return;
+  }
   if (state->sftp_window != nullptr) {
     elder_terms::present_file_transfer_window(state->sftp_window);
     return;
   }
-  if (state->sftp_opening || !state->connection_active) {
+  if (state->sftp_opening || (!state->ssh_origin && !state->connection_active)) {
     return;
   }
 
   std::shared_ptr<elder_terms::AuthenticatedSshTransport> transport;
   if (!state->test_options.fixture) {
     transport =
-        elder_terms::terminal_runtime_authenticated_ssh(state->runtime);
+        state->ssh_origin ? elder_terms::terminal_transport_origin_authenticated_ssh(state->ssh_origin) :
+        state->runtime ? elder_terms::terminal_runtime_authenticated_ssh(state->runtime) : nullptr;
     if (transport == nullptr) {
       elder_terms::set_main_window_status_text(
           state->main_window, _("SFTP unavailable"));
@@ -1971,71 +1997,24 @@ static bool select_new_window_connection(elder_terms::LaunchOptions *options) {
   return true;
 }
 
-int main(int argc, char **argv) {
-  // Advertise terminal capabilities before GTK or Cardio can start threads.
-  if (setenv("COLORTERM", "truecolor", 1) != 0) {
-    std::perror("Error: failed to set COLORTERM");
-    return 1;
-  }
-
-  const elder_terms::ApplicationUiLanguage ui_language =
-      elder_terms::load_application_ui_language_preference(
-          elder_terms::default_global_config_path());
-  const elder_terms::LocalizationInitializationResult localization =
-      elder_terms::initialize_localization(ui_language);
-  for (const std::string &warning : localization.warnings) {
-    std::cerr << warning << '\n';
-  }
-  gtk_disable_setlocale();
-  auto launch_options =
-    elder_terms::parse_launch_options(&argc, argv);
-  if (!select_new_window_connection(&launch_options)) {
-    return 1;
-  }
-  elder_terms::initialize_terminal_gtk(&argc, &argv);
-  g_set_prgname(terminal_application_id);
-  (void)elder_terms::initialize_application_window_icon();
-
-  const double default_font_size_dip = 12.0;
-  const elder_terms::SettingsLoadOptions settings_load_options{
-      .config_path = launch_options.config_path,
-      .startup_config_path = launch_options.startup_config_path,
-      .global_config_path = elder_terms::default_global_config_path(),
-  };
-  auto settings_result =
-    elder_terms::load_settings(settings_load_options, default_font_size_dip);
-
-  for (const std::string &warning : settings_result.warnings) {
-    std::cerr << warning << '\n';
-  }
-
-  if (launch_options.new_window && !settings_result.loaded) {
-    std::cerr << "Error: failed to load the New Window connection\n";
-    return 1;
-  }
-  if (!elder_terms::settings_theme_is_resolved(settings_result.store)) return 1;
-
-  const std::optional<elder_terms::TerminalConnectionProfile>
-      connection_profile =
-          elder_terms::terminal_connection_profile(settings_result.store);
-  if (!connection_profile.has_value()) {
-    std::cerr << "Error: configured connection type is not a terminal "
-                 "connection\n";
-    return 1;
-  }
-  (void)elder_terms::initialize_connection_desktop_session(
-      &settings_result.store, launch_options.config_path,
-      launch_options.startup_config_path, argv[0]);
-
-  cardio::dispatcher_group_glib dispatcher_group;
-  // Let GLib prioritize ready I/O alongside native events. Pumping GTK before
-  // every continuation repeatedly renders partially received output batches.
-  cardio::dispatcher_host_glib_auto dispatcher(dispatcher_group);
-
-  auto main_window = elder_terms::load_main_window(
-      elder_terms::terminal_ambiguous_width(settings_result.store));
+static bool track_session(ApplicationState *s) {
+  return elder_terms::track_terminal_dock_page(s->session_id, s->launcher, [s](auto timestamp, const auto &token) {
+    if (!s->tab || s->closing) return;
+    elder_terms::select_terminal_tab(s->tab);
+    elder_terms::present_tracked_window(s->window, timestamp, token);
+  });
+}
+static ApplicationState *create_session(const elder_terms::LaunchOptions &launch_options,
+    elder_terms::SettingsLoadResult settings_result, bool imported, std::span<const std::uint8_t> checkpoint) {
+  const auto connection_profile = elder_terms::terminal_connection_profile(settings_result.store);
+  if (!connection_profile) return nullptr;
+  auto owned = std::make_unique<ApplicationState>();
+  auto &app_state = *owned;
+  auto &main_window = app_state.owned_window;
+  main_window = elder_terms::load_main_window(
+      elder_terms::terminal_ambiguous_width(settings_result.store), checkpoint);
   if (!main_window.has_value()) {
-    return 1;
+    return nullptr;
   }
   elder_terms::set_main_window_activity_indicators_latched(
       &*main_window, launch_options.test.latch_activity_indicators);
@@ -2049,11 +2028,13 @@ int main(int argc, char **argv) {
   elder_terms::set_main_window_compact_mode(
       &*main_window, elder_terms::general_compact_mode(settings_result.store));
 
-  ApplicationState app_state;
+  sessions.push_back(std::move(owned));
+
+  app_state.startup_path = launch_options.startup_config_path;
+  app_state.owns_desktop_entry = !imported;
   app_state.main_window = &*main_window;
   app_state.runtime = main_window->runtime;
   app_state.active_profile = *connection_profile;
-  app_state.dispatcher_group = &dispatcher_group;
   app_state.settings_store = settings_result.store;
   if (main_window->compact_mode) {
     elder_terms::set_connection_window_icon(GTK_WINDOW(main_window->window),
@@ -2179,17 +2160,9 @@ int main(int argc, char **argv) {
   update_application_terminal_presentation(&app_state);
   update_application_session_identity(&app_state);
 
-  g_signal_connect(main_window->window, "delete-event", G_CALLBACK(on_main_window_delete), &app_state);
-
-  g_signal_connect(
-    main_window->window, "destroy",
-    G_CALLBACK(on_main_window_destroy), &app_state);
   g_signal_connect(main_window->reconnect_button, "clicked",
                    G_CALLBACK(on_reconnect_clicked), &app_state);
-  g_signal_connect_after(
-    main_window->window, "focus-in-event",
-    G_CALLBACK(on_main_window_focus_in), &app_state);
-  g_signal_connect(app_state.window, "notify::sensitive",
+  app_state.sensitivity_handler = g_signal_connect(app_state.window, "notify::sensitive",
       G_CALLBACK(on_parent_sensitivity_changed), &app_state);
   g_signal_connect(
     main_window->settings_menu_item, "activate",
@@ -2199,7 +2172,9 @@ int main(int argc, char **argv) {
     G_CALLBACK(on_about_menu_item_activate), &app_state);
 
   bool session_started = false;
-  if (!launch_options.test.fixture) {
+  if (imported) {
+    session_started = true;
+  } else if (!launch_options.test.fixture) {
     app_state.connect_when_ready = true;
     session_started = true;
     set_application_connection_phase(&app_state, elder_terms::TerminalSessionConnectionPhase::connecting);
@@ -2214,10 +2189,64 @@ int main(int argc, char **argv) {
         elder_terms::TerminalSessionConnectionPhase::disconnected);
   }
 
-  gtk_widget_show_all(main_window->window);
-  gtk_window_present_with_time(GTK_WINDOW(main_window->window), GDK_CURRENT_TIME);
-  elder_terms::attach_tracked_window(main_window->window,
-      elder_terms::present_tracked_window);
+  app_state.tab = elder_terms::create_terminal_tab(&*main_window, connection_profile->name, {
+      .host = [&app_state](GtkWidget *window, GtkWidget *content, bool selected) {
+        auto *page = app_state.main_window;
+        const bool moved = page->window != window;
+        if (moved) {
+          g_signal_handler_disconnect(app_state.window, app_state.sensitivity_handler);
+          app_state.sensitivity_handler = g_signal_connect(window, "notify::sensitive",
+              G_CALLBACK(on_parent_sensitivity_changed), &app_state);
+        }
+        page->window = window;
+        page->selected = selected;
+        app_state.window = window;
+        elder_terms::terminal_runtime_set_window(app_state.runtime, GTK_WINDOW(window), GTK_BOX(content), selected);
+        if (moved) elder_terms::attach_terminal_presentation(app_state.presentation);
+      },
+      .close = [&app_state] { on_main_window_delete(nullptr, nullptr, &app_state); },
+      .movable = [&app_state] { return !app_state.closing && !app_state.transferring &&
+          !elder_terms::has_modal_dialog(app_state.window); },
+      .transferable = [&app_state] { return can_transfer_terminal(&app_state) &&
+          !elder_terms::terminal_widget_has_selected_text(BOXRIG_GTK3_TERMINAL_WIDGET(app_state.main_window->terminal)); },
+      .undock_key = [&app_state](guint key, GdkModifierType modifiers) {
+        const auto binding = elder_terms::terminal_key_bindings(app_state.settings_store).undock;
+        return binding && elder_terms::key_binding_matches(*binding, key, modifiers);
+      },
+      .offer = offer_terminal_pages,
+      .receive = [&app_state](std::string token, std::function<void(bool)> done) {
+        receive_terminal_pages(&app_state, std::move(token), std::move(done));
+      },
+  });
+  auto *uuid = g_uuid_string_random();
+  app_state.session_id = uuid;
+  g_free(uuid);
+  if (!imported) {
+    if (const auto *bus = g_getenv("ELDER_TERMS_LAUNCHER_BUS")) app_state.launcher = bus;
+    gtk_widget_show_all(main_window->window);
+    gtk_window_present_with_time(GTK_WINDOW(main_window->window), GDK_CURRENT_TIME);
+    // A native tray may outlive its original page. Resolve legacy Present by ID as well.
+    const auto id = app_state.session_id;
+    const bool tracked = elder_terms::attach_tracked_window(main_window->window,
+        [id](GtkWidget *, auto timestamp, const auto &token) {
+          for (auto &s : sessions) if (s->session_id == id && s->tab && !s->closing) {
+            elder_terms::select_terminal_tab(s->tab);
+            elder_terms::present_tracked_window(s->window, timestamp, token);
+          }
+        });
+    if (!tracked) app_state.launcher.clear();
+    if (track_session(&app_state) && tracked)
+      elder_terms::announce_terminal_dock_page(id, g_getenv("ELDER_TERMS_LAUNCH_ID"), app_state.launcher);
+    if (connection_profile->kind == elder_terms::TerminalConnectionKind::ssh && elder_terms::terminal_dock_connection()) {
+      app_state.sftp_service = elder_terms::create_sftp_origin_service(elder_terms::terminal_dock_connection(),
+          id, [&app_state] {
+            on_sftp_menu_item_activate(nullptr, &app_state);
+            if (app_state.sftp_window) elder_terms::present_tracked_window(
+                elder_terms::file_transfer_window_widget(app_state.sftp_window), GDK_CURRENT_TIME, {});
+          });
+      app_state.sftp_origin = elder_terms::sftp_origin_service_bus_name(app_state.sftp_service);
+    }
+  }
   if (launch_options.test.show_transfer_progress) {
     elder_terms::set_main_window_transfer_progress_visible(
         &*main_window, true);
@@ -2242,7 +2271,13 @@ int main(int argc, char **argv) {
           std::cerr << "Failed to apply startup background image\n";
         update_settings_renderer_status(&app_state);
       });
-  dispatcher.park();
+  update_peer_presence();
+  return &app_state;
+}
+
+static void dispose_session(ApplicationState *state) {
+  auto &app_state = *state;
+  elder_terms::destroy_sftp_origin_service(app_state.sftp_service);
 
   if (app_state.sftp_cancel_source.has_value()) {
     (void)app_state.sftp_cancel_source->cancel();
@@ -2264,7 +2299,326 @@ int main(int argc, char **argv) {
   elder_terms::destroy_terminal_bell(app_state.bell_state);
   elder_terms::destroy_terminal_bell_player(app_state.bell_player);
   elder_terms::destroy_terminal_presentation(app_state.presentation);
-  elder_terms::release_main_window(&*main_window);
+  elder_terms::release_main_window(app_state.main_window);
 
+
+}
+
+static std::vector<cardio::promise<void>> docking_jobs;
+
+static ApplicationState *find_page(const std::string &id) {
+  for (auto &state : sessions) if (state->session_id == id && !state->closing && state->tab) return state.get();
+  return nullptr;
+}
+
+static bool can_transfer_terminal(const ApplicationState *s) {
+  return s && !s->closing && !s->transferring && s->runtime && s->connection_active &&
+      !s->transfer_active && !s->settings_dialog && !s->transfer_file_dialog &&
+      !elder_terms::has_modal_dialog(s->window) &&
+      (s->active_profile.kind == elder_terms::TerminalConnectionKind::local_shell ||
+       s->active_profile.kind == elder_terms::TerminalConnectionKind::ssh);
+}
+
+static cardio::promise<void> wait_for_shell(elder_terms::TerminalLocalChildReaper *reaper) {
+  ++background_operations;
+  co_await elder_terms::terminal_local_child_reaper_wait(reaper);
+  elder_terms::destroy_terminal_local_child_reaper(reaper);
+  --background_operations;
+  stop_if_finished();
+}
+
+static cardio::promise<void> commit_ssh_page(ApplicationState *s) {
+  s->origin_active = true;
+  auto *origin = co_await elder_terms::terminal_connection_commit_transport_handoff(
+      elder_terms::terminal_runtime_connection(s->runtime));
+  s->ssh_origin = origin;
+  s->transferring = false;
+  on_main_window_delete(nullptr, nullptr, s);
+  if (origin) {
+    co_await elder_terms::terminal_transport_origin_wait(origin);
+    s->ssh_origin = nullptr;
+    elder_terms::destroy_terminal_transport_origin(origin);
+  }
+  s->origin_active = false;
+  maybe_shutdown_application(s);
+}
+
+static void update_peer_presence() {
+  elder_terms::publish_terminal_dock_window(std::any_of(sessions.begin(), sessions.end(),
+      [](const auto &s) { return !s->closing && s->tab && s->window && gtk_widget_get_visible(s->window); }));
+}
+
+static cardio::promise<elder_terms::DockPrepared> prepare_pages(std::vector<std::string> ids, unsigned active) {
+  elder_terms::DockPrepared result;
+  result.batch.active = active;
+  std::vector<ApplicationState *> pages;
+  for (auto &id : ids) {
+    auto *s = find_page(id);
+    if (!can_transfer_terminal(s)) co_return result;
+    if (elder_terms::terminal_widget_has_selected_text(BOXRIG_GTK3_TERMINAL_WIDGET(s->main_window->terminal))) {
+      elder_terms::set_main_window_status_text(s->main_window, _("Clear the text selection to move this terminal"));
+      co_return result;
+    }
+    pages.push_back(s);
+  }
+  for (auto *s : pages) {
+    s->transferring = true;
+    elder_terms::terminal_runtime_set_hyperlink_rules(s->runtime, false, {}, {});
+    elder_terms::set_main_window_terminal_interactive(s->main_window, false);
+  }
+  auto finish = [pages](bool commit) {
+    for (auto *s : pages) {
+      auto *connection = elder_terms::terminal_runtime_connection(s->runtime);
+      const bool ssh = s->active_profile.kind == elder_terms::TerminalConnectionKind::ssh;
+      if (commit && ssh) {
+        docking_jobs.emplace_back(commit_ssh_page(s));
+        continue;
+      }
+      s->transferring = false;
+      if (commit) {
+        auto *reaper = elder_terms::terminal_connection_commit_local_handoff(connection);
+        if (reaper) docking_jobs.emplace_back(wait_for_shell(reaper));
+        on_main_window_delete(nullptr, nullptr, s);
+      } else {
+        if (ssh) elder_terms::terminal_connection_rollback_transport_handoff(connection);
+        else elder_terms::terminal_connection_rollback_local_handoff(connection);
+        apply_terminal_hyperlink_settings(s);
+        update_application_terminal_presentation(s);
+      }
+    }
+    update_peer_presence();
+  };
+  try {
+    for (auto *s : pages) {
+      auto *connection = elder_terms::terminal_runtime_connection(s->runtime);
+      elder_terms::DockPageImage page{s->session_id, s->config_path.value_or(""), s->startup_path.value_or(""),
+          s->terminal_title, s->launcher, elder_terms::snapshot_connection_settings(s->settings_store), {}, s->sftp_origin, {}, false, -1, -1, "UTF-8", 0, 0, 0, {}};
+      if (!elder_terms::terminal_runtime_pause_input_for_handoff(s->runtime)) { finish(false); co_return result; }
+      auto keep_fd = [&](int fd) {
+        const int index = g_unix_fd_list_append(result.batch.descriptors.get(), fd, nullptr);
+        close(fd);
+        return index;
+      };
+      if (s->active_profile.kind == elder_terms::TerminalConnectionKind::ssh) {
+        auto image = co_await elder_terms::terminal_connection_prepare_transport_handoff(connection);
+        if (!image) { finish(false); co_return result; }
+        page.descriptor = keep_fd(image->data_fd);
+        page.control_descriptor = keep_fd(image->control_fd);
+        page.encoding = std::move(image->encoding);
+        page.checkpoint = std::move(image->checkpoint);
+        page.eof = image->input_finished;
+        page.capacity = image->queue_capacity;
+        page.chunk = image->io_chunk_size;
+        if (page.control_descriptor < 0) { finish(false); co_return result; }
+      } else {
+        auto image = co_await elder_terms::terminal_connection_prepare_local_handoff(connection);
+        if (!image) { finish(false); co_return result; }
+        page.descriptor = keep_fd(image->master_fd);
+        page.checkpoint = std::move(image->checkpoint);
+        page.eof = image->input_finished;
+        page.capacity = image->queue_capacity;
+        page.chunk = image->io_chunk_size;
+        page.child = image->child;
+      }
+      if (page.descriptor < 0) { finish(false); co_return result; }
+      page.host_state = elder_terms::terminal_runtime_save_host_state(s->runtime);
+      if (!page.host_state) { finish(false); co_return result; }
+      page.log = co_await elder_terms::terminal_log_handoff_path(s->log_state);
+      result.batch.pages.push_back(std::move(page));
+    }
+    result.finish = finish;
+  } catch (...) {
+    finish(false);
+    throw;
+  }
+  co_return result;
+}
+
+static std::string offer_terminal_pages(const std::vector<elder_terms::TerminalTab *> &tabs, elder_terms::TerminalTab *active) {
+  std::vector<std::string> ids;
+  for (auto *tab : tabs) {
+    auto found = std::find_if(sessions.begin(), sessions.end(), [tab](const auto &s) { return s->tab == tab; });
+    if (found == sessions.end()) return {};
+    ids.push_back((*found)->session_id);
+  }
+  unsigned selected = std::find(tabs.begin(), tabs.end(), active) - tabs.begin();
+  return elder_terms::terminal_dock_offer([ids, selected] { return prepare_pages(ids, selected); });
+}
+
+struct StagedPage {
+  ApplicationState *state;
+  int fd, control_fd;
+  std::string encoding;
+  bool eof;
+  unsigned child, capacity, chunk;
+  std::shared_ptr<GVariant> host_state;
+};
+
+static elder_terms::DockDecision stage_pages(ApplicationState *destination, const elder_terms::DockBatch &batch) {
+  std::vector<StagedPage> staged;
+  bool ready = true;
+  for (const auto &page : batch.pages) {
+    if (find_page(page.id)) { g_debug("Terminal already present"); break; }
+    if (page.capacity == 0 || page.capacity > 1024 * 1024 || page.chunk == 0 ||
+        (page.control_descriptor < 0 ? page.child == 0 : page.encoding.empty())) {
+      g_debug("Invalid terminal resume parameters");
+      break;
+    }
+    elder_terms::LaunchOptions options;
+    if (!page.config.empty()) options.config_path = page.config;
+    if (!page.startup.empty()) options.startup_config_path = page.startup;
+    auto settings = elder_terms::restore_connection_settings({options.config_path, options.startup_config_path,
+        elder_terms::default_global_config_path()}, page.settings, 12.0);
+    if (!settings.loaded || !elder_terms::settings_theme_is_resolved(settings.store)) { for (auto &warning : settings.warnings) g_debug("%s", warning.c_str()); break; }
+    auto *s = create_session(options, std::move(settings), true, page.checkpoint);
+    if (!s) { g_debug("Cannot create checkpoint page"); break; }
+    s->session_id = page.id;
+    s->launcher = page.launcher;
+    s->sftp_origin = page.sftp_origin;
+    s->terminal_title = page.title;
+    elder_terms::terminal_log_resume_path(s->log_state, page.log);
+    update_application_session_identity(s);
+    const int fd = g_unix_fd_list_get(batch.descriptors.get(), page.descriptor, nullptr);
+    const auto control_fd = page.control_descriptor < 0 ? -1 :
+        g_unix_fd_list_get(batch.descriptors.get(), page.control_descriptor, nullptr);
+    staged.push_back({s, fd, control_fd, page.encoding, page.eof, page.child, page.capacity, page.chunk, page.host_state});
+    const auto phase = elder_terms::terminal_connection_state(
+        elder_terms::terminal_runtime_connection(s->runtime)).phase;
+    ready = fd >= 0 && (page.control_descriptor < 0 || control_fd >= 0) &&
+        (phase == elder_terms::TerminalConnectionPhase::idle ||
+         phase == elder_terms::TerminalConnectionPhase::closed) &&
+        track_session(s);
+    if (!ready) break;
+  }
+  auto finish = [staged, active = batch.active, destination](bool commit) {
+    const auto close_page = [&staged](std::size_t index) {
+        const auto &page = staged[index];
+        auto *s = page.state;
+        if (page.fd >= 0) close(page.fd);
+        if (page.control_fd >= 0) close(page.control_fd);
+        on_main_window_delete(nullptr, nullptr, s);
+    };
+    if (!commit) {
+      for (std::size_t index = 0; index < staged.size(); ++index) close_page(index);
+      return;
+    }
+    elder_terms::finish_terminal_dock_resumes(staged.size(), active,
+        [&staged](std::size_t index) {
+          const auto &page = staged[index];
+          auto *s = page.state;
+          auto *connection = elder_terms::terminal_runtime_connection(s->runtime);
+          const bool resumed = page.control_fd >= 0 ? elder_terms::terminal_connection_resume_transport(connection, page.fd,
+              page.control_fd, page.eof, page.encoding, page.capacity, page.chunk) :
+              elder_terms::terminal_connection_resume_local(connection, page.fd, page.eof, page.child, page.capacity, page.chunk);
+          if (resumed) {
+            elder_terms::terminal_runtime_restore_host_state(s->runtime, s->terminal_title, page.host_state.get());
+            set_application_connection_phase(s, elder_terms::TerminalSessionConnectionPhase::connected);
+          }
+          return resumed;
+        }, close_page,
+        [&staged, destination](const std::vector<std::size_t> &indices, std::size_t selected) {
+          std::vector<elder_terms::TerminalTab *> tabs;
+          tabs.reserve(indices.size());
+          for (const auto index : indices) tabs.push_back(staged[index].state->tab);
+          if (!destination->tab || !elder_terms::dock_terminal_tabs(tabs, staged[selected].state->tab, destination->tab))
+            return false;
+          elder_terms::focus_main_window_terminal_if_interactive(staged[selected].state->main_window);
+          return true;
+        },
+        [&staged](std::size_t index) {
+          auto *s = staged[index].state;
+          gtk_widget_show_all(s->window);
+          gtk_window_present_with_time(GTK_WINDOW(s->window), GDK_CURRENT_TIME);
+        });
+    update_peer_presence();
+  };
+  if (ready && staged.size() == batch.pages.size()) return finish;
+  finish(false);
+  return {};
+}
+
+static cardio::promise<void> receive_pages_async(ApplicationState *destination, std::string token,
+    std::function<void(bool)> done) {
+  destination->transferring = true;
+  const bool accepted = co_await elder_terms::terminal_dock_receive(std::move(token),
+      [destination](const auto &batch) { return stage_pages(destination, batch); });
+  destination->transferring = false;
+  done(accepted);
+}
+
+static void receive_terminal_pages(ApplicationState *destination, std::string token, std::function<void(bool)> done) {
+  if (!destination || destination->closing || destination->transferring ||
+      elder_terms::has_modal_dialog(destination->window)) { done(false); return; }
+  std::erase_if(docking_jobs, [](const auto &task) { return task.is_ready(); });
+  docking_jobs.emplace_back(receive_pages_async(destination, std::move(token), std::move(done)));
+}
+
+int main(int argc, char **argv) {
+  // Advertise terminal capabilities before GTK or Cardio can start threads.
+  if (setenv("COLORTERM", "truecolor", 1) != 0) {
+    std::perror("Error: failed to set COLORTERM");
+    return 1;
+  }
+
+  const elder_terms::ApplicationUiLanguage ui_language =
+      elder_terms::load_application_ui_language_preference(
+          elder_terms::default_global_config_path());
+  const elder_terms::LocalizationInitializationResult localization =
+      elder_terms::initialize_localization(ui_language);
+  for (const std::string &warning : localization.warnings) {
+    std::cerr << warning << '\n';
+  }
+  gtk_disable_setlocale();
+  auto launch_options =
+    elder_terms::parse_launch_options(&argc, argv);
+  if (!select_new_window_connection(&launch_options)) {
+    return 1;
+  }
+  elder_terms::initialize_terminal_gtk(&argc, &argv);
+  g_set_prgname(terminal_application_id);
+  (void)elder_terms::initialize_application_window_icon();
+
+  const double default_font_size_dip = 12.0;
+  const elder_terms::SettingsLoadOptions settings_load_options{
+      .config_path = launch_options.config_path,
+      .startup_config_path = launch_options.startup_config_path,
+      .global_config_path = elder_terms::default_global_config_path(),
+  };
+  auto settings_result =
+    elder_terms::load_settings(settings_load_options, default_font_size_dip);
+
+  for (const std::string &warning : settings_result.warnings) {
+    std::cerr << warning << '\n';
+  }
+
+  if (launch_options.new_window && !settings_result.loaded) {
+    std::cerr << "Error: failed to load the New Window connection\n";
+    return 1;
+  }
+  if (!elder_terms::settings_theme_is_resolved(settings_result.store)) return 1;
+
+  const std::optional<elder_terms::TerminalConnectionProfile>
+      connection_profile =
+          elder_terms::terminal_connection_profile(settings_result.store);
+  if (!connection_profile.has_value()) {
+    std::cerr << "Error: configured connection type is not a terminal "
+                 "connection\n";
+    return 1;
+  }
+  (void)elder_terms::initialize_connection_desktop_session(
+      &settings_result.store, launch_options.config_path,
+      launch_options.startup_config_path, argv[0]);
+
+  cardio::dispatcher_group_glib dispatcher_group;
+  // Let GLib prioritize ready I/O alongside native events. Pumping GTK before
+  // every continuation repeatedly renders partially received output batches.
+  cardio::dispatcher_host_glib_auto dispatcher(dispatcher_group);
+
+  process_dispatcher = &dispatcher_group;
+  elder_terms::initialize_terminal_dock_bus();
+  if (!create_session(launch_options, std::move(settings_result), false, {})) return 1;
+  dispatcher.park();
+  elder_terms::shutdown_terminal_dock_bus();
+  elder_terms::shutdown_connection_desktop_session();
   return 0;
 }

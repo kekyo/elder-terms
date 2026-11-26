@@ -115,31 +115,33 @@ static std::optional<GdkWindowEdge> header_edge(GtkWidget *window, GtkWidget *bo
   return allowed_edge(header, edge, corner);
 }
 
-static void install_header_resize(GtkWidget *window, GtkWidget *border) {
-  // GtkWindow offers WM events here before dispatching its own titlebar move gesture.
-  g_signal_connect_object(window, "event", G_CALLBACK(+[](GtkWidget *widget, GdkEvent *event,
-      GtkWidget *side) -> gboolean {
-    if (event->type != GDK_BUTTON_PRESS || event->button.button != GDK_BUTTON_PRIMARY) return FALSE;
-    gint origin_x;
-    gint origin_y;
-    auto *native = gtk_widget_get_window(widget);
-    if (!native) return FALSE;
-    gdk_window_get_origin(native, &origin_x, &origin_y);
-    const auto edge = header_edge(widget, side, event->button.x_root - origin_x, event->button.y_root - origin_y);
-    if (!edge) return FALSE;
-    gdk_window_begin_resize_drag_for_device(native, *edge, gdk_event_get_device(event),
-        GDK_BUTTON_PRIMARY, static_cast<int>(event->button.x_root), static_cast<int>(event->button.y_root),
-        event->button.time);
-    return TRUE;
-  }), border, G_CONNECT_DEFAULT);
+bool begin_window_header_resize(GtkWidget *window, GdkEventButton *button) {
+  if (button->type != GDK_BUTTON_PRESS || button->button != GDK_BUTTON_PRIMARY) return false;
+  auto *border = GTK_WIDGET(g_object_get_data(G_OBJECT(window), "connection-start-border"));
+  auto *native = gtk_widget_get_window(window);
+  if (!border || !native) return false;
+  gint x, y;
+  gdk_window_get_origin(native, &x, &y);
+  const auto edge = header_edge(window, border, button->x_root - x, button->y_root - y);
+  if (!edge) return false;
+  gdk_window_begin_resize_drag_for_device(native, *edge, gdk_event_get_device(reinterpret_cast<GdkEvent *>(button)),
+      button->button, static_cast<int>(button->x_root), static_cast<int>(button->y_root), button->time);
+  return true;
+}
 
+static void install_header_resize(GtkWidget *window) {
+  // GtkWindow offers WM events here before dispatching its own titlebar move gesture.
+  g_signal_connect(window, "event", G_CALLBACK(+[](GtkWidget *widget, GdkEvent *event, gpointer) -> gboolean {
+    return event->type == GDK_BUTTON_PRESS && begin_window_header_resize(widget, &event->button);
+  }), nullptr);
   auto *motion = gtk_event_controller_motion_new(window);
   gtk_event_controller_set_propagation_phase(motion, GTK_PHASE_CAPTURE);
-  g_signal_connect_object(motion, "motion", G_CALLBACK(+[](GtkEventControllerMotion *controller,
-      double x, double y, GtkWidget *side) {
+  g_signal_connect(motion, "motion", G_CALLBACK(+[](GtkEventControllerMotion *controller,
+      double x, double y, gpointer) {
     auto *window = gtk_event_controller_get_widget(GTK_EVENT_CONTROLLER(controller));
-    set_resize_cursor(gtk_widget_get_window(window), header_edge(window, side, x, y));
-  }), border, G_CONNECT_DEFAULT);
+    auto *side = GTK_WIDGET(g_object_get_data(G_OBJECT(window), "connection-start-border"));
+    if (side) set_resize_cursor(gtk_widget_get_window(window), header_edge(window, side, x, y));
+  }), nullptr);
   g_signal_connect(motion, "leave", G_CALLBACK(+[](GtkEventControllerMotion *controller, gpointer) {
     auto *window = gtk_event_controller_get_widget(GTK_EVENT_CONTROLLER(controller));
     set_resize_cursor(gtk_widget_get_window(window), std::nullopt);
@@ -152,6 +154,9 @@ static void update_resize_margin(GtkWidget *border, GParamSpec *, gpointer) {
   if (!GTK_IS_WINDOW(toplevel) || gtk_widget_in_destruction(toplevel)) return;
   const auto edge = GPOINTER_TO_INT(g_object_get_data(G_OBJECT(border), border_edge_key)) - 1;
   const auto *name = edge == GDK_WINDOW_EDGE_SOUTH ? "connection-bottom-border" : "connection-side-borders";
+  const auto *active = g_object_get_data(G_OBJECT(toplevel), edge == GDK_WINDOW_EDGE_SOUTH ?
+      "connection-bottom-widget" : "connection-start-border");
+  if (active != border) return;
   auto *context = gtk_widget_get_style_context(toplevel);
   if (gtk_widget_get_visible(border)) gtk_style_context_add_class(context, name);
   else gtk_style_context_remove_class(context, name);
@@ -159,12 +164,22 @@ static void update_resize_margin(GtkWidget *border, GParamSpec *, gpointer) {
 
 void install_window_resize_borders(GtkWindow *window, GtkWidget *start,
                                    GtkWidget *end, GtkWidget *bottom) {
-  auto *provider = gtk_css_provider_new();
-  gtk_css_provider_load_from_data(provider, resize_border_css, -1, nullptr);
-  gtk_style_context_add_provider(gtk_widget_get_style_context(GTK_WIDGET(window)),
-      GTK_STYLE_PROVIDER(provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
-  g_object_unref(provider);
-  install_header_resize(GTK_WIDGET(window), start);
+  if (g_object_get_data(G_OBJECT(window), "connection-start-border") == start) return;
+  g_object_set_data_full(G_OBJECT(window), "connection-start-border", g_object_ref(start), g_object_unref);
+  g_object_set_data_full(G_OBJECT(window), "connection-bottom-widget", g_object_ref(bottom), g_object_unref);
+  if (!g_object_get_data(G_OBJECT(window), "connection-header-motion")) {
+    auto *provider = gtk_css_provider_new();
+    gtk_css_provider_load_from_data(provider, resize_border_css, -1, nullptr);
+    gtk_style_context_add_provider(gtk_widget_get_style_context(GTK_WIDGET(window)),
+        GTK_STYLE_PROVIDER(provider), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
+    g_object_unref(provider);
+    install_header_resize(GTK_WIDGET(window));
+  }
+  if (g_object_get_data(G_OBJECT(start), border_edge_key)) {
+    update_resize_margin(start, nullptr, nullptr);
+    update_resize_margin(bottom, nullptr, nullptr);
+    return;
+  }
   for (const auto &[border, edge] : {std::pair{start, GDK_WINDOW_EDGE_WEST},
       std::pair{end, GDK_WINDOW_EDGE_EAST}, std::pair{bottom, GDK_WINDOW_EDGE_SOUTH}}) {
     g_object_set_data(G_OBJECT(border), border_edge_key, GINT_TO_POINTER(edge + 1));

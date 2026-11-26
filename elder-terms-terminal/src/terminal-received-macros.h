@@ -7,6 +7,7 @@
 
 #include <cstdint>
 #include <functional>
+#include <optional>
 #include <span>
 #include <string>
 #include <vector>
@@ -79,6 +80,19 @@ TerminalReceivedMacroProgress terminal_received_macros_dispatch(
  * @param generation Connection identity associated with subsequent input.
  */
 void terminal_received_macros_reset(TerminalReceivedMacros *macros, std::uint64_t generation);
+
+/** Received-line context retained across a terminal handoff. */
+struct ReceivedMacroLine {
+  std::string bytes;             /**< Current line, including embedded control bytes. */
+  bool pending_carriage_return;  /**< A CR may still combine with the next LF. */
+  bool action_executed;          /**< A matching action already ran for this line. */
+};
+
+/** Copies the partial line once all queued matching and send work is complete. */
+std::optional<ReceivedMacroLine> terminal_received_macros_snapshot(const TerminalReceivedMacros *macros);
+/** Starts processing the saved line in the resumed connection's generation. */
+void terminal_received_macros_restore(TerminalReceivedMacros *macros, std::uint64_t generation,
+    const ReceivedMacroLine &line);
 
 /**
  * Releases a runner without invoking its callbacks.

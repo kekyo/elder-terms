@@ -392,6 +392,18 @@ ELDER_TERMS_API SettingsLoadResult
 load_settings(const SettingsLoadOptions &options,
               gdouble default_terminal_font_size_dip);
 
+/** Serializes the current explicit settings and connection rules as INI text. */
+ELDER_TERMS_API std::string snapshot_connection_settings(const SettingsStore &store);
+
+/** Loads a live session snapshot over the configured global defaults and theme.
+ * @param options Paths used for inherited defaults and connection identity.
+ * @param snapshot INI text exported by snapshot_connection_settings().
+ * @param default_terminal_font_size_dip Default character size in device-independent pixels.
+ * @return Restored settings and any diagnostics.
+ */
+ELDER_TERMS_API SettingsLoadResult restore_connection_settings(const SettingsLoadOptions &options,
+    const std::string &snapshot, gdouble default_terminal_font_size_dip);
+
 /**
  * Loads global defaults for editing.
  *

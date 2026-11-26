@@ -2673,3 +2673,6 @@ msgstr "顶部"
 
 msgid "Bottom"
 msgstr "底部"
+
+msgid "Drag to dock all tabs in another terminal window"
+msgstr "拖动以将所有标签页停靠到另一个终端窗口"

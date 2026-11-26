@@ -68,4 +68,7 @@ TerminalTextConversionResult convert_terminal_text(TerminalTextStream *stream,
  */
 TerminalTextConversionResult finish_terminal_text(TerminalTextStream *stream);
 
+/** Reports whether a UTF-8 boundary has no incomplete source character. */
+bool terminal_text_stream_has_pending(const TerminalTextStream *stream);
+
 }
