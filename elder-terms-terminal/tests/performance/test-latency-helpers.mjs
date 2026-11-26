@@ -74,7 +74,7 @@ try {
         );
       const hasVisibleUrl = initial
         .split(/\s+/)
-        .includes('https://example.org/text/visible');
+        .some((word) => word === 'https://example.org/text/visible');
       if (hasVisibleUrl !== (mode === 'mixed'))
         throw new Error(`${mode} has the wrong visible regex URL load`);
     }
