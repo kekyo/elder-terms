@@ -189,7 +189,9 @@ Well then, enjoy elder-terms!
 
 ## Grouping running terminals
 
-Drag the title text or connection icon of a local or SSH terminal window onto another terminal. Click a row on the left to display its terminal on the right and give it keyboard focus. Drag an empty part of the title bar to move the window.
+Open two local or SSH terminal windows. On supported X11 desktops, drag either window by its title text, empty title bar, or connection icon. Release it inside the other terminal window to group them. Releasing it elsewhere leaves the window at its new position. On Wayland and other desktops, drag the connection icon onto the other terminal to group them.
+
+Click a row on the left to display its terminal on the right and give it keyboard focus. The list initially spans 220 logical pixels, and you can drag the splitter between the list and terminal to adjust its width.
 
 Drag a row onto another terminal window to move just that session. Press `Ctrl+Shift+U` to detach the selected session. You can change this shortcut in the terminal settings. Dropping a row on the desktop also detaches it. On Wayland, use the shortcut when other terminal windows are open.
 
