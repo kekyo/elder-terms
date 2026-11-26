@@ -7,11 +7,13 @@
 #include <string>
 
 namespace elder_terms {
+/** Reports target readiness asynchronously when the pointer enters a different tray. */
+using TitlebarDockProbe = std::function<void(const std::string &, guint32, std::function<void(bool)>)>;
 /** Observes native titlebar moves on supported displays. Calls drop with the
  * destination bus name and native window ID on a primary-button drop.
  * Returns false when the header needs the explicit GTK drag handle. */
 bool install_titlebar_dock(GtkWidget *window, const char *bus_name,
-    std::function<bool()> has_peer, std::function<void(const std::string &, guint32)> drop);
+    std::function<bool()> has_peer, TitlebarDockProbe probe, std::function<void(const std::string &, guint32)> drop);
 /** Returns the mapped window's X11 ID, or zero on other displays. */
 guint32 titlebar_dock_window_id(GtkWidget *window);
 }

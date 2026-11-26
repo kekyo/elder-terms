@@ -32,6 +32,7 @@ launch() {
   cat >"$scratch/$name.sh" <<SCRIPT
 #!/bin/sh
 echo \$\$ > "$scratch/$name.pid"
+echo "Terminal selection for $name"
 while IFS= read -r line; do
   printf '%s:%s\n' "\$\$" "\$line" >> "$scratch/$name.input"
 done
@@ -78,6 +79,30 @@ assert_video_move() {
     { if ($1 > 90 || $2 > 160 || $3 < 90) moved = 1; frames++ }
     END { if (frames < 4 || !moved) exit 1 }
   '
+}
+assert_dock_feedback() {
+  local name=$1 x=$2 y=$3 expected=$4
+  # Read the recorded pointer neighborhood, including the pressed and released
+  # frames. The dock badge has a teal field distinct from both fixture windows.
+  ffmpeg -nostdin -loglevel error -i "$scratch/$name.mp4" \
+    -vf "crop=48:48:$x:$y" -pix_fmt rgb24 -f rawvideo - | node -e '
+    const pixels = require("node:fs").readFileSync(0);
+    const stride = 48 * 48 * 3;
+    const states = [];
+    for (let start = 0; start + stride <= pixels.length; start += stride) {
+      let teal = 0;
+      for (let p = start; p < start + stride; p += 3) {
+        const [r, g, b] = [pixels[p], pixels[p + 1], pixels[p + 2]];
+        if (g > 85 && g > r * 2 && g > b + 14 && b > 48) teal++;
+      }
+      const state = teal > 50 ? "on" : "off";
+      if (states.at(-1) !== state) states.push(state);
+    }
+    if (states.join(",") !== process.argv[1]) {
+      console.error(process.argv[2], "dock feedback:", states, "expected:", process.argv[1]);
+      process.exitCode = 1;
+    }
+  ' "$expected" "$name"
 }
 launch Alpha '#A51D2D'
 launch Beta '#2D6AA5'
@@ -133,9 +158,24 @@ reset_beta
 
 # Escape cancels docking even with the pointer over another terminal.
 begin_title_move 115 "$((ax+200))" "$((ay+150))" cancelled
+xdotool mousemove 1300 500
+sleep .3
+xdotool mousemove "$((ax+200))" "$((ay+150))"
+sleep .3
 xdotool key Escape
 end_title_move cancelled
+assert_dock_feedback cancelled "$((ax+200))" "$((ay+150))" off,on,off,on,off
+assert_dock_feedback cancelled 1300 500 off
 [[ $(window Beta) == "$beta" ]]
+reset_beta
+
+# Selected text prevents a cross-process handoff at an otherwise valid target.
+xdotool mousemove --window "$beta" 26 55 click --repeat 3 1
+begin_title_move 115 "$((ax+200))" "$((ay+150))" selection
+end_title_move selection
+assert_dock_feedback selection "$((ax+200))" "$((ay+150))" off
+[[ $(window Beta) == "$beta" ]]
+xdotool mousemove --window "$beta" 26 55 click 1
 reset_beta
 
 # The foreign window is the topmost destination under the moved terminal.
@@ -145,6 +185,7 @@ foreign=$(xdotool search --onlyvisible --name '^Foreign-Window$' | tail -1)
 xdotool windowraise "$foreign"
 begin_title_move 115 "$((ax+200))" "$((ay+150))" foreign
 end_title_move foreign
+assert_dock_feedback foreign "$((ax+200))" "$((ay+150))" off
 [[ $(window Beta) == "$beta" ]]
 kill "${pids[-1]}"
 reset_beta
@@ -170,6 +211,7 @@ reset_beta
 begin_title_move 45 "$((ax+200))" "$((ay+150))" group
 [[ $(window Gamma) == "$beta" ]]
 end_title_move group
+assert_dock_feedback group "$((ax+200))" "$((ay+150))" off,on,off
 docked() { [[ $(window Gamma) == "$alpha" ]]; }
 wait_until docked
 for row in Alpha Beta Gamma; do

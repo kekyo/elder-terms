@@ -45,6 +45,8 @@ void shutdown_terminal_dock_bus();
 void publish_terminal_dock_window(bool visible);
 /** Returns the borrowed desktop session bus, or nullptr when unavailable. */
 GDBusConnection *terminal_dock_connection();
+/** Checks a peer tray's availability without offering or pausing any session. */
+void probe_terminal_window_drop(const std::string &peer, guint32 xid, DockDecision ready);
 /** Delivers a native drop offer to the specific window under the pointer. */
 void send_terminal_window_drop(const std::string &peer, guint32 xid, const std::string &token);
 /** Claims a stable session address, replacing its paused owner during staging. */

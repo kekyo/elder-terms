@@ -2,6 +2,7 @@
 // Copyright (c) Kouji Matsui. (@kekyo@mi.kekyo.net)
 // Under MIT.
 #include "titlebar-dock.h"
+#include "dock-feedback.h"
 #include <gdk/gdkx.h>
 #include <glib-unix.h>
 #include <X11/Xatom.h>
@@ -10,6 +11,7 @@
 #include <X11/extensions/shape.h>
 #include <X11/keysym.h>
 #include <cstring>
+#include <memory>
 #include <utility>
 
 namespace elder_terms {
@@ -18,6 +20,7 @@ struct TitlebarDock {
   GtkWidget *window;
   std::string bus_name;
   std::function<bool()> has_peer;
+  TitlebarDockProbe probe;
   std::function<void(const std::string &, guint32)> drop;
   Display *control;
   Atom marker, moveresize;
@@ -29,6 +32,10 @@ struct TitlebarDock {
   int x = 0, y = 0;
   KeyCode escape = 0;
   bool moving = false, finished = false;
+  guint tick = 0;
+  GtkWidget *badge = nullptr;
+  Window hover_target = None;
+  std::shared_ptr<bool> accepted{};
 };
 
 guint32 titlebar_dock_window_id(GtkWidget *window) {
@@ -102,6 +109,77 @@ static std::pair<std::string, Window> drop_target(TitlebarDock *dock) {
   return {};
 }
 
+static std::pair<std::string, Window> target_at_pointer(TitlebarDock *dock) {
+  auto *display = gtk_widget_get_display(dock->window);
+  // Other clients can destroy a window between our queries to the X server.
+  gdk_x11_display_error_trap_push(display);
+  auto target = drop_target(dock);
+  gdk_x11_display_error_trap_pop_ignored(display);
+  return target;
+}
+
+static void update_badge(TitlebarDock *dock) {
+  if (!dock->accepted || !*dock->accepted) {
+    if (dock->badge) gtk_widget_hide(dock->badge);
+    return;
+  }
+  // The WM owns the cursor during a native move. Place the same glyph used
+  // by GTK tab drags alongside it, with an empty input region.
+  const int scale = gtk_widget_get_scale_factor(dock->window);
+  if (!dock->badge) {
+    dock->badge = gtk_window_new(GTK_WINDOW_POPUP);
+    auto *popup = GTK_WINDOW(dock->badge);
+    gtk_window_set_screen(popup, gtk_widget_get_screen(dock->window));
+    gtk_window_set_type_hint(popup, GDK_WINDOW_TYPE_HINT_DND);
+    gtk_window_set_accept_focus(popup, FALSE);
+    auto *surface = dock_feedback_surface(DOCK_FEEDBACK_DOCK, scale);
+    auto *image = gtk_image_new_from_surface(surface);
+    gtk_container_add(GTK_CONTAINER(popup), image);
+    gtk_widget_show(image);
+    auto *shape = gdk_cairo_region_create_from_surface(surface);
+    gtk_widget_shape_combine_region(dock->badge, shape);
+    cairo_region_destroy(shape);
+    cairo_surface_destroy(surface);
+    auto *empty = cairo_region_create();
+    gtk_widget_input_shape_combine_region(dock->badge, empty);
+    cairo_region_destroy(empty);
+  }
+  int x = dock->x / scale, y = dock->y / scale;
+  auto *monitor = gdk_display_get_monitor_at_point(gtk_widget_get_display(dock->window), x, y);
+  if (monitor) {
+    GdkRectangle bounds;
+    gdk_monitor_get_geometry(monitor, &bounds);
+    constexpr int offset = 12;
+    constexpr int total = offset + DOCK_FEEDBACK_SIZE;
+    x += x + total <= bounds.x + bounds.width ? offset : -total;
+    y += y + total <= bounds.y + bounds.height ? offset : -total;
+  }
+  gtk_window_move(GTK_WINDOW(dock->badge), x, y);
+  gtk_widget_show(dock->badge);
+}
+
+static gboolean update_hover(GtkWidget *, GdkFrameClock *, gpointer data) {
+  auto *dock = static_cast<TitlebarDock *>(data);
+  dock->tick = 0;
+  const auto [name, target] = target_at_pointer(dock);
+  if (target != dock->hover_target) {
+    dock->hover_target = target;
+    dock->accepted.reset();
+    update_badge(dock);
+    if (target) {
+      dock->accepted = std::make_shared<bool>(false);
+      // Ignore delayed peer replies after leave, release or window destruction.
+      dock->probe(name, target, [dock, current = std::weak_ptr(dock->accepted)](bool ready) {
+        if (auto accepted = current.lock()) {
+          *accepted = ready;
+          if (!dock->tick) update_badge(dock);
+        }
+      });
+    }
+  } else update_badge(dock);
+  return G_SOURCE_REMOVE;
+}
+
 // During a native move the WM owns the pointer grab. RECORD orders our own
 // EWMH move request, physical motion, Escape and button release on one stream.
 // Button device events only guarantee detail/time; motion carries root X/Y.
@@ -138,6 +216,10 @@ static void record_event(XPointer data, XRecordInterceptData *packet) {
 }
 
 static void stop_recording(TitlebarDock *dock) {
+  if (dock->tick) gtk_widget_remove_tick_callback(dock->window, std::exchange(dock->tick, 0));
+  dock->hover_target = None;
+  dock->accepted.reset();
+  if (dock->badge) gtk_widget_destroy(std::exchange(dock->badge, nullptr));
   if (dock->source) g_source_remove(std::exchange(dock->source, 0));
   if (dock->context) {
     XRecordFreeContext(dock->control, std::exchange(dock->context, 0));
@@ -150,17 +232,17 @@ static gboolean read_move(gint, GIOCondition condition, gpointer data) {
   auto *dock = static_cast<TitlebarDock *>(data);
   if (condition & G_IO_IN) {
     XRecordProcessReplies(dock->stream);
-    if (!dock->finished && !(condition & (G_IO_HUP | G_IO_ERR))) return G_SOURCE_CONTINUE;
+    if (!dock->finished && !(condition & (G_IO_HUP | G_IO_ERR))) {
+      if (dock->moving && dock->root && !dock->tick)
+        dock->tick = gtk_widget_add_tick_callback(dock->window, update_hover, dock, nullptr);
+      return G_SOURCE_CONTINUE;
+    }
   }
   dock->source = 0;
   stop_recording(dock);
   if (dock->finished && dock->moving && dock->root) {
-    auto *display = gtk_widget_get_display(dock->window);
-    gdk_x11_display_error_trap_push(display);
-    const auto [name, target] = drop_target(dock);
-    // A different window in the stack can disappear during the hit test. Each
-    // query checks its own result, and the recipient rechecks the addressed tray.
-    gdk_x11_display_error_trap_pop_ignored(display);
+    // The recipient also rechecks the addressed tray at release.
+    const auto [name, target] = target_at_pointer(dock);
     if (target) {
       // A same-process dock may destroy this source window immediately.
       auto drop = dock->drop;
@@ -200,7 +282,7 @@ static void header_pressed(GtkGestureMultiPress *, gint presses, gdouble x, gdou
       static_cast<GIOCondition>(G_IO_IN | G_IO_ERR | G_IO_HUP), read_move, dock);
 }
 
-bool install_titlebar_dock(GtkWidget *window, const char *bus_name, std::function<bool()> has_peer,
+bool install_titlebar_dock(GtkWidget *window, const char *bus_name, std::function<bool()> has_peer, TitlebarDockProbe probe,
     std::function<void(const std::string &, guint32)> drop) {
   auto *gdk = gtk_widget_get_display(window);
   if (!GDK_IS_X11_DISPLAY(gdk)) return false;
@@ -212,7 +294,7 @@ bool install_titlebar_dock(GtkWidget *window, const char *bus_name, std::functio
       (major == 1 && minor < 1) ||
       !gdk_x11_screen_supports_net_wm_hint(gtk_widget_get_screen(window),
           gdk_atom_intern_static_string("_NET_WM_MOVERESIZE"))) return false;
-  auto *dock = new TitlebarDock{window, bus_name ? bus_name : "", std::move(has_peer), std::move(drop),
+  auto *dock = new TitlebarDock{window, bus_name ? bus_name : "", std::move(has_peer), std::move(probe), std::move(drop),
       display, XInternAtom(display, "_ELDER_TERMS_DOCK_WINDOW", False),
       XInternAtom(display, "_NET_WM_MOVERESIZE", False), gtk_gesture_multi_press_new(window)};
   dock->escape = XKeysymToKeycode(display, XK_Escape);

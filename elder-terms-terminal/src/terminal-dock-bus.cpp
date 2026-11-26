@@ -19,6 +19,7 @@ static constexpr char methods[] = "<node><interface name='net.kekyo.ElderTerms.D
     "<method name='Finish'><arg type='s' direction='in'/><arg type='b' direction='in'/></method>"
     "<method name='State'><arg type='s' direction='in'/><arg type='b' direction='out'/></method>"
     "<method name='Release'><arg type='s' direction='in'/></method>"
+    "<method name='CanDropAtWindow'><arg type='u' direction='in'/><arg type='b' direction='out'/></method>"
     "<method name='DropAtWindow'><arg type='s' direction='in'/><arg type='u' direction='in'/></method>"
     "<method name='Present'><arg type='s' direction='in'/><arg type='u' direction='in'/><arg type='s' direction='in'/></method>"
     "<signal name='Tracked'><arg type='s'/><arg type='s'/></signal></interface></node>";
@@ -92,6 +93,12 @@ static cardio::promise<void> prepare_offer(std::shared_ptr<Offer> offer, std::st
 
 static void dispatch(GDBusConnection *, const gchar *sender, const gchar *, const gchar *, const gchar *method,
     GVariant *args, GDBusMethodInvocation *invocation, gpointer) {
+  if (std::string_view(method) == "CanDropAtWindow") {
+    guint32 xid;
+    g_variant_get(args, "(u)", &xid);
+    g_dbus_method_invocation_return_value(invocation, g_variant_new("(b)", can_receive_terminal_window_drop(xid)));
+    return;
+  }
   const char *key;
   g_variant_get_child(args, 0, "&s", &key);
   if (std::string_view(method) == "DropAtWindow") {
@@ -177,6 +184,21 @@ void announce_terminal_dock_page(const std::string &id, const char *launch_id, c
 }
 
 static std::string presence_name() { return std::string(prefix) + std::to_string(getpid()); }
+static cardio::promise<void> probe_window(std::string peer, guint32 xid, DockDecision ready) {
+  gboolean available = FALSE;
+  try {
+    auto reply = co_await call(peer, path, interface, "CanDropAtWindow", g_variant_new("(u)", xid), G_VARIANT_TYPE("(b)"));
+    g_variant_get(reply.get(), "(b)", &available);
+  } catch (const std::exception &) {
+    // A prospective target can disappear while the pointer passes over it.
+  }
+  ready(available);
+}
+void probe_terminal_window_drop(const std::string &peer, guint32 xid, DockDecision ready) {
+  if (!bus || !g_dbus_is_unique_name(peer.c_str())) { ready(false); return; }
+  std::erase_if(requests, [](const auto &task) { return task.is_ready(); });
+  requests.emplace_back(probe_window(peer, xid, std::move(ready)));
+}
 void send_terminal_window_drop(const std::string &peer, guint32 xid, const std::string &token) {
   if (bus && g_dbus_is_unique_name(peer.c_str()))
     g_dbus_connection_call(bus, peer.c_str(), path, interface, "DropAtWindow",

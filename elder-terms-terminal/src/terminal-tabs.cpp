@@ -39,9 +39,16 @@ static TerminalTray *tray_by_xid(guint32 xid) {
   return nullptr;
 }
 
-bool receive_terminal_window_drop(guint32 xid, const std::string &token) {
+static TerminalTray *available_tray(guint32 xid) {
   auto *target = tray_by_xid(xid);
-  if (!target || !target->active || !target->active->actions.movable()) return false;
+  return target && target->active && target->active->actions.movable() ? target : nullptr;
+}
+bool can_receive_terminal_window_drop(guint32 xid) {
+  return available_tray(xid) != nullptr;
+}
+bool receive_terminal_window_drop(guint32 xid, const std::string &token) {
+  auto *target = available_tray(xid);
+  if (!target) return false;
   target->active->actions.receive(token, [](bool) {});
   return true;
 }
@@ -231,6 +238,14 @@ static TerminalTray *make_tray(GtkWidget *window) {
   auto *bus = terminal_dock_connection();
   tray->native_title_drag = install_titlebar_dock(window, bus ? g_dbus_connection_get_unique_name(bus) : nullptr,
       [] { return external_peers || trays.size() > 1; },
+      [tray](const std::string &name, guint32 xid, DockDecision ready) {
+        if (auto *target = tray_by_xid(xid)) {
+          ready(target != tray && target->active && target->active->actions.movable() &&
+              std::ranges::all_of(tray->tabs, [](auto *tab) { return tab->actions.movable(); }));
+        } else if (std::ranges::all_of(tray->tabs, [](auto *tab) { return tab->actions.transferable(); })) {
+          probe_terminal_window_drop(name, xid, std::move(ready));
+        } else ready(false);
+      },
       [tray](const std::string &name, guint32 xid) {
         if (!tray->active) return;
         if (auto *target = tray_by_xid(xid)) {

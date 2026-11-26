@@ -17,6 +17,8 @@ struct TerminalTabActions {
   std::function<void()> close;
   /** Reports whether this page can currently leave its tray. */
   std::function<bool()> movable;
+  /** Reports whether this page is ready for a cross-process handoff. */
+  std::function<bool()> transferable;
   /** Matches the configured undock accelerator. */
   std::function<bool(guint, GdkModifierType)> undock_key;
   /** Publishes a drag offer for the ordered pages and selected page. */
@@ -36,6 +38,8 @@ bool dock_terminal_tabs(const std::vector<TerminalTab *> &pages, TerminalTab *ac
 bool undock_terminal_tab(TerminalTab *tab);
 /** Updates the native tear-off gesture when other processes gain or lose windows. */
 void set_terminal_tab_external_peers(bool available);
+/** Returns whether a native drop can currently be received at the addressed tray. */
+bool can_receive_terminal_window_drop(guint32 xid);
 /** Starts receiving a native drop if its addressed tray still exists and is available. */
 bool receive_terminal_window_drop(guint32 xid, const std::string &token);
 }

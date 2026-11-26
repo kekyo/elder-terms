@@ -128,7 +128,7 @@ static void dispose_session(ApplicationState *state);
 static void update_peer_presence();
 static std::string offer_terminal_pages(const std::vector<elder_terms::TerminalTab *> &, elder_terms::TerminalTab *);
 static void receive_terminal_pages(ApplicationState *, std::string, std::function<void(bool)>);
-static bool can_move_terminal(const ApplicationState *state);
+static bool can_transfer_terminal(const ApplicationState *state);
 static gboolean on_main_window_delete(GtkWidget *, GdkEvent *, gpointer);
 static void stop_if_finished() {
   if (sessions.empty() && background_operations == 0) process_dispatcher->shutdown();
@@ -2207,6 +2207,8 @@ static ApplicationState *create_session(const elder_terms::LaunchOptions &launch
       .close = [&app_state] { on_main_window_delete(nullptr, nullptr, &app_state); },
       .movable = [&app_state] { return !app_state.closing && !app_state.transferring &&
           !elder_terms::has_modal_dialog(app_state.window); },
+      .transferable = [&app_state] { return can_transfer_terminal(&app_state) &&
+          !elder_terms::terminal_widget_has_selected_text(BOXRIG_GTK3_TERMINAL_WIDGET(app_state.main_window->terminal)); },
       .undock_key = [&app_state](guint key, GdkModifierType modifiers) {
         const auto binding = elder_terms::terminal_key_bindings(app_state.settings_store).undock;
         return binding && elder_terms::key_binding_matches(*binding, key, modifiers);
@@ -2309,10 +2311,12 @@ static ApplicationState *find_page(const std::string &id) {
   return nullptr;
 }
 
-static bool can_move_terminal(const ApplicationState *s) {
+static bool can_transfer_terminal(const ApplicationState *s) {
   return s && !s->closing && !s->transferring && s->runtime && s->connection_active &&
       !s->transfer_active && !s->settings_dialog && !s->transfer_file_dialog &&
-      !elder_terms::has_modal_dialog(s->window);
+      !elder_terms::has_modal_dialog(s->window) &&
+      (s->active_profile.kind == elder_terms::TerminalConnectionKind::local_shell ||
+       s->active_profile.kind == elder_terms::TerminalConnectionKind::ssh);
 }
 
 static cardio::promise<void> wait_for_shell(elder_terms::TerminalLocalChildReaper *reaper) {
@@ -2350,9 +2354,7 @@ static cardio::promise<elder_terms::DockPrepared> prepare_pages(std::vector<std:
   std::vector<ApplicationState *> pages;
   for (auto &id : ids) {
     auto *s = find_page(id);
-    if (!can_move_terminal(s) || (s->active_profile.kind != elder_terms::TerminalConnectionKind::local_shell &&
-        s->active_profile.kind != elder_terms::TerminalConnectionKind::ssh))
-      co_return result;
+    if (!can_transfer_terminal(s)) co_return result;
     if (elder_terms::terminal_widget_has_selected_text(BOXRIG_GTK3_TERMINAL_WIDGET(s->main_window->terminal))) {
       elder_terms::set_main_window_status_text(s->main_window, _("Clear the text selection to move this terminal"));
       co_return result;

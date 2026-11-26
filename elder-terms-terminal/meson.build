@@ -81,6 +81,7 @@ elder_terms_sources = [
   'src/main.cpp',
   'src/terminal-tabs.cpp',
   'src/titlebar-dock.cpp',
+  'src/dock-feedback.c',
   'src/terminal-dock-bus.cpp',
   'src/sftp-origin-bus.cpp',
   'src/tab-tearoff.c',
