@@ -107,7 +107,8 @@ static void refresh(TerminalTray *tray) {
   }
   auto *active = tray->active;
   gtk_widget_set_visible(tray->sidebar, tray->tabs.size() > 1);
-  frame_page(tray, active);
+  if (tray->tabs.size() > 1) frame_page(tray, active);
+  else restore_frame(tray);
   for (auto *tab : tray->tabs) tab->actions.host(tray->window, tray->body, tab == active);
   gtk_stack_set_visible_child(GTK_STACK(tray->headers), active->page->header_bar);
   gtk_stack_set_visible_child(GTK_STACK(tray->pages), active->page->root_box);
