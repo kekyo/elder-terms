@@ -139,6 +139,11 @@ if find_program('kwin_x11', required: false).found()
   if find_program('xdotool', required: false).found()
     test('terminal-tab-docking', find_program('bash'),
       args: [meson.current_source_dir() / 'tests/terminal-docking.sh', elder_terms_terminal], timeout: 90, is_parallel: false)
+    if find_program('ffmpeg', required: false).found() and find_program('xmessage', required: false).found()
+      test('terminal-title-native-docking', find_program('bash'),
+        args: [meson.current_source_dir() / 'tests/terminal-title-native-docking.sh', elder_terms_terminal],
+        timeout: 90, is_parallel: false)
+    endif
     test('terminal-tab-docking-blur', find_program('bash'),
       args: [meson.current_source_dir() / 'tests/terminal-docking-blur.sh', elder_terms_terminal],
       timeout: 90, is_parallel: false)

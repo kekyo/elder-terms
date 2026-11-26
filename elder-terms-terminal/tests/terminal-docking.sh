@@ -76,6 +76,8 @@ xdotool mousemove --window "$beta" 25 67 click 1
 xdotool windowactivate --sync "$beta" type 'save-title'
 xdotool key Return
 wait_until grep -qx "$(cat "$scratch/Beta.pid"):save-title" "$scratch/Beta.input"
+xdotool windowmove --sync "$beta" 950 100
+read -r bx by < <(origin "$beta")
 drag "$((bx+26))" "$((by+28))" "$((ax+200))" "$((ay+150))"
 merged() { [[ -z $(window Alpha || true) && $(window Beta) == "$alpha" ]]; }
 wait_until merged
