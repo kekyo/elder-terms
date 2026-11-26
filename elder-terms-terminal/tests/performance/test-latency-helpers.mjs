@@ -80,9 +80,11 @@ try {
     }
     if (mode === 'sparse-url') {
       const initial = state.output.split('elder-latency:ready')[0];
-      const urls = initial.split(/\s+/).filter((word) =>
-        /^https:\/\/example\.org\/latency\/\d{8}$/.test(word)
-      );
+      const urls = initial
+        .split(/\s+/)
+        .filter((word) =>
+          /^https:\/\/example\.org\/latency\/\d{8}$/.test(word)
+        );
       if (urls.length !== 11 || !initial.includes('ordinary terminal line'))
         throw new Error('Sparse URLs must occur once per 100 initial lines');
     }

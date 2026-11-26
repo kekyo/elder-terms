@@ -145,16 +145,8 @@ try {
     }
   };
   for (const scheme of ['http', 'https']) {
-    await check(scheme, 'reject', scheme === 'https', 'none', {}, '127.0.0.1');
-    await check(
-      scheme,
-      'reject',
-      scheme === 'https',
-      'valid',
-      {},
-      '127.0.0.1'
-    );
-    await check(scheme, 'reject', scheme === 'https', 'invalid', {}, '127.0.0.1');
+    for (const mode of ['none', 'valid', 'invalid'])
+      await check(scheme, 'reject', scheme === 'https', mode, {}, '127.0.0.1');
   }
   for (const policy of ['reject', 'allow', 'decline'])
     await check('https', policy, false, 'none', {}, '127.0.0.1');
