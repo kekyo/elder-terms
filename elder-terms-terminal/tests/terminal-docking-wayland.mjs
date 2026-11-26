@@ -99,9 +99,11 @@ await withWaylandHarness(null, async (h) => {
     );
     await h.waitUntil(async () => {
       const moved = await locate('Beta');
-      return moved &&
+      return (
+        moved &&
         (Math.abs(moved.left - startingPosition.left) > 40 ||
-          Math.abs(moved.top - startingPosition.top) > 40);
+          Math.abs(moved.top - startingPosition.top) > 40)
+      );
     }, 'title text moved the Wayland terminal window');
     b = await ready('Beta');
     const beforeWhitespace = { left: b.left, top: b.top };
@@ -111,9 +113,11 @@ await withWaylandHarness(null, async (h) => {
     );
     await h.waitUntil(async () => {
       const moved = await locate('Beta');
-      return moved &&
+      return (
+        moved &&
         (Math.abs(moved.left - beforeWhitespace.left) > 40 ||
-          Math.abs(moved.top - beforeWhitespace.top) > 40);
+          Math.abs(moved.top - beforeWhitespace.top) > 40)
+      );
     }, 'title whitespace moved the Wayland terminal window');
     b = await ready('Beta');
     await h.drag({ x: b.left + 14, y: b.top - headerOffset }, inside);
