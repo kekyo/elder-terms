@@ -128,6 +128,11 @@ elder_terms_terminal = executable(
 )
 
 if get_option('build_tests')
+tab_tearoff_cursor_test = executable('tab-tearoff-cursor-test',
+  ['tests/cpp/tab-tearoff-cursor-test.c', 'src/tab-tearoff.c', 'src/dock-feedback.c'],
+  dependencies: [gtk_dep, dependency('x11'), dependency('xfixes')])
+test('tab-tearoff-cursor-test', find_program('xvfb-run'), args: ['-a', tab_tearoff_cursor_test],
+  env: ['G_DEBUG=fatal-criticals', 'GDK_BACKEND=x11'])
 sftp_origin_bus_test = executable('sftp-origin-bus-test',
   ['tests/cpp/sftp-origin-bus-test.cpp', 'src/sftp-origin-bus.cpp'], dependencies: gio_dep)
 test('sftp-origin-bus-test', find_program('dbus-run-session'), args: ['--', sftp_origin_bus_test])

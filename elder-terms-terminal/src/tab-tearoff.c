@@ -1,4 +1,5 @@
 #include "tab-tearoff.h"
+#include "dock-feedback.h"
 
 struct TearoffGesture {
     GtkWidget *button;
@@ -12,10 +13,57 @@ struct TearoffGesture {
     gboolean pressed;
     gboolean dragging;
     double previous_opacity;
+    GdkWindow *cursor_window;
+    GdkCursor *previous_cursor;
 };
+
+static void show_undock_cursor(TearoffGesture *gesture)
+{
+    GdkWindow *native = gtk_widget_get_window(gesture->button);
+    if (!native) return;
+    int scale = gdk_window_get_scale_factor(native);
+    cairo_surface_t *surface = cairo_image_surface_create(CAIRO_FORMAT_ARGB32,
+        36 * scale, 36 * scale);
+    cairo_surface_set_device_scale(surface, scale, scale);
+    cairo_t *cr = cairo_create(surface);
+    cairo_move_to(cr, 1.5, 1.5);
+    cairo_line_to(cr, 1.5, 19.5);
+    cairo_line_to(cr, 5.5, 15.5);
+    cairo_line_to(cr, 9.0, 23.0);
+    cairo_line_to(cr, 12.0, 21.5);
+    cairo_line_to(cr, 8.5, 14.0);
+    cairo_line_to(cr, 14.5, 14.0);
+    cairo_close_path(cr);
+    cairo_set_source_rgb(cr, 1, 1, 1);
+    cairo_fill_preserve(cr);
+    cairo_set_source_rgb(cr, 0, 0, 0);
+    cairo_set_line_width(cr, 1.5);
+    cairo_stroke(cr);
+    cairo_surface_t *badge = dock_feedback_surface(DOCK_FEEDBACK_UNDOCK, scale);
+    cairo_set_source_surface(cr, badge, 11, 10);
+    cairo_paint(cr);
+    cairo_surface_destroy(badge);
+    cairo_destroy(cr);
+
+    GdkCursor *cursor = gdk_cursor_new_from_surface(gdk_window_get_display(native), surface, 0, 0);
+    cairo_surface_destroy(surface);
+    if (!cursor) return;
+    gesture->cursor_window = g_object_ref(native);
+    gesture->previous_cursor = gdk_window_get_cursor(native);
+    if (gesture->previous_cursor) g_object_ref(gesture->previous_cursor);
+    gdk_window_set_cursor(native, cursor);
+    g_object_unref(cursor);
+}
 
 static void finish(TearoffGesture *gesture)
 {
+    if (gesture->cursor_window) {
+        gdk_window_set_cursor(gesture->cursor_window, gesture->previous_cursor);
+        if (gesture->previous_cursor) g_object_unref(gesture->previous_cursor);
+        g_object_unref(gesture->cursor_window);
+        gesture->cursor_window = NULL;
+        gesture->previous_cursor = NULL;
+    }
     if (gesture->window) {
         if (gesture->key_handler)
             g_signal_handler_disconnect(gesture->window, gesture->key_handler);
@@ -64,6 +112,7 @@ static gboolean motion(GtkWidget *widget, GdkEventMotion *event, TearoffGesture 
         gesture->dragging = TRUE;
         gesture->previous_opacity = gtk_widget_get_opacity(widget);
         gtk_widget_set_opacity(widget, 0.65);
+        show_undock_cursor(gesture);
     }
     return TRUE;
 }
