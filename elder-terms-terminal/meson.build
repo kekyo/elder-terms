@@ -154,6 +154,11 @@ if find_program('kwin_x11', required: false).found()
         args: [meson.current_source_dir() / 'tests/terminal-title-native-docking.sh', elder_terms_terminal],
         timeout: 90, is_parallel: false)
     endif
+    if find_program('import', required: false).found() and find_program('xmessage', required: false).found()
+      test('terminal-tab-drag-feedback-x11', find_program('bash'),
+        args: [meson.current_source_dir() / 'tests/terminal-tab-feedback-x11.sh', elder_terms_terminal],
+        timeout: 90, is_parallel: false)
+    endif
     test('terminal-tab-docking-blur', find_program('bash'),
       args: [meson.current_source_dir() / 'tests/terminal-docking-blur.sh', elder_terms_terminal],
       timeout: 90, is_parallel: false)
