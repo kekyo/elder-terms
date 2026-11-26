@@ -65,6 +65,8 @@ struct MainWindow {
   GtkBuilder *builder = nullptr;
   /** Top-level application window. */
   GtkWidget *window = nullptr;
+  /** Screen retained for CSS providers after a docked window is destroyed. */
+  GdkScreen *style_screen = nullptr;
   /** Whether this session supplies the native tray title and controls. */
   bool selected = true;
   /** Header bar widget. */

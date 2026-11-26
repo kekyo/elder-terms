@@ -611,7 +611,7 @@ static void clear_main_window_exterior_background(MainWindow *main_window) {
   GtkCssProvider *component_provider =
       main_window->exterior_component_background_provider;
   if (component_provider != nullptr) {
-    GdkScreen *screen = gtk_widget_get_screen(main_window->window);
+    GdkScreen *screen = main_window->style_screen;
     if (screen != nullptr) {
       gtk_style_context_remove_provider_for_screen(
           screen, GTK_STYLE_PROVIDER(component_provider));
@@ -679,7 +679,7 @@ static void clear_main_window_component_background(
   GtkCssProvider *popup_provider =
       main_window->popup_component_background_provider;
   if (popup_provider != nullptr) {
-    GdkScreen *screen = gtk_widget_get_screen(main_window->window);
+    GdkScreen *screen = main_window->style_screen;
     if (screen != nullptr) {
       gtk_style_context_remove_provider_for_screen(
           screen, GTK_STYLE_PROVIDER(popup_provider));
@@ -712,7 +712,7 @@ static void set_main_window_component_background(
   if (popup_provider == nullptr) {
     return;
   }
-  GdkScreen *screen = gtk_widget_get_screen(main_window->window);
+  GdkScreen *screen = main_window->style_screen;
   if (screen == nullptr) {
     g_object_unref(popup_provider);
     return;
@@ -785,7 +785,7 @@ static void set_main_window_exterior_background(
     update_widget_style_class(
         main_window->status_bar,
         main_exterior_component_style_class, true);
-    GdkScreen *screen = gtk_widget_get_screen(main_window->window);
+    GdkScreen *screen = main_window->style_screen;
     if (screen != nullptr) {
       gtk_style_context_add_provider_for_screen(
           screen, GTK_STYLE_PROVIDER(component_provider),
@@ -1011,6 +1011,10 @@ std::optional<MainWindow> load_main_window(TerminalAmbiguousWidth ambiguous_widt
   gestament_gtk_assign_accessible_ids_from_builder(main_window.builder);
 
   main_window.window = required_widget(main_window.builder, "main_window");
+  if (main_window.window) {
+    if (auto *screen = gtk_widget_get_screen(main_window.window))
+      main_window.style_screen = GDK_SCREEN(g_object_ref(screen));
+  }
   if (main_window.window) prepare_terminal_background_window(main_window.window);
   main_window.header_bar = required_widget(main_window.builder, "header_bar");
   main_window.header_connection_icon =
@@ -1701,9 +1705,10 @@ void release_main_window(MainWindow *main_window) {
   deactivate_main_window_activity_indicators(main_window);
   clear_main_window_compact_header(main_window);
   if (main_window->header_provider != nullptr) {
-    gtk_style_context_remove_provider_for_screen(
-        gtk_widget_get_screen(main_window->header_bar),
-        GTK_STYLE_PROVIDER(main_window->header_provider));
+    if (main_window->style_screen)
+      gtk_style_context_remove_provider_for_screen(
+          main_window->style_screen,
+          GTK_STYLE_PROVIDER(main_window->header_provider));
     g_clear_object(&main_window->header_provider);
   }
   clear_main_window_exterior_background(main_window);
@@ -1717,6 +1722,7 @@ void release_main_window(MainWindow *main_window) {
   if (main_window->builder != nullptr) {
     g_object_unref(main_window->builder);
   }
+  g_clear_object(&main_window->style_screen);
   *main_window = {};
 }
 

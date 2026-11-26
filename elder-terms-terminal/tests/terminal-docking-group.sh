@@ -33,6 +33,7 @@ SCRIPT
 name=$tab
 type=local
 auto_close=false
+${ELDER_TERMS_GROUP_COLOR_CLOSE:+exterior_background=#A51D2D}
 [local]
 command_line=$scratch/$tab.sh
 [terminal]
@@ -125,4 +126,12 @@ width=$(xwininfo -id "$delta" | awk '/Width:/{print $2}')
 xdotool mousemove --window "$delta" "$((width-25))" 27 click 1
 wait_until shell_gone Gamma
 wait_until gone "$delta"
+if [[ -n ${ELDER_TERMS_GROUP_COLOR_CLOSE:-} ]]; then
+  # Session disposal runs after GTK has removed the final window.
+  for pid in "${pids[@]:1}"; do wait "$pid"; done
+  if grep -nE 'Gtk-CRITICAL|GTK_IS_WIDGET' "$scratch/"{Alpha,Beta,Gamma,Delta}.log; then
+    echo "A colored terminal used a destroyed widget during close" >&2
+    exit 1
+  fi
+fi
 succeeded=1
