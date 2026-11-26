@@ -76,9 +76,12 @@ static TerminalBackgroundImagePtr copy_pixels(ImageRead *read) {
   const auto channels = gdk_pixbuf_get_n_channels(pixbuf);
   const auto stride = gdk_pixbuf_get_rowstride(pixbuf);
   if (!dimensions_valid(width, height) || gdk_pixbuf_get_bits_per_sample(pixbuf) != 8 ||
-      gdk_pixbuf_get_colorspace(pixbuf) != GDK_COLORSPACE_RGB || (channels != 3 && channels != 4) ||
-      stride < width * channels || static_cast<std::size_t>(stride) > image_limit / height ||
-      gdk_pixbuf_get_byte_length(pixbuf) < static_cast<std::size_t>(height - 1) * stride + width * channels)
+      gdk_pixbuf_get_colorspace(pixbuf) != GDK_COLORSPACE_RGB || (channels != 3 && channels != 4) || stride <= 0)
+    return nullptr;
+  const auto row_stride = static_cast<std::size_t>(stride);
+  const auto row_bytes = static_cast<std::size_t>(width) * channels;
+  if (row_stride < row_bytes || row_stride > image_limit / height ||
+      gdk_pixbuf_get_byte_length(pixbuf) < static_cast<std::size_t>(height - 1) * row_stride + row_bytes)
     return nullptr;
   auto image = std::make_shared<TerminalBackgroundImage>(TerminalBackgroundImage{read->path,
       static_cast<std::size_t>(width), static_cast<std::size_t>(height), {}});
@@ -86,7 +89,7 @@ static TerminalBackgroundImagePtr copy_pixels(ImageRead *read) {
   const auto *pixels = gdk_pixbuf_read_pixels(pixbuf);
   for (int y = 0; y < height; ++y) {
     for (int x = 0; x < width; ++x) {
-      const auto *source = pixels + static_cast<std::size_t>(y) * stride + x * channels;
+      const auto *source = pixels + static_cast<std::size_t>(y) * row_stride + static_cast<std::size_t>(x) * channels;
       auto *target = image->rgba.data() + (static_cast<std::size_t>(y) * width + x) * 4;
       std::memcpy(target, source, 3);
       target[3] = channels == 4 ? source[3] : 255;

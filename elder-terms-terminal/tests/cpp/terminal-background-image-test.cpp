@@ -39,6 +39,20 @@ int main() {
   assert(gdk_pixbuf_save(pixbuf, jpeg.c_str(), "jpeg", nullptr, "quality", "100", nullptr));
   run(jpeg, nullptr);
   assert(failure.empty() && loaded && loaded->rgba[3] == 255);
+  const auto rgb = std::string(directory) + "/padded.png";
+  auto *padded = gdk_pixbuf_new(GDK_COLORSPACE_RGB, FALSE, 8, 3, 2);
+  assert(padded && gdk_pixbuf_get_rowstride(padded) > 9);
+  gdk_pixbuf_fill(padded, 0x112233ff);
+  auto *last = gdk_pixbuf_get_pixels(padded) + gdk_pixbuf_get_rowstride(padded) + 6;
+  last[0] = 0x44;
+  assert(gdk_pixbuf_save(padded, rgb.c_str(), "png", nullptr, nullptr));
+  g_object_unref(padded);
+  run(rgb, nullptr);
+  assert(failure.empty() && loaded && loaded->rgba.size() == 24);
+  for (std::size_t offset = 0; offset < loaded->rgba.size(); offset += 4) {
+    assert(loaded->rgba[offset] == (offset == 20 ? 0x44 : 0x11));
+    assert(loaded->rgba[offset + 1] == 0x22 && loaded->rgba[offset + 2] == 0x33 && loaded->rgba[offset + 3] == 255);
+  }
   run("", nullptr);
   assert(!loaded && failure.empty());
   for (const auto &invalid : {std::string("image.png"), std::string("https://example.com/image.png"), path + ".missing", std::string(directory)}) {
