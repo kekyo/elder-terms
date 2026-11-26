@@ -8,11 +8,12 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PNG } from 'pngjs';
+import type { PNG } from 'pngjs';
 import { expect, it } from 'vitest';
 import { waitForResult } from 'gestament/testing';
 import {
   runGtkTest,
+  readTerminalGridPixels,
   readTerminalGridLayout,
   pressKeyWithModifiers,
 } from './gtk-test-helpers.ts';
@@ -98,7 +99,10 @@ process.stdout.write(${JSON.stringify(output)});`
             }
             const { terminal, cellWidth: width, cellHeight: height } = layout;
             await waitForResult(async () => {
-              const frame = PNG.sync.read((await terminal.capture()).image);
+              const frame = readTerminalGridPixels(
+                await terminal.capture(),
+                layout
+              );
               for (const [index, color] of colors.entries()) {
                 let pixels = 0;
                 for (let y = 0; y < height; y++)
@@ -120,7 +124,6 @@ process.stdout.write(${JSON.stringify(output)});`
                 );
               }
             });
-            const { bounds } = await terminal.capture();
             for (const [row, left, right, expected] of [
               [0, 1.1, 3.9, 'אבג'],
               [1, 2.1, 4.9, '界❤️B'],
@@ -130,13 +133,13 @@ process.stdout.write(${JSON.stringify(output)});`
                   await app.input.pressKey('Escape');
                   await app.input.setModifier('control', rectangular);
                   await app.input.moveMouseTo(
-                    Math.trunc(bounds.x + width * (reverse ? right : left)),
-                    Math.trunc(bounds.y + height * (row + 0.5))
+                    Math.trunc(layout.gridX + width * (reverse ? right : left)),
+                    Math.trunc(layout.gridY + height * (row + 0.5))
                   );
                   await app.input.setMouseButton('left', true);
                   await app.input.moveMouseTo(
-                    Math.trunc(bounds.x + width * (reverse ? left : right)),
-                    Math.trunc(bounds.y + height * (row + 0.5))
+                    Math.trunc(layout.gridX + width * (reverse ? left : right)),
+                    Math.trunc(layout.gridY + height * (row + 0.5))
                   );
                   await app.input.setMouseButton('left', false);
                   await app.input.setModifier('control', false);
@@ -153,8 +156,8 @@ process.stdout.write(${JSON.stringify(output)});`
             await app.input.pressKey('Escape');
             for (let index = 0; index < letters.length; index++) {
               await app.input.moveMouseTo(
-                Math.trunc(bounds.x + width * (index + 1.5)),
-                Math.trunc(bounds.y + height * 2.5)
+                Math.trunc(layout.gridX + width * (index + 1.5)),
+                Math.trunc(layout.gridY + height * 2.5)
               );
               await app.input.setModifier('control', true);
               await app.input.setMouseButton('left', true);
@@ -271,7 +274,7 @@ process.stdin.on('data', chunk => {
             join(evidence.directory, 'meter-initial.png'),
             capture.image
           );
-          const baseline = PNG.sync.read(capture.image);
+          const baseline = readTerminalGridPixels(capture, layout);
           for (const [row, line] of lines.entries()) {
             for (const [column, character] of [...line].entries()) {
               if (character === ' ') continue;
@@ -316,7 +319,7 @@ process.stdin.on('data', chunk => {
                   '-video_size',
                   `${width}x${height}`,
                   '-i',
-                  `${env.DISPLAY}+${capture.bounds.x},${capture.bounds.y}`,
+                  `${env.DISPLAY}+${layout.gridX},${layout.gridY}`,
                   '-frames:v',
                   '90',
                   '-c:v',
@@ -439,14 +442,14 @@ process.stdin.on('data', chunk => {
             const terminal = await app.getById('terminal_view');
             const width = layout.cellWidth * (span + 2);
             const height = layout.cellHeight;
-            await app.input.moveMouseTo(
-              layout.terminalCapture.bounds.x + 50,
-              layout.terminalCapture.bounds.y + 50
-            );
+            await app.input.moveMouseTo(layout.gridX + 50, layout.gridY + 50);
             await app.input.setMouseButton('left', true);
             await app.input.setMouseButton('left', false);
             const baseline = await waitForResult(async () => {
-              const png = PNG.sync.read((await terminal.capture()).image);
+              const png = readTerminalGridPixels(
+                await terminal.capture(),
+                layout
+              );
               const rgb = Buffer.alloc(width * height * 3);
               let ink = 0;
               for (let y = 0; y < height; y++)
@@ -472,7 +475,10 @@ process.stdin.on('data', chunk => {
             ] as const) {
               await app.input.pressKey(key);
               await waitForResult(async () => {
-                const png = PNG.sync.read((await terminal.capture()).image);
+                const png = readTerminalGridPixels(
+                  await terminal.capture(),
+                  layout
+                );
                 const offset = column * layout.cellWidth * 4;
                 expect([...png.data.subarray(offset, offset + 3)]).toEqual([
                   255, 204, 0,
@@ -495,7 +501,7 @@ process.stdin.on('data', chunk => {
                   '-video_size',
                   `${width}x${height}`,
                   '-i',
-                  `${env.DISPLAY}+${layout.terminalCapture.bounds.x},${layout.terminalCapture.bounds.y}`,
+                  `${env.DISPLAY}+${layout.gridX},${layout.gridY}`,
                   '-frames:v',
                   '90',
                   '-c:v',
@@ -672,8 +678,8 @@ draw();
               );
               const focus = async (): Promise<void> => {
                 await app.input.moveMouseTo(
-                  layout.terminalCapture.bounds.x + 10,
-                  layout.terminalCapture.bounds.y + 10
+                  layout.gridX + 10,
+                  layout.gridY + 10
                 );
                 await app.input.setMouseButton('left', true);
                 await app.input.setMouseButton('left', false);
@@ -681,7 +687,7 @@ draw();
               await focus();
               const capture = async (): Promise<PNG> => {
                 expect(await state.text()).toContain('ready=1');
-                return PNG.sync.read((await terminal.capture()).image);
+                return readTerminalGridPixels(await terminal.capture(), layout);
               };
               const before = await waitForResult(async () => {
                 const pixels = await capture();
@@ -773,21 +779,17 @@ draw();
               // Cross the drag threshold before returning to the digit's end.
               await app.input.setModifier('control', true);
               await app.input.moveMouseTo(
-                layout.terminalCapture.bounds.x + 1,
-                layout.terminalCapture.bounds.y +
-                  Math.floor(layout.cellHeight / 2)
+                layout.gridX + 1,
+                layout.gridY + Math.floor(layout.cellHeight / 2)
               );
               await app.input.setMouseButton('left', true);
               await app.input.moveMouseTo(
-                layout.terminalCapture.bounds.x +
-                  (width + 2) * layout.cellWidth,
-                layout.terminalCapture.bounds.y +
-                  Math.floor(layout.cellHeight / 2)
+                layout.gridX + (width + 2) * layout.cellWidth,
+                layout.gridY + Math.floor(layout.cellHeight / 2)
               );
               await app.input.moveMouseTo(
-                layout.terminalCapture.bounds.x + width * layout.cellWidth - 1,
-                layout.terminalCapture.bounds.y +
-                  Math.floor(layout.cellHeight / 2)
+                layout.gridX + width * layout.cellWidth - 1,
+                layout.gridY + Math.floor(layout.cellHeight / 2)
               );
               await app.input.setMouseButton('left', false);
               await app.input.setModifier('control', false);

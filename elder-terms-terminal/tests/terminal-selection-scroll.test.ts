@@ -7,11 +7,11 @@ import { spawn } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { chmod, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { PNG } from 'pngjs';
 import { describe, expect, it } from 'vitest';
 import { waitForResult } from 'gestament/testing';
 import {
   defaultRows,
+  readTerminalGridPixels,
   readWindowCellLayout,
   runGtkTest,
 } from './gtk-test-helpers';
@@ -98,7 +98,6 @@ describe.concurrent('terminal selection autoscroll video', () => {
                 expect(value.ready).toBe(true);
                 return value;
               });
-              const bounds = (await terminal.capture()).bounds;
               const width = layout.cellWidth * 14;
               const height = layout.cellHeight * 8;
               const frameSize = width * height * 3;
@@ -119,7 +118,7 @@ describe.concurrent('terminal selection autoscroll video', () => {
                   '-video_size',
                   `${width}x${height}`,
                   '-i',
-                  `${env.DISPLAY}+${bounds.x},${bounds.y}`,
+                  `${env.DISPLAY}+${layout.gridX},${layout.gridY}`,
                   '-map',
                   '0:v',
                   '-c:v',
@@ -184,8 +183,8 @@ describe.concurrent('terminal selection autoscroll video', () => {
               });
               const move = async (column: number, row: number) => {
                 await app.input.moveMouseTo(
-                  Math.trunc(bounds.x + column * layout.cellWidth),
-                  Math.trunc(bounds.y + row * layout.cellHeight)
+                  Math.trunc(layout.gridX + column * layout.cellWidth),
+                  Math.trunc(layout.gridY + row * layout.cellHeight)
                 );
               };
               const observe = async (label: string, stableFrames: number) => {
@@ -194,7 +193,10 @@ describe.concurrent('terminal selection autoscroll video', () => {
                   expect(failure).toBe('');
                   const current = await state();
                   expect(current.ready).toBe(true);
-                  const image = PNG.sync.read((await terminal.capture()).image);
+                  const image = readTerminalGridPixels(
+                    await terminal.capture(),
+                    layout
+                  );
                   const rgb = Buffer.alloc(frameSize);
                   for (let y = 0; y < height; y++)
                     for (let x = 0; x < width; x++) {

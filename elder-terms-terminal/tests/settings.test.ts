@@ -42,6 +42,7 @@ import {
   readFixtureTerminalScrollbackLines,
   readTerminalGridLayout,
   readWindowCellLayout,
+  readTerminalGridPixels,
   runGtkTest,
   saveTerminalGridLayoutEvidence,
   scrollWheelWithControl,
@@ -933,7 +934,10 @@ describe.concurrent('elder-terms-terminal settings', () => {
           return Buffer.concat(rows);
         };
         const initial = await waitForResult(async () => {
-          const frame = PNG.sync.read((await terminal.capture()).image);
+          const frame = readTerminalGridPixels(
+            await terminal.capture(),
+            layout
+          );
           const plain = rowPixels(frame, 0);
           const underlined = rowPixels(frame, 1);
           expect(plain).not.toEqual(underlined);
@@ -941,7 +945,10 @@ describe.concurrent('elder-terms-terminal settings', () => {
         });
         const checkRows = async (regex: Buffer, osc8: Buffer) => {
           await toPass(async () => {
-            const frame = PNG.sync.read((await terminal.capture()).image);
+            const frame = readTerminalGridPixels(
+              await terminal.capture(),
+              layout
+            );
             expect(rowPixels(frame, 0)).toEqual(regex);
             expect(rowPixels(frame, 1)).toEqual(osc8);
           });
@@ -1102,11 +1109,10 @@ describe.concurrent('elder-terms-terminal settings', () => {
                 await app.getById('fixture_terminal_state_label'),
                 'label'
               );
-              const bounds = (await terminal.capture()).bounds;
               const move = async (column: number, row: number) => {
                 await app.input.moveMouseTo(
-                  Math.trunc(bounds.x + column * layout.cellWidth),
-                  Math.trunc(bounds.y + row * layout.cellHeight)
+                  Math.trunc(layout.gridX + column * layout.cellWidth),
+                  Math.trunc(layout.gridY + row * layout.cellHeight)
                 );
               };
               const expectCopy = async (expected: string) => {

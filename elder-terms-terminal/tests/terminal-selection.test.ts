@@ -8,10 +8,13 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { PNG } from 'pngjs';
 import { describe, expect, it } from 'vitest';
 import { waitForResult } from 'gestament/testing';
-import { readWindowCellLayout, runGtkTest } from './gtk-test-helpers';
+import {
+  readTerminalGridPixels,
+  readWindowCellLayout,
+  runGtkTest,
+} from './gtk-test-helpers';
 import {
   withTemporaryDirectory,
   expectElementKind,
@@ -62,11 +65,10 @@ describe.concurrent('terminal selection presentation', () => {
                   `scroll=${100 - layout.rows}/${100 - layout.rows}`
                 )
               );
-              const bounds = (await terminal.capture()).bounds;
               const move = async (column: number, row: number) => {
                 await app.input.moveMouseTo(
-                  Math.trunc(bounds.x + column * layout.cellWidth),
-                  Math.trunc(bounds.y + row * layout.cellHeight)
+                  Math.trunc(layout.gridX + column * layout.cellWidth),
+                  Math.trunc(layout.gridY + row * layout.cellHeight)
                 );
               };
               const modifier = rectangular ? 'control' : 'shift';
@@ -86,7 +88,10 @@ describe.concurrent('terminal selection presentation', () => {
                   layout.cellWidth,
                   layout.cellHeight,
                 ]);
-                const frame = PNG.sync.read((await terminal.capture()).image);
+                const frame = readTerminalGridPixels(
+                  await terminal.capture(),
+                  layout
+                );
                 const offset =
                   (frame.width +
                     Math.trunc(layout.cellWidth * (rectangular ? 2 : 5) + 1)) *
@@ -158,11 +163,13 @@ process.stdout.write('\\x1b[?25l\\x1b[2J\\x1b[H\\x1b[5m██  ██\\r\\n\\x1b
             );
             await layout.mainWindow.activate();
             const terminal = await app.getById('terminal_view');
-            const bounds = (await terminal.capture()).bounds;
             const width = layout.cellWidth;
             const height = layout.cellHeight;
             await waitForResult(async () => {
-              const image = PNG.sync.read((await terminal.capture()).image);
+              const image = readTerminalGridPixels(
+                await terminal.capture(),
+                layout
+              );
               const offset =
                 (Math.trunc(height * 1.5) * image.width +
                   Math.trunc(width * 2.5)) *
@@ -172,17 +179,20 @@ process.stdout.write('\\x1b[?25l\\x1b[2J\\x1b[H\\x1b[5m██  ██\\r\\n\\x1b
               ).toBe('b3b3b3');
             });
             await app.input.moveMouseTo(
-              Math.trunc(bounds.x + 1),
-              Math.trunc(bounds.y + height / 2)
+              Math.trunc(layout.gridX + 1),
+              Math.trunc(layout.gridY + height / 2)
             );
             await app.input.setMouseButton('left', true);
             await app.input.moveMouseTo(
-              Math.trunc(bounds.x + width * 6 - 1),
-              Math.trunc(bounds.y + height / 2)
+              Math.trunc(layout.gridX + width * 6 - 1),
+              Math.trunc(layout.gridY + height / 2)
             );
             await app.input.setMouseButton('left', false);
             await waitForResult(async () => {
-              const image = PNG.sync.read((await terminal.capture()).image);
+              const image = readTerminalGridPixels(
+                await terminal.capture(),
+                layout
+              );
               const offset =
                 (Math.trunc(height / 2) * image.width +
                   Math.trunc(width * 2.5)) *
@@ -210,7 +220,7 @@ process.stdout.write('\\x1b[?25l\\x1b[2J\\x1b[H\\x1b[5m██  ██\\r\\n\\x1b
                 '-video_size',
                 `${videoWidth}x${videoHeight}`,
                 '-i',
-                `${(await app.environment()).DISPLAY}+${bounds.x},${bounds.y}`,
+                `${(await app.environment()).DISPLAY}+${layout.gridX},${layout.gridY}`,
                 '-map',
                 '0:v',
                 '-c:v',
@@ -358,7 +368,6 @@ process.stdout.write('\\x1b[?25l\\x1b[2J\\x1b[H\\x1b[5m██  ██\\r\\n\\x1b
                 });
                 await layout.mainWindow.activate();
                 const terminal = await app.getById('terminal_view');
-                const bounds = (await terminal.capture()).bounds;
                 const width = layout.cellWidth;
                 const height = layout.cellHeight;
                 const select = async (
@@ -367,13 +376,13 @@ process.stdout.write('\\x1b[?25l\\x1b[2J\\x1b[H\\x1b[5m██  ██\\r\\n\\x1b
                 ): Promise<void> => {
                   await app.input.setModifier('control', rectangular);
                   await app.input.moveMouseTo(
-                    Math.trunc(bounds.x + width * 0.1),
-                    Math.trunc(bounds.y + height * (row + 0.5))
+                    Math.trunc(layout.gridX + width * 0.1),
+                    Math.trunc(layout.gridY + height * (row + 0.5))
                   );
                   await app.input.setMouseButton('left', true);
                   await app.input.moveMouseTo(
-                    Math.trunc(bounds.x + width * 9.9),
-                    Math.trunc(bounds.y + height * (row + 0.5))
+                    Math.trunc(layout.gridX + width * 9.9),
+                    Math.trunc(layout.gridY + height * (row + 0.5))
                   );
                   await app.input.setMouseButton('left', false);
                   await app.input.setModifier('control', false);
@@ -382,7 +391,10 @@ process.stdout.write('\\x1b[?25l\\x1b[2J\\x1b[H\\x1b[5m██  ██\\r\\n\\x1b
                   row: number,
                   concealed: boolean
                 ): Promise<void> => {
-                  const frame = PNG.sync.read((await terminal.capture()).image);
+                  const frame = readTerminalGridPixels(
+                    await terminal.capture(),
+                    layout
+                  );
                   const pixel = (x: number, y: number): string => {
                     const offset =
                       (Math.trunc(y) * frame.width + Math.trunc(x)) * 4;

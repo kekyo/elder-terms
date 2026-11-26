@@ -91,6 +91,12 @@ static boxrig_ui_view *view(Fixture *fixture) {
   return boxrig_gtk3_terminal_widget_view(terminal_runtime_widget(fixture->window->runtime));
 }
 
+static boxrig_ui_layout_result selection_grid(Fixture *fixture) {
+  boxrig_ui_layout_result grid{};
+  expect(boxrig_ui_view_get_layout(view(fixture), &grid) == BOXRIG_UI_OK, "locate the selection grid");
+  return grid;
+}
+
 static void key(Fixture *fixture, guint symbol, GdkEventType type, guint modifiers) {
   auto *widget = GTK_WIDGET(terminal_runtime_widget(fixture->window->runtime));
   GdkEventKey event{};
@@ -112,8 +118,9 @@ static void mouse(Fixture *fixture, GdkEventType type, double column, double row
   boxrig_font_effective_metrics metrics{};
   expect(boxrig_gtk3_terminal_widget_get_effective_metrics(widget, &metrics) == BOXRIG_FONT_CATALOG_OK, "mouse metrics");
   const auto scale = gtk_widget_get_scale_factor(GTK_WIDGET(widget));
-  const auto x = column * metrics.cell_width / scale;
-  const auto y = row * metrics.cell_height / scale;
+  const auto grid = selection_grid(fixture);
+  const auto x = (grid.origin_x / double(BOXRIG_UI_FIXED_ONE) + column * metrics.cell_width) / scale;
+  const auto y = (grid.origin_y / double(BOXRIG_UI_FIXED_ONE) + row * metrics.cell_height) / scale;
   gboolean handled = FALSE;
   if (type == GDK_MOTION_NOTIFY) {
     GdkEventMotion event{};
@@ -152,8 +159,9 @@ static void wheel(Fixture *fixture, GdkScrollDirection direction, double column,
   event.type = GDK_SCROLL;
   event.window = gtk_widget_get_window(GTK_WIDGET(widget));
   event.send_event = TRUE;
-  event.x = column * metrics.cell_width / scale;
-  event.y = row * metrics.cell_height / scale;
+  const auto grid = selection_grid(fixture);
+  event.x = (grid.origin_x / double(BOXRIG_UI_FIXED_ONE) + column * metrics.cell_width) / scale;
+  event.y = (grid.origin_y / double(BOXRIG_UI_FIXED_ONE) + row * metrics.cell_height) / scale;
   event.state = modifiers;
   event.direction = direction;
   gboolean handled = FALSE;
@@ -176,14 +184,15 @@ static void select(Fixture *fixture, boxrig_ui_selection_shape shape, bool empty
   boxrig_font_effective_metrics metrics{};
   expect(boxrig_gtk3_terminal_widget_get_effective_metrics(widget, &metrics) == BOXRIG_FONT_CATALOG_OK, "selection metrics");
   boxrig_ui_hit_test_result hit{};
-  expect(boxrig_ui_view_hit_test(view(fixture), BOXRIG_UI_FIXED_ONE,
-      metrics.cell_height / 2 * BOXRIG_UI_FIXED_ONE, &hit) == BOXRIG_UI_OK, "selection start");
+  const auto grid = selection_grid(fixture);
+  const auto y = grid.origin_y + metrics.cell_height / 2 * BOXRIG_UI_FIXED_ONE;
+  expect(boxrig_ui_view_hit_test(view(fixture), grid.origin_x + BOXRIG_UI_FIXED_ONE, y, &hit) == BOXRIG_UI_OK, "selection start");
   boxrig_ui_selection_options options{};
   options.kind = BOXRIG_UI_SELECTION_CHARACTER;
   options.shape = shape;
   expect(boxrig_ui_view_begin_selection_with_options(view(fixture), &options, &hit) == BOXRIG_UI_OK, "begin retained selection");
-  if (!empty) expect(boxrig_ui_view_hit_test(view(fixture), metrics.cell_width * 8 * BOXRIG_UI_FIXED_ONE,
-      metrics.cell_height / 2 * BOXRIG_UI_FIXED_ONE, &hit) == BOXRIG_UI_OK, "selection end");
+  if (!empty) expect(boxrig_ui_view_hit_test(view(fixture), grid.origin_x + metrics.cell_width * 8 * BOXRIG_UI_FIXED_ONE,
+      y, &hit) == BOXRIG_UI_OK, "selection end");
   expect(boxrig_ui_view_update_selection(view(fixture), &hit) == BOXRIG_UI_OK && selected(fixture), "retain selection anchor");
   if (empty) {
     boxrig_ui_selection selection{};
@@ -513,11 +522,10 @@ static cardio::promise<void> click_scenarios(Fixture *fixture) {
     mouse(fixture, GDK_BUTTON_PRESS, 0.1, 0.5, modifier);
     co_await barrier(fixture, false);
     boxrig_ui_hit_test_result before{}, after{};
-    expect(boxrig_ui_view_hit_test(view(fixture), BOXRIG_UI_FIXED_ONE,
-        metrics.cell_height / 2 * BOXRIG_UI_FIXED_ONE, &before) == BOXRIG_UI_OK,
+    const auto grid = selection_grid(fixture);
+    expect(boxrig_ui_view_hit_test(view(fixture), grid.origin_x + BOXRIG_UI_FIXED_ONE,
+        grid.origin_y + metrics.cell_height / 2 * BOXRIG_UI_FIXED_ONE, &before) == BOXRIG_UI_OK,
         "read the pending press before layout publication");
-    boxrig_ui_layout_result grid{};
-    expect(boxrig_ui_view_get_layout(view(fixture), &grid) == BOXRIG_UI_OK, "read the current grid");
     std::vector<boxrig_text_cluster_input> clusters(grid.columns);
     for (std::size_t column = 0; column < clusters.size(); ++column) {
       clusters[column].logical_column = column;
@@ -652,8 +660,8 @@ static cardio::promise<void> scroll_scenarios(Fixture *fixture) {
       boxrig_ui_layout_result layout{};
       expect(boxrig_ui_view_get_layout(view(fixture), &layout) == BOXRIG_UI_OK, "edge layout");
       boxrig_ui_hit_test_result edge{};
-      expect(boxrig_ui_view_hit_test(view(fixture), bottom ? layout.grid_width - 1 : 0,
-          bottom ? layout.grid_height - 1 : 0, &edge) == BOXRIG_UI_OK, "clipped edge position");
+      expect(boxrig_ui_view_hit_test(view(fixture), layout.origin_x + (bottom ? layout.grid_width - 1 : 0),
+          layout.origin_y + (bottom ? layout.grid_height - 1 : 0), &edge) == BOXRIG_UI_OK, "clipped edge position");
       boxrig_ui_selection selection{};
       const auto linear = modifier == GDK_SHIFT_MASK;
       const auto expected_column = linear && bottom ? 0 : edge.position.column;

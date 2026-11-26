@@ -2034,7 +2034,7 @@ describe.concurrent('shared settings widget', () => {
           await waitForEntryPlaceholder(
             app,
             'settings_terminal_scrollback_lines_entry',
-            '10000 (built-in default)'
+            '100000 (built-in default)'
           );
           await waitForEntryPlaceholder(
             app,
@@ -6890,7 +6890,7 @@ describe.concurrent('shared settings widget', () => {
         await waitForEntryPlaceholder(
           app,
           'settings_terminal_scrollback_lines_entry',
-          '10000 (built-in default)'
+          '100000 (built-in default)'
         );
         await scrollbackLines.setText('999');
         await waitForEntryIconTooltip(

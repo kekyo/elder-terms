@@ -353,7 +353,10 @@ for (const backend of ['cairo', 'opengl']) {
           const peer = join(directory, 'peer.mjs');
           const keys = join(directory, 'mouse');
           const inset = mode === 'preserve-window' ? 2 : 4;
-          const placement = mode === 'preserve-window' ? '' : 'padding_dip=4\ngrid_vertical_alignment=bottom\n';
+          const placement =
+            mode === 'preserve-window'
+              ? ''
+              : 'padding_dip=4\ngrid_vertical_alignment=bottom\n';
           await writeFile(
             peer,
             `import { appendFileSync } from 'node:fs';
