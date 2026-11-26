@@ -2703,3 +2703,6 @@ msgstr "Arriba"
 
 msgid "Bottom"
 msgstr "Abajo"
+
+msgid "Drag to dock all tabs in another terminal window"
+msgstr "Arrastre para acoplar todas las pestañas en otra ventana de terminal"

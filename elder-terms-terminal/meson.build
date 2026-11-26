@@ -80,6 +80,7 @@ elder_terms_sources = [
   'src/gtk-initialization.cpp',
   'src/main.cpp',
   'src/terminal-tabs.cpp',
+  'src/titlebar-dock.cpp',
   'src/terminal-dock-bus.cpp',
   'src/sftp-origin-bus.cpp',
   'src/tab-tearoff.c',
@@ -113,6 +114,9 @@ elder_terms_terminal = executable(
     libudev_dep,
     boxrig_runtime_dep,
     boxrig_background_dep,
+    dependency('x11'),
+    dependency('xext'),
+    dependency('xtst'),
   ],
   link_with: [
     libxyzm_async_static_library,

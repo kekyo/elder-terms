@@ -36,4 +36,6 @@ bool dock_terminal_tabs(const std::vector<TerminalTab *> &pages, TerminalTab *ac
 bool undock_terminal_tab(TerminalTab *tab);
 /** Updates the native tear-off gesture when other processes gain or lose windows. */
 void set_terminal_tab_external_peers(bool available);
+/** Starts receiving a native drop if its addressed tray still exists and is available. */
+bool receive_terminal_window_drop(guint32 xid, const std::string &token);
 }

@@ -2699,3 +2699,6 @@ msgstr "أعلى"
 
 msgid "Bottom"
 msgstr "أسفل"
+
+msgid "Drag to dock all tabs in another terminal window"
+msgstr "اسحب لإرساء كل الألسنة في نافذة طرفية أخرى"

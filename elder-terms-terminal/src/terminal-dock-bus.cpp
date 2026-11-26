@@ -19,6 +19,7 @@ static constexpr char methods[] = "<node><interface name='net.kekyo.ElderTerms.D
     "<method name='Finish'><arg type='s' direction='in'/><arg type='b' direction='in'/></method>"
     "<method name='State'><arg type='s' direction='in'/><arg type='b' direction='out'/></method>"
     "<method name='Release'><arg type='s' direction='in'/></method>"
+    "<method name='DropAtWindow'><arg type='s' direction='in'/><arg type='u' direction='in'/></method>"
     "<method name='Present'><arg type='s' direction='in'/><arg type='u' direction='in'/><arg type='s' direction='in'/></method>"
     "<signal name='Tracked'><arg type='s'/><arg type='s'/></signal></interface></node>";
 struct Offer {
@@ -93,6 +94,14 @@ static void dispatch(GDBusConnection *, const gchar *sender, const gchar *, cons
     GVariant *args, GDBusMethodInvocation *invocation, gpointer) {
   const char *key;
   g_variant_get_child(args, 0, "&s", &key);
+  if (std::string_view(method) == "DropAtWindow") {
+    guint32 xid;
+    g_variant_get_child(args, 1, "u", &xid);
+    if (std::string_view(key).starts_with(std::string(sender) + "/") && receive_terminal_window_drop(xid, key))
+      g_dbus_method_invocation_return_value(invocation, nullptr);
+    else g_dbus_method_invocation_return_dbus_error(invocation, "net.kekyo.ElderTerms.Dock.Closed", "Window unavailable");
+    return;
+  }
   if (std::string_view(method) == "Present") {
     auto found = tracked.find(key);
     if (found != tracked.end() && found->second.launcher == sender) {
@@ -168,6 +177,12 @@ void announce_terminal_dock_page(const std::string &id, const char *launch_id, c
 }
 
 static std::string presence_name() { return std::string(prefix) + std::to_string(getpid()); }
+void send_terminal_window_drop(const std::string &peer, guint32 xid, const std::string &token) {
+  if (bus && g_dbus_is_unique_name(peer.c_str()))
+    g_dbus_connection_call(bus, peer.c_str(), path, interface, "DropAtWindow",
+        g_variant_new("(su)", token.c_str(), xid), G_VARIANT_TYPE_UNIT, G_DBUS_CALL_FLAGS_NO_AUTO_START,
+        -1, nullptr, nullptr, nullptr);
+}
 static void set_peer(const std::string &name, bool present) {
   if (!name.starts_with(prefix) || name == presence_name()) return;
   if (present) peers.insert(name); else peers.erase(name);

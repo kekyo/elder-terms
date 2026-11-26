@@ -45,6 +45,8 @@ void shutdown_terminal_dock_bus();
 void publish_terminal_dock_window(bool visible);
 /** Returns the borrowed desktop session bus, or nullptr when unavailable. */
 GDBusConnection *terminal_dock_connection();
+/** Delivers a native drop offer to the specific window under the pointer. */
+void send_terminal_window_drop(const std::string &peer, guint32 xid, const std::string &token);
 /** Claims a stable session address, replacing its paused owner during staging. */
 bool track_terminal_dock_page(const std::string &id, std::string launcher, std::function<void(guint, const std::string &)> present);
 /** Releases the current or queued D-Bus ownership on close or rollback. */

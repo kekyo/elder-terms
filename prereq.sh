@@ -62,6 +62,8 @@ libudev-dev
 libsystemd-dev
 liburing-dev
 libx11-dev
+libxext-dev
+libxtst-dev
 libxfixes-dev
 libxkbcommon-dev
 libxml2-dev

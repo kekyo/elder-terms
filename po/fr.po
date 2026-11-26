@@ -2708,3 +2708,6 @@ msgstr "En haut"
 
 msgid "Bottom"
 msgstr "En bas"
+
+msgid "Drag to dock all tabs in another terminal window"
+msgstr "Faites glisser pour ancrer tous les onglets dans une autre fenêtre de terminal"

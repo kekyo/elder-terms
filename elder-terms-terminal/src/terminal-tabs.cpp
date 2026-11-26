@@ -3,6 +3,8 @@
 // Under MIT.
 
 #include "terminal-tabs.h"
+#include "terminal-dock-bus.h"
+#include "titlebar-dock.h"
 #include "tab-tearoff.h"
 #include "terminal-background.h"
 #include "../../shared/src/connection-runtime/window-resize-border.h"
@@ -17,6 +19,7 @@ struct TerminalTray {
   GtkWidget *window, *body, *frame_row, *splitter, *sidebar, *list, *pages, *headers;
   std::vector<TerminalTab *> tabs;
   TerminalTab *active = nullptr;
+  bool native_title_drag = false;
   TerminalTab *framed = nullptr;
   guint16 undock_keycode = 0;
 };
@@ -29,6 +32,19 @@ struct TerminalTab {
 };
 static std::vector<TerminalTray *> trays;
 static bool external_peers = false;
+
+static TerminalTray *tray_by_xid(guint32 xid) {
+  for (auto *tray : trays)
+    if (gtk_widget_get_mapped(tray->window) && titlebar_dock_window_id(tray->window) == xid) return tray;
+  return nullptr;
+}
+
+bool receive_terminal_window_drop(guint32 xid, const std::string &token) {
+  auto *target = tray_by_xid(xid);
+  if (!target || !target->active || !target->active->actions.movable()) return false;
+  target->active->actions.receive(token, [](bool) {});
+  return true;
+}
 static GtkTargetEntry dock_targets[] = {
     {const_cast<char *>("application/x-elder-terms-terminal-tabs"), 0, 1},
     {const_cast<char *>("application/x-rootwindow-drop"), 0, 2}};
@@ -211,6 +227,21 @@ static TerminalTray *make_tray(GtkWidget *window) {
   gtk_widget_show_all(tray->list);
   gtk_widget_show(tray->headers);
   g_object_set_data(G_OBJECT(window), "terminal-tray", tray);
+  auto *bus = terminal_dock_connection();
+  tray->native_title_drag = install_titlebar_dock(window, bus ? g_dbus_connection_get_unique_name(bus) : nullptr,
+      [] { return external_peers || trays.size() > 1; },
+      [tray](const std::string &name, guint32 xid) {
+        if (!tray->active) return;
+        if (auto *target = tray_by_xid(xid)) {
+          if (target != tray && target->active && target->active->actions.movable()) {
+            const auto pages = tray->tabs;
+            dock_terminal_tabs(pages, tray->active, target->active);
+          }
+        } else if (!name.empty()) {
+          const auto token = tray->active->actions.offer(tray->tabs, tray->active);
+          if (!token.empty()) send_terminal_window_drop(name, xid, token);
+        }
+      });
   install_drop(tray->headers);
   install_drop(tray->body);
   g_signal_connect(window, "delete-event", G_CALLBACK(+[](GtkWidget *, GdkEvent *, gpointer data) -> gboolean {
@@ -299,31 +330,21 @@ static void bind_source(GtkWidget *widget, TerminalTab *tab, bool row) {
   }), tab);
 }
 
-static GtkWidget *drag_handle(GtkWidget *child, TerminalTab *tab) {
+static GtkWidget *dock_handle(GtkWidget *child, TerminalTab *tab) {
   auto *button = gtk_event_box_new();
   gtk_event_box_set_visible_window(GTK_EVENT_BOX(button), FALSE);
   gtk_event_box_set_above_child(GTK_EVENT_BOX(button), TRUE);
   gtk_style_context_add_class(gtk_widget_get_style_context(button), "terminal-dock-handle");
+  gtk_widget_set_tooltip_text(button, _("Drag to dock all tabs in another terminal window"));
   // The label or icon is already owned by its builder or parent.
   g_object_ref(child);
   unparent(child);
   gtk_container_add(GTK_CONTAINER(button), child);
   g_object_unref(child);
   g_signal_connect(button, "button-press-event", G_CALLBACK(+[](GtkWidget *handle,
-      GdkEventButton *event, gpointer data) -> gboolean {
-    if (event->button != GDK_BUTTON_PRIMARY) return FALSE;
-    if (begin_window_header_resize(gtk_widget_get_toplevel(handle), event)) return TRUE;
-    if (!GTK_IS_LABEL(data)) return FALSE;
-    auto *label = GTK_LABEL(data);
-    int x; int y;
-    gtk_label_get_layout_offsets(label, &x, &y);
-    int width; int height;
-    pango_layout_get_pixel_size(gtk_label_get_layout(label), &width, &height);
-    if (event->x >= x && event->x < x + width && event->y >= y && event->y < y + height) return FALSE;
-    gtk_window_begin_move_drag(GTK_WINDOW(gtk_widget_get_toplevel(handle)), event->button,
-        event->x_root, event->y_root, event->time);
-    return TRUE;
-  }), child);
+      GdkEventButton *event, gpointer) -> gboolean {
+    return event->button == GDK_BUTTON_PRIMARY && begin_window_header_resize(gtk_widget_get_toplevel(handle), event);
+  }), nullptr);
   bind_source(button, tab, false);
   gtk_widget_show_all(button);
   return button;
@@ -339,11 +360,10 @@ TerminalTab *create_terminal_tab(MainWindow *page, std::string label, TerminalTa
   unparent(page->root_box);
   auto *tray = make_tray(window);
   install_drop(page->terminal_attachment);
-  auto *icon_handle = drag_handle(page->header_connection_icon, tab);
-  gtk_header_bar_pack_start(GTK_HEADER_BAR(page->header_bar), icon_handle);
-  auto *title_handle = drag_handle(page->header_title_label, tab);
-  gtk_box_pack_start(GTK_BOX(page->header_title_box), title_handle, TRUE, TRUE, 0);
-  gtk_box_reorder_child(GTK_BOX(page->header_title_box), title_handle, 0);
+  if (!tray->native_title_drag) {
+    auto *handle = dock_handle(page->header_connection_icon, tab);
+    gtk_header_bar_pack_start(GTK_HEADER_BAR(page->header_bar), handle);
+  }
   tab->row = gtk_list_box_row_new();
   g_object_ref_sink(tab->row);
   auto *line = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
