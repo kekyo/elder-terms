@@ -88,10 +88,34 @@ await withWaylandHarness(null, async (h) => {
   try {
     await mkdir(file('config'));
     await start('Alpha');
-    const b = await start('Beta');
+    let b = await start('Beta');
     const a = await ready('Alpha');
     const inside = { x: a.left + 12, y: a.bottom - 8 };
     const headerOffset = compact ? 16 : 24;
+    const startingPosition = { left: b.left, top: b.top };
+    await h.drag(
+      { x: b.left + 110, y: b.top - headerOffset },
+      { x: b.left + 290, y: b.top + 64 }
+    );
+    await h.waitUntil(async () => {
+      const moved = await locate('Beta');
+      return moved &&
+        (Math.abs(moved.left - startingPosition.left) > 40 ||
+          Math.abs(moved.top - startingPosition.top) > 40);
+    }, 'title text moved the Wayland terminal window');
+    b = await ready('Beta');
+    const beforeWhitespace = { left: b.left, top: b.top };
+    await h.drag(
+      { x: b.left + 44, y: b.top - headerOffset },
+      { x: b.left + 44, y: b.top - headerOffset - 90 }
+    );
+    await h.waitUntil(async () => {
+      const moved = await locate('Beta');
+      return moved &&
+        (Math.abs(moved.left - beforeWhitespace.left) > 40 ||
+          Math.abs(moved.top - beforeWhitespace.top) > 40);
+    }, 'title whitespace moved the Wayland terminal window');
+    b = await ready('Beta');
     await h.drag({ x: b.left + 14, y: b.top - headerOffset }, inside);
     await h.waitUntil(
       async () => !(await locate('Alpha')),
