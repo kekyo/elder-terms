@@ -2711,3 +2711,15 @@ msgstr "En bas"
 
 msgid "Drag to dock all tabs in another terminal window"
 msgstr "Faites glisser pour ancrer tous les onglets dans une autre fenêtre de terminal"
+
+msgid "Scrollback storage"
+msgstr "Stockage de l’historique"
+
+msgid "Uncompressed"
+msgstr "Sans compression"
+
+msgid "Custom compression"
+msgstr "Compression personnalisée"
+
+msgid "DEFLATE (level 1)"
+msgstr "DEFLATE (niveau 1)"

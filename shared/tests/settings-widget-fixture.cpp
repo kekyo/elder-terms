@@ -399,16 +399,7 @@ static void load_assignments(
 }
 
 static elder_terms::SettingsStore create_default_store() {
-  elder_terms::SettingsStore store =
-      elder_terms::create_default_settings(
-          elder_terms::TerminalDisplaySettings{
-              .width = 80,
-              .height = 24,
-              .scrollback_lines = 10000,
-              .font_size_dip = 12.0,
-          },
-          "fixture");
-  return store;
+  return elder_terms::create_default_settings(elder_terms::default_terminal_display_settings(12.0), "fixture");
 }
 
 static elder_terms::SettingsStore

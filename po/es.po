@@ -2706,3 +2706,15 @@ msgstr "Abajo"
 
 msgid "Drag to dock all tabs in another terminal window"
 msgstr "Arrastre para acoplar todas las pestañas en otra ventana de terminal"
+
+msgid "Scrollback storage"
+msgstr "Almacenamiento del historial"
+
+msgid "Uncompressed"
+msgstr "Sin compresión"
+
+msgid "Custom compression"
+msgstr "Compresión personalizada"
+
+msgid "DEFLATE (level 1)"
+msgstr "DEFLATE (nivel 1)"

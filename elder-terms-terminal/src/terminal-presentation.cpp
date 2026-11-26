@@ -307,6 +307,11 @@ bool apply_terminal_presentation(TerminalPresentation *presentation, const Setti
     if (font_status != BOXRIG_UI_OK) { g_printerr("Terminal font: %d\n", font_status); return false; }
   }
   auto *core = boxrig_ui_model_terminal(boxrig_ui_view_model(boxrig_gtk3_terminal_widget_view(widget)));
+  const auto compression = terminal_scrollback_compression(settings);
+  const auto format = compression == TerminalScrollbackCompression::none ? BOXRIG_SCROLLBACK_COMPRESSION_NONE :
+      compression == TerminalScrollbackCompression::deflate ? BOXRIG_SCROLLBACK_COMPRESSION_DEFLATE_LEVEL_1 :
+      BOXRIG_SCROLLBACK_COMPRESSION_PACKED;
+  if (boxrig_terminal_set_scrollback_compression(core, format) != BOXRIG_STATUS_OK) return false;
   if (boxrig_terminal_set_scrollback_capacity(core, display.scrollback_lines) != BOXRIG_STATUS_OK) return false;
   presentation->bindings = terminal_key_bindings(settings);
   presentation->font_zoom_mode = terminal_font_zoom_mode(settings);

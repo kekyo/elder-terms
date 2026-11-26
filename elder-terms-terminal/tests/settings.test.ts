@@ -1734,6 +1734,42 @@ describe.concurrent('elder-terms-terminal settings', () => {
     });
   });
 
+  it('switches scrollback compression on a running terminal and saves the selection', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const path = join(directory, 'history.ini');
+      await writeFile(path, '[terminal]\n');
+      await runGtkTest(context, ['--test-fixture', '-c', path], async (app) => {
+        const comboId = 'settings_terminal_scrollback_compression_combo';
+        for (const [index, mode] of [
+          [1, 'none'],
+          [3, 'deflate'],
+          [2, 'packed'],
+        ] as const) {
+          await openSettingsDialog(app);
+          await showTerminalSettingsPage(app);
+          if (index === 1)
+            await expectSelectedComboValue(
+              app,
+              comboId,
+              'Custom compression (built-in default)'
+            );
+          await expectElementKind(
+            await app.getById(comboId),
+            'comboBox'
+          ).selectChildAt(index);
+          await expectElementKind(
+            await app.getById('settings_save_button'),
+            'button'
+          ).click();
+          await expectSettingsDialogClosed(app);
+          expect(await readFile(path, 'utf8')).toContain(
+            `scrollback_compression=${mode}`
+          );
+        }
+      });
+    });
+  });
+
   it('uses the startup terminal grid size from a read-only INI file', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const startupConfigPath = join(directory, 'startup.ini');
@@ -3932,7 +3968,7 @@ describe.concurrent('elder-terms-terminal settings', () => {
   it('applies runtime scrollback size changes to terminal', async (context) => {
     await runGtkTest(context, ['--test-fixture'], async (app) => {
       await waitForResult(async () => {
-        expect(await readFixtureTerminalScrollbackLines(app)).toBe(10000);
+        expect(await readFixtureTerminalScrollbackLines(app)).toBe(100000);
       });
       await openSettingsDialog(app);
       await showTerminalSettingsPage(app);

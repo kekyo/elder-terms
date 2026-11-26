@@ -277,8 +277,8 @@ static void test_default_settings() {
   const TerminalDisplaySettings display = terminal_display_settings(store);
   expect_true(display.width == 80, "default terminal width should be 80");
   expect_true(display.height == 24, "default terminal height should be 24");
-  expect_true(display.scrollback_lines == 10000,
-              "default terminal scrollback should retain 10000 lines");
+  expect_true(display.scrollback_lines == 100000,
+              "default terminal scrollback should retain 100000 lines");
   expect_true(display.font_size_dip == default_font_size_dip,
               "default terminal font_size_dip should be retained");
   const TerminalFontFamilies fonts = terminal_font_families(store);
@@ -614,7 +614,7 @@ static void test_terminal_scrollback_lines_range_and_round_trip() {
       load_terminal_scrollback_lines("scrollback-below-minimum", "999");
   expect_true(
       terminal_display_settings(below_minimum.store).scrollback_lines ==
-          10000,
+          100000,
       "terminal scrollback below the minimum should use the default");
   expect_true(warnings_contain(
                   below_minimum.warnings,
@@ -625,7 +625,7 @@ static void test_terminal_scrollback_lines_range_and_round_trip() {
       load_terminal_scrollback_lines("scrollback-above-maximum", "100001");
   expect_true(
       terminal_display_settings(above_maximum.store).scrollback_lines ==
-          10000,
+          100000,
       "terminal scrollback above the maximum should use the default");
   expect_true(warnings_contain(
                   above_maximum.warnings,
@@ -1248,10 +1248,12 @@ static void test_terminal_font_zoom_mode() {
   auto store = create_default_settings(default_terminal_display_settings(12), "Zoom");
   const auto padding = elder_terms::make_setting_key("terminal", "padding_dip");
   const auto align = elder_terms::make_setting_key("terminal", "grid_vertical_alignment");
-  expect_true(elder_terms::setting_integer_value_or_default(store, padding, -1) == 0 &&
-      elder_terms::setting_string_value_or_default(store, align, "") == "top", "default grid placement");
-  expect_true(set_explicit_setting_value(&store, padding, gint64{4}) &&
-      set_explicit_setting_value(&store, align, std::string("bottom")), "accept bottom aligned padded terminal");
+  expect_true(elder_terms::terminal_padding_dip(store) == 2 &&
+      elder_terms::terminal_grid_bottom_aligned(store), "default grid must be bottom aligned with a 2 DIP inset");
+  expect_true(set_explicit_setting_value(&store, padding, gint64{0}) &&
+      set_explicit_setting_value(&store, align, std::string("top")) &&
+      elder_terms::terminal_padding_dip(store) == 0 && !elder_terms::terminal_grid_bottom_aligned(store),
+      "explicit zero padding and top alignment must override the defaults");
   expect_true(!set_explicit_setting_value(&store, padding, gint64{-1}) &&
       !set_explicit_setting_value(&store, align, std::string("diagonal")), "reject invalid grid placement");
   expect_true(mode(store) == "preserve-grid", "font zoom must preserve the grid by default");

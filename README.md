@@ -710,7 +710,7 @@ The default for TELNET and SSH is `xterm-256color`. Use global or connection set
 ![Scrollback buffer settings](./images/scrollback-settings.png)
 
 "Scrollback lines" on the "Terminal" tab sets the normal-screen history, from 1,000 to 100,000 lines.
-The built-in default is 10,000 lines.
+The default is 100,000 lines. “Scrollback storage” offers uncompressed history, custom compression (the default), and DEFLATE level 1. Custom compression packs text and attributes for each offscreen row.
 
 ## Configuring the BEL Sound
 

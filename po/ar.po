@@ -2702,3 +2702,15 @@ msgstr "أسفل"
 
 msgid "Drag to dock all tabs in another terminal window"
 msgstr "اسحب لإرساء كل الألسنة في نافذة طرفية أخرى"
+
+msgid "Scrollback storage"
+msgstr "تخزين سجل التمرير"
+
+msgid "Uncompressed"
+msgstr "بلا ضغط"
+
+msgid "Custom compression"
+msgstr "ضغط مخصص"
+
+msgid "DEFLATE (level 1)"
+msgstr "DEFLATE (المستوى 1)"

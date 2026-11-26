@@ -2341,7 +2341,7 @@ describe.concurrent('shared settings widget', () => {
               : [
                   '--runtime',
                   '--global=terminal.font_zoom_mode=preserve-window',
-                  '--global=terminal.grid_vertical_alignment=bottom',
+                  '--global=terminal.grid_vertical_alignment=top',
                   '--global=terminal.padding_dip=7',
                 ]),
           ],
@@ -2373,7 +2373,7 @@ describe.concurrent('shared settings widget', () => {
             const alignmentNames = await comboOptionNames(app, alignId);
             expect(alignmentNames.slice(1)).toEqual(['Top', 'Bottom']);
             expect(alignmentNames[0]).toContain(
-              mode === 'global' ? 'Top' : 'Bottom'
+              mode === 'global' ? 'Bottom' : 'Top'
             );
             await align.selectChildAt(2);
             await padding.setText('4');

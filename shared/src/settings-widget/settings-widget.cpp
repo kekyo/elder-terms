@@ -161,6 +161,7 @@ struct SettingsWidgetState {
   GtkWidget *terminal_width_entry = nullptr;
   GtkWidget *terminal_height_entry = nullptr;
   GtkWidget *terminal_scrollback_lines_entry = nullptr;
+  GtkWidget *terminal_scrollback_compression_combo = nullptr;
   GtkWidget *terminal_font_size_dip_entry = nullptr;
   GtkWidget *terminal_font_zoom_mode_combo = nullptr;
   GtkWidget *terminal_padding_dip_entry = nullptr;
@@ -1064,9 +1065,7 @@ update_terminal_scrollback_lines_from_widget(SettingsWidgetState *state) {
     sync_cleared_entry(
         state, state->terminal_scrollback_lines_entry,
         terminal_scrollback_lines_setting_key(),
-        std::to_string(setting_integer_value_or_default(
-            state->draft_store, terminal_scrollback_lines_setting_key(),
-            10000)));
+        std::to_string(terminal_display_settings(state->draft_store).scrollback_lines));
     return;
   }
   gtk_entry_set_placeholder_text(
@@ -1142,7 +1141,7 @@ static void update_terminal_color_vision_strength(SettingsWidgetState *state) {
 
 static void update_terminal_padding(SettingsWidgetState *state) {
   update_terminal_integer(state, state->terminal_padding_dip_entry, terminal_padding_dip_setting_key(),
-      maximum_terminal_padding_dip, 0, state->terminal_padding_dip_valid);
+      maximum_terminal_padding_dip, default_terminal_padding_dip, state->terminal_padding_dip_valid);
 }
 
 static void update_terminal_font_size_dip_from_widget(SettingsWidgetState *state) {
@@ -3532,10 +3531,18 @@ static void sync_widgets_from_draft(SettingsWidgetState *state, bool preserve_in
   }
   if (state->terminal_grid_alignment_combo) {
     const auto key = terminal_grid_vertical_alignment_setting_key();
-    const auto fallback = std::get<std::string>(setting_fallback_value(state->draft_store, key, std::string("top")));
+    const auto fallback = std::get<std::string>(setting_fallback_value(state->draft_store, key, std::string("bottom")));
     populate_inheritable_combo(state->terminal_grid_alignment_combo, state->draft_store, key,
         setting_choice_label(key, fallback), {{"top", setting_choice_label(key, "top")}, {"bottom", setting_choice_label(key, "bottom")}},
-        setting_string_value_or_default(state->draft_store, key, "top"));
+        setting_string_value_or_default(state->draft_store, key, "bottom"));
+  }
+  if (state->terminal_scrollback_compression_combo) {
+    const auto key = terminal_scrollback_compression_setting_key();
+    const auto fallback = std::get<std::string>(setting_fallback_value(state->draft_store, key, std::string("packed")));
+    std::vector<ComboOption> options;
+    for (const auto *mode : {"none", "packed", "deflate"}) options.push_back({mode, setting_choice_label(key, mode)});
+    populate_inheritable_combo(state->terminal_scrollback_compression_combo, state->draft_store, key,
+        setting_choice_label(key, fallback), options, setting_string_value_or_default(state->draft_store, key, "packed"));
   }
   if (state->terminal_font_zoom_mode_combo != nullptr) {
     const auto key = terminal_font_zoom_mode_setting_key();
@@ -5558,6 +5565,17 @@ create_terminal_pages(SettingsWidgetState *state) {
                    G_CALLBACK(on_terminal_scrollback_lines_changed), state);
   attach_row(page, 6, terminal_scrollback_lines_setting_key(),
              state->terminal_scrollback_lines_entry);
+  state->terminal_scrollback_compression_combo = create_combo_box(widget_id(state, "terminal_scrollback_compression_combo").c_str());
+  g_signal_connect(state->terminal_scrollback_compression_combo, "changed", G_CALLBACK(+[](GtkComboBox *combo, gpointer data) {
+    auto *state = static_cast<SettingsWidgetState *>(data);
+    if (state->synchronizing) return;
+    const auto key = terminal_scrollback_compression_setting_key();
+    const auto choice = active_combo_id(GTK_WIDGET(combo), inherit_choice);
+    if (choice == inherit_choice) clear_explicit_setting_value(&state->draft_store, key);
+    else set_explicit_setting_value(&state->draft_store, key, SettingValue{choice});
+    notify_changed(state);
+  }), state);
+  attach_row(page, 7, terminal_scrollback_compression_setting_key(), state->terminal_scrollback_compression_combo);
 
   state->terminal_font_size_dip_entry =
       create_entry(widget_id(state, "terminal_font_size_dip_entry"));
@@ -5615,7 +5633,7 @@ create_terminal_pages(SettingsWidgetState *state) {
                    G_CALLBACK(on_terminal_bell_sound_browse_clicked), state);
   gtk_box_pack_start(GTK_BOX(bell_sound_row), bell_sound_browse, FALSE, FALSE,
                      0);
-  attach_row(page, 7, terminal_bell_sound_setting_key(), bell_sound_row);
+  attach_row(page, 8, terminal_bell_sound_setting_key(), bell_sound_row);
 
   const std::string zoom_in_id =
       widget_id(state, "terminal_zoom_in_key_entry");
@@ -5643,7 +5661,7 @@ create_terminal_pages(SettingsWidgetState *state) {
   gtk_box_pack_start(GTK_BOX(zoom_in_row),
                      state->terminal_zoom_in_key_reset_button, FALSE, FALSE,
                      0);
-  attach_row(page, 8, terminal_zoom_in_key_setting_key(), zoom_in_row);
+  attach_row(page, 9, terminal_zoom_in_key_setting_key(), zoom_in_row);
 
   const std::string zoom_out_id =
       widget_id(state, "terminal_zoom_out_key_entry");
@@ -5671,7 +5689,7 @@ create_terminal_pages(SettingsWidgetState *state) {
   gtk_box_pack_start(GTK_BOX(zoom_out_row),
                      state->terminal_zoom_out_key_reset_button, FALSE, FALSE,
                      0);
-  attach_row(page, 9, terminal_zoom_out_key_setting_key(), zoom_out_row);
+  attach_row(page, 10, terminal_zoom_out_key_setting_key(), zoom_out_row);
 
   const std::string send_break_id =
       widget_id(state, "terminal_send_break_key_entry");
@@ -5701,7 +5719,7 @@ create_terminal_pages(SettingsWidgetState *state) {
   gtk_box_pack_start(GTK_BOX(send_break_row),
                      state->terminal_send_break_key_reset_button, FALSE,
                      FALSE, 0);
-  attach_row(page, 10, terminal_send_break_key_setting_key(),
+  attach_row(page, 11, terminal_send_break_key_setting_key(),
              send_break_row);
 
   const std::string undock_id =
@@ -5732,7 +5750,7 @@ create_terminal_pages(SettingsWidgetState *state) {
   gtk_box_pack_start(GTK_BOX(undock_row),
                      state->terminal_undock_key_reset_button, FALSE,
                      FALSE, 0);
-  attach_row(page, 14, terminal_undock_key_setting_key(),
+  attach_row(page, 15, terminal_undock_key_setting_key(),
              undock_row);
 
   auto *font_panel = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);
@@ -5755,7 +5773,7 @@ create_terminal_pages(SettingsWidgetState *state) {
       widget_id(state, "terminal_accessibility_enabled_combo").c_str());
   g_signal_connect(state->terminal_accessibility_enabled_combo, "changed",
                    G_CALLBACK(on_terminal_accessibility_enabled_changed), state);
-  attach_row(page, 11, terminal_accessibility_enabled_setting_key(),
+  attach_row(page, 12, terminal_accessibility_enabled_setting_key(),
              state->terminal_accessibility_enabled_combo);
 
   state->terminal_block_copy_trim_trailing_spaces_combo = create_combo_box(
@@ -5767,7 +5785,7 @@ create_terminal_pages(SettingsWidgetState *state) {
                    "changed",
                    G_CALLBACK(on_terminal_block_copy_trim_trailing_spaces_changed),
                    state);
-  attach_row(page, 12, terminal_block_copy_trim_trailing_spaces_setting_key(),
+  attach_row(page, 13, terminal_block_copy_trim_trailing_spaces_setting_key(),
              state->terminal_block_copy_trim_trailing_spaces_combo);
 
   state->terminal_ambiguous_width_combo = create_combo_box(
@@ -5783,7 +5801,7 @@ create_terminal_pages(SettingsWidgetState *state) {
     else set_explicit_setting_value(&state->draft_store, key, SettingValue{choice});
     notify_changed(state);
   }), state);
-  attach_row(page, 13, terminal_ambiguous_width_setting_key(), state->terminal_ambiguous_width_combo);
+  attach_row(page, 14, terminal_ambiguous_width_setting_key(), state->terminal_ambiguous_width_combo);
 
   state->terminal_cursor_shape_combo = create_combo_box(widget_id(state, "terminal_cursor_shape_combo").c_str());
   state->terminal_cursor_blink_combo = create_combo_box(widget_id(state, "terminal_cursor_blink_combo").c_str());

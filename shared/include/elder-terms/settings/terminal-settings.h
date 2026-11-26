@@ -235,6 +235,18 @@ ELDER_TERMS_API SettingKey terminal_height_setting_key();
  */
 ELDER_TERMS_API SettingKey terminal_scrollback_lines_setting_key();
 
+/** @returns Key for the storage format of offscreen terminal rows. */
+ELDER_TERMS_API SettingKey terminal_scrollback_compression_setting_key();
+
+/** Storage format of retained terminal history. */
+enum class TerminalScrollbackCompression {
+  none,    /**< Store uncompressed terminal cells. */
+  packed,  /**< Pack text and attributes per row (the default). */
+  deflate, /**< Compress blocks of packed rows with DEFLATE level 1. */
+};
+/** @param store Layered settings. @returns Effective scrollback storage format. */
+ELDER_TERMS_API TerminalScrollbackCompression terminal_scrollback_compression(const SettingsStore &store);
+
 /**
  * Returns the setting key for [terminal] block_copy_trim_trailing_spaces.
  *
@@ -250,11 +262,13 @@ ELDER_TERMS_API SettingKey terminal_block_copy_trim_trailing_spaces_setting_key(
  */
 ELDER_TERMS_API SettingKey terminal_font_size_dip_setting_key();
 
+/** Built-in inset between each terminal edge and the grid, in logical pixels. */
+inline constexpr int default_terminal_padding_dip = 2;
 /** Largest symmetric inset accepted by the terminal widget, in logical pixels. */
 inline constexpr int maximum_terminal_padding_dip = G_MAXINT / 2;
 /** @returns Key for the uniform terminal inset in logical pixels. */
 ELDER_TERMS_API SettingKey terminal_padding_dip_setting_key();
-/** @param store Layered settings. @returns Inset on each edge, zero by default. */
+/** @param store Layered settings. @returns Inset on each edge in logical pixels. */
 ELDER_TERMS_API unsigned int terminal_padding_dip(const SettingsStore &store);
 /** @returns Key for the vertical position of the terminal grid. */
 ELDER_TERMS_API SettingKey terminal_grid_vertical_alignment_setting_key();

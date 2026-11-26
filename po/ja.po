@@ -3434,3 +3434,15 @@ msgstr "文字の選択を解除すると、この端末を移せます"
 
 msgid "Drag to dock all tabs in another terminal window"
 msgstr "別の端末ウインドウにドラッグして、すべてのタブをドッキング"
+
+msgid "Scrollback storage"
+msgstr "履歴バッファの管理方式"
+
+msgid "Uncompressed"
+msgstr "非圧縮"
+
+msgid "Custom compression"
+msgstr "独自圧縮"
+
+msgid "DEFLATE (level 1)"
+msgstr "DEFLATE（レベル1）"

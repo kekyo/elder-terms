@@ -2700,3 +2700,15 @@ msgstr "Inferior"
 
 msgid "Drag to dock all tabs in another terminal window"
 msgstr "Arraste para acoplar todas as abas em outra janela de terminal"
+
+msgid "Scrollback storage"
+msgstr "Armazenamento do histórico"
+
+msgid "Uncompressed"
+msgstr "Sem compressão"
+
+msgid "Custom compression"
+msgstr "Compressão personalizada"
+
+msgid "DEFLATE (level 1)"
+msgstr "DEFLATE (nível 1)"

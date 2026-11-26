@@ -847,7 +847,7 @@ export const expectWindowCellSize = (
   layout: TerminalGridLayout | WindowCellLayout,
   columns: number,
   rows: number,
-  padding = 0
+  padding = 2
 ): void => {
   expect(layout.columns).toBe(columns);
   expect(layout.rows).toBe(rows);

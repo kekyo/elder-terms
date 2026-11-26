@@ -98,10 +98,10 @@ describe.concurrent('elder-terms-terminal terminal layout', () => {
                   resized.rows,
                 ]);
                 expect(layout.rows).toBe(
-                  Math.floor(area.height / layout.cellHeight)
+                  Math.floor((area.height - 4) / layout.cellHeight)
                 );
                 expect(layout.columns).toBe(
-                  Math.floor(area.width / layout.cellWidth)
+                  Math.floor((area.width - 4) / layout.cellWidth)
                 );
                 await expectFixtureTerminalGridSize(
                   app,
@@ -555,7 +555,7 @@ describe.concurrent('elder-terms-terminal terminal layout', () => {
     });
   });
 
-  it('fills the whole terminal image up to the right and bottom edges', async (context) => {
+  it('renders the complete grid inside the default terminal inset', async (context) => {
     await runGtkTest(
       context,
       ['--test-fixture', '-c', terminalPlainTextGridConfigPath],
@@ -858,7 +858,10 @@ describe.concurrent('elder-terms-terminal terminal layout', () => {
         'fractional-cell-resize-layout'
       );
       expect(resizedLayout.terminalCapture.bounds.width).toBe(
-        defaultColumns * resizedLayout.cellWidth + resizedLayout.cellWidth - 1
+        4 +
+          defaultColumns * resizedLayout.cellWidth +
+          resizedLayout.cellWidth -
+          1
       );
     });
   });

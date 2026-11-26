@@ -106,7 +106,8 @@ block_copy_trim_trailing_spaces=false
 | `accessibility_enabled` | `true`で端末本文を読み上げソフトへ公開。組み込み既定値は`false` |
 | `return_code` | `auto`、`cr`、`lf`、`crlf` |
 | `send_break_key` | BREAK送信のキーの組み合わせ。空欄で無効 |
-| `scrollback_lines` | 1000〜100000行。組み込み既定値は10000 |
+| `scrollback_lines` | 履歴に残す行数。1000〜100000行で指定でき、既定値は100000行 |
+| `scrollback_compression` | 履歴バッファの管理方式。`none`は非圧縮、`packed`は独自圧縮（既定）、`deflate`はDEFLATE（レベル1）。変更は保存済みの履歴にも適用 |
 | `bell_sound` | `default`でデスクトップのビープ音。カスタム音はOgg VorbisまたはWAV（PCM）の絶対パス |
 | `block_copy_trim_trailing_spaces` | `false`でブロックコピーの行末空白を保持。組み込み既定値は`true` |
 
@@ -138,8 +139,8 @@ font_families=DejaVu Sans Mono;Noto Sans Mono CJK JP;Monospace;
 文字サイズ・行数・桁数の直接指定や手動リサイズは、この設定によらず使用できます。
 最大化や全画面などでウインドウサイズが制限される場合は、どちらのモードでも実際の表示領域に行・桁数を合わせます。
 
-「端末の外観」の「端末のパディング」は、四辺から文字セルまでの幅です。単位は論理ピクセル（DIP）で、既定値は0です。
-「セルの縦位置」は、文字セルで割り切れない高さをどちらに残すかを選びます。既定の`top`は下に、`bottom`は上に余りを置きます。横の余りは常に右に残ります。
+「端末の外観」の「端末のパディング」で、端末の四辺から文字セルまでの余白を指定できます。既定値は2論理ピクセル（DIP）です。
+「セルの縦位置」の既定値は下寄せ（`bottom`）です。端末の高さが文字セルの高さで割り切れないときは、余った分が上に入ります。上寄せ（`top`）を選ぶと下に入ります。横の余りは常に右に残ります。
 たとえばパディング4 DIP、縦の余り7 DIPで下寄せにすると、上の余白は11 DIP、下は4 DIPです。どちらのズーム設定でも、最大化やタイル配置中も同じ規則を使います。
 
 `ambiguous_width`は`narrow`で1列、`wide`で2列、`font`でフォント依存になります。組み込み既定値は`narrow`です。

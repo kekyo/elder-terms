@@ -18,7 +18,7 @@ namespace elder_terms {
 
 static constexpr glong default_terminal_width = 80;
 static constexpr glong default_terminal_height = 24;
-static constexpr glong default_terminal_scrollback_lines = 10000;
+static constexpr glong default_terminal_scrollback_lines = 100000;
 static constexpr gint64 minimum_terminal_scrollback_lines = 1000;
 static constexpr gint64 maximum_terminal_scrollback_lines = 100000;
 static constexpr char terminal_section[] = "terminal";
@@ -126,6 +126,13 @@ static bool validate_font_zoom_mode(const SettingValue &value, std::string *reas
     return false;
   }
   return true;
+}
+
+static bool validate_scrollback_compression(const SettingValue &value, std::string *reason) {
+  const auto *format = std::get_if<std::string>(&value);
+  if (format && (*format == "none" || *format == "packed" || *format == "deflate")) return true;
+  *reason = "must be none, packed, or deflate";
+  return false;
 }
 
 static bool validate_scrollback_lines(const SettingValue &value,
@@ -345,6 +352,15 @@ SettingKey terminal_scrollback_lines_setting_key() {
   return terminal_key(terminal_scrollback_lines_key);
 }
 
+SettingKey terminal_scrollback_compression_setting_key() { return terminal_key("scrollback_compression"); }
+
+TerminalScrollbackCompression terminal_scrollback_compression(const SettingsStore &store) {
+  const auto format = setting_string_value_or_default(store, terminal_scrollback_compression_setting_key(), "packed");
+  if (format == "none") return TerminalScrollbackCompression::none;
+  if (format == "deflate") return TerminalScrollbackCompression::deflate;
+  return TerminalScrollbackCompression::packed;
+}
+
 SettingKey terminal_ambiguous_width_setting_key() {
   return terminal_key(terminal_ambiguous_width_key);
 }
@@ -365,12 +381,12 @@ SettingKey terminal_font_size_dip_setting_key() {
 
 SettingKey terminal_padding_dip_setting_key() { return terminal_key("padding_dip"); }
 unsigned int terminal_padding_dip(const SettingsStore &store) {
-  return static_cast<unsigned int>(setting_integer_value_or_default(store, terminal_padding_dip_setting_key(), 0));
+  return static_cast<unsigned int>(setting_integer_value_or_default(store, terminal_padding_dip_setting_key(), default_terminal_padding_dip));
 }
 
 SettingKey terminal_grid_vertical_alignment_setting_key() { return terminal_key("grid_vertical_alignment"); }
 bool terminal_grid_bottom_aligned(const SettingsStore &store) {
-  return setting_string_value_or_default(store, terminal_grid_vertical_alignment_setting_key(), "top") == "bottom";
+  return setting_string_value_or_default(store, terminal_grid_vertical_alignment_setting_key(), "bottom") == "bottom";
 }
 
 SettingKey terminal_font_zoom_mode_setting_key() {
@@ -611,6 +627,11 @@ terminal_setting_definitions(TerminalDisplaySettings terminal_defaults) {
           .validate = validate_scrollback_lines,
       },
       {
+          .key = terminal_scrollback_compression_setting_key(),
+          .default_value = SettingValue{std::string("packed")},
+          .validate = validate_scrollback_compression,
+      },
+      {
           .key = terminal_block_copy_trim_trailing_spaces_setting_key(),
           .default_value = SettingValue{true},
           .validate = nullptr,
@@ -628,12 +649,12 @@ terminal_setting_definitions(TerminalDisplaySettings terminal_defaults) {
       },
       {
           .key = terminal_padding_dip_setting_key(),
-          .default_value = SettingValue{gint64{0}},
+          .default_value = SettingValue{gint64{default_terminal_padding_dip}},
           .validate = validate_terminal_padding,
       },
       {
           .key = terminal_grid_vertical_alignment_setting_key(),
-          .default_value = SettingValue{std::string("top")},
+          .default_value = SettingValue{std::string("bottom")},
           .validate = validate_grid_alignment,
       },
       {

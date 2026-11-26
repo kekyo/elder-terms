@@ -352,6 +352,8 @@ for (const backend of ['cairo', 'opengl']) {
           const config = join(directory, 'layout.ini');
           const peer = join(directory, 'peer.mjs');
           const keys = join(directory, 'mouse');
+          const inset = mode === 'preserve-window' ? 2 : 4;
+          const placement = mode === 'preserve-window' ? '' : 'padding_dip=4\ngrid_vertical_alignment=bottom\n';
           await writeFile(
             peer,
             `import { appendFileSync } from 'node:fs';
@@ -361,7 +363,7 @@ process.stdout.write('\\x1b[?25l\\x1b[?1000h\\x1b[?1006h\\x1b[H\\x1b[48;2;213;45
           );
           await writeFile(
             config,
-            `[terminal]\nwidth=${scale === 1 ? 79 : 40}\nheight=${scale === 1 ? 17 : 9}\nfont_size_dip=14\npadding_dip=4\ngrid_vertical_alignment=bottom\nfont_zoom_mode=${mode}\n[local]\ncommand_line=${process.execPath} ${peer} ${keys}\n`
+            `[terminal]\nwidth=${scale === 1 ? 79 : 40}\nheight=${scale === 1 ? 17 : 9}\nfont_size_dip=14\n${placement}font_zoom_mode=${mode}\n[local]\ncommand_line=${process.execPath} ${peer} ${keys}\n`
           );
           await runGtkTest(
             context,
@@ -397,7 +399,7 @@ process.stdout.write('\\x1b[?25l\\x1b[?1000h\\x1b[?1006h\\x1b[H\\x1b[48;2;213;45
                 });
                 const area = (await terminal.capture()).bounds;
                 const targetHeight =
-                  8 + Math.ceil(zoomed.rows * zoomed.cellHeight) + 3;
+                  2 * inset + Math.ceil(zoomed.rows * zoomed.cellHeight) + 3;
                 await zoomed.mainWindow.resizeTo(
                   zoomed.mainBounds.width,
                   zoomed.mainBounds.height - area.height + targetHeight
@@ -408,7 +410,7 @@ process.stdout.write('\\x1b[?25l\\x1b[?1000h\\x1b[?1006h\\x1b[H\\x1b[48;2;213;45
                 expect(layout.fontSizeDip).toBeGreaterThan(14);
                 const area = (await terminal.capture()).bounds;
                 const picture = PNG.sync.read((await app.capture()).image);
-                const padding = 4 * scale;
+                const padding = inset * scale;
                 const cellHeight = layout.cellHeight * scale;
                 const remainder =
                   area.height * scale - 2 * padding - layout.rows * cellHeight;

@@ -2683,3 +2683,15 @@ msgstr "नीचे"
 
 msgid "Drag to dock all tabs in another terminal window"
 msgstr "सभी टैब दूसरी टर्मिनल विंडो में जोड़ने के लिए खींचें"
+
+msgid "Scrollback storage"
+msgstr "स्क्रॉलबैक संग्रहण"
+
+msgid "Uncompressed"
+msgstr "असंपीड़ित"
+
+msgid "Custom compression"
+msgstr "कस्टम संपीड़न"
+
+msgid "DEFLATE (level 1)"
+msgstr "DEFLATE (स्तर 1)"
