@@ -17,7 +17,9 @@ finish() {
 }
 trap finish EXIT
 export XDG_CONFIG_HOME="$scratch/config" XDG_DATA_HOME="$scratch/data" GDK_BACKEND=x11
-export GSETTINGS_BACKEND=memory
+# SFTP uses the real SSH fixture. Local file choosers should not start a GVfs
+# metadata daemon that can write into the fixture after the private bus exits.
+export GSETTINGS_BACKEND=memory GIO_USE_VFS=local
 KWIN_COMPOSE=N kwin_x11 --replace >"$scratch/wm.log" 2>&1 & pids+=($!)
 gdbus wait --session --timeout=20 org.kde.KWin
 dbus-monitor --session "interface='net.kekyo.ElderTerms.SftpOrigin'" "member='GetNameOwner'" "type='error'" >"$scratch/sftp-bus.log" 2>&1 & pids+=($!)
