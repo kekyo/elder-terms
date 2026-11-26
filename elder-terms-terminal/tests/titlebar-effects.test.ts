@@ -101,6 +101,8 @@ process.stdin.on('data', () => process.stdout.write('\\x07\\x07\\x07'));`
               'rawvideo',
               '-pix_fmt',
               'rgb24',
+              '-r',
+              '60',
               '-threads',
               '1',
               'pipe:1',
