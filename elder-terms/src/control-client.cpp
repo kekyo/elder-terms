@@ -63,7 +63,8 @@ public:
 };
 
 static std::string send_request(const std::string &command,
-                                const std::string &connection) {
+                                const std::string &connection,
+                                const std::string &activation_token) {
     const auto address = elder_terms::control_socket_address(
         elder_terms::control_socket_path());
     elder_terms::ControlDescriptor socket;
@@ -83,10 +84,7 @@ static std::string send_request(const std::string &command,
     if (!elder_terms::control_peer_is_owner(socket.value)) {
       throw std::runtime_error("The control socket belongs to a different user");
     }
-    const char *token = std::getenv("XDG_ACTIVATION_TOKEN");
-    const std::string packet = command + '\0' +
-        connection + '\0' +
-        (token == nullptr ? "" : token);
+    const std::string packet = command + '\0' + connection + '\0' + activation_token;
     if (packet.size() > elder_terms::control_request_limit) {
       throw std::runtime_error("Control request is too large");
     }
@@ -196,6 +194,15 @@ int main(int argc, char **argv) {
     return 2;
   }
   try {
+    // Forward the one-shot desktop token only with the activation request.
+    // A launcher started in the background must not pass it to later children.
+    std::string activation_token;
+    if (const char *token = std::getenv("XDG_ACTIVATION_TOKEN")) {
+      if (command != "setup" && command != "unsetup") activation_token = token;
+      if (unsetenv("XDG_ACTIVATION_TOKEN") != 0) {
+        throw std::runtime_error("Cannot clear the desktop activation token");
+      }
+    }
     if (command == "unsetup") {
       run_unsetup();
     }
@@ -208,7 +215,7 @@ int main(int argc, char **argv) {
                           std::chrono::seconds(120);
     while (true) {
       try {
-        const std::string response = send_request(command, connection);
+        const std::string response = send_request(command, connection, activation_token);
         if (response == "OK\n") {
           return 0;
         }
