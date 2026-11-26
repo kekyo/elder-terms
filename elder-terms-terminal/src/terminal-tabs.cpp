@@ -281,7 +281,9 @@ bool undock_terminal_tab(TerminalTab *tab) {
   prepare_terminal_background_window(window);
   int width, height;
   gtk_window_get_size(GTK_WINDOW(tab->tray->window), &width, &height);
-  gtk_window_set_default_size(GTK_WINDOW(window), width - gtk_widget_get_allocated_width(tab->tray->sidebar), height);
+  const int tab_chrome_width = gtk_widget_get_allocated_width(tab->tray->splitter) -
+    gtk_widget_get_allocated_width(tab->tray->pages);
+  gtk_window_set_default_size(GTK_WINDOW(window), width - tab_chrome_width, height);
   auto *tray = make_tray(window);
   move_pages({tab}, tab, tray);
   gtk_widget_show(window);

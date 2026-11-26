@@ -71,6 +71,8 @@ done
 xdotool mouseup 1
 merged() { [[ $(window Second) == "$first" ]]; }
 wait_until merged
+# Keep the terminal wider than its standalone minimum after moving the splitter.
+xdotool windowsize --sync "$first" 800 460
 # The frame color is set on each page. After grouping, the active page's
 # border must be drawn at the outside of the whole tray, before the tab list.
 pixel_at() {
@@ -94,11 +96,26 @@ if [[ $initial_terminal == 'srgb(250,250,250)' ]]; then exit 1; fi
 xdotool mousemove "$((fx+50))" "$((fy+69))" click 1
 wait_until is_pixel 7 250 'srgb(165,29,45)'
 xdotool mousemove "$((fx+50))" "$((fy+107))" click 1
+# Count the uninterrupted dark terminal canvas at a row without shell text.
+terminal_span() {
+  xwd -silent -id "$1" | convert xwd:- -crop 0x1+0+250 +repage -depth 8 rgb:- |
+    od -An -v -tu1 -w3 | awk '
+      $1 <= 25 && $2 <= 25 && $3 <= 25 { run++; next }
+      { if (run > longest) longest = run; run = 0 }
+      END { if (run > longest) longest = run; print longest }
+    '
+}
+before_span=$(terminal_span "$first")
 xdotool key ctrl+shift+u
 split() { [[ $(window Second) != "$first" ]]; }
 wait_until split
 wait_until is_not_pixel 50 250 'srgb(250,250,250)'
 wait_until is_pixel 7 250 'srgb(165,29,45)'
+after_span=$(terminal_span "$(window Second)")
+if [[ $after_span != "$before_span" ]]; then
+  echo "Terminal display width changed on undock: $before_span -> $after_span pixels" >&2
+  exit 1
+fi
 xdotool windowactivate --sync "$first" key alt+F4
 xdotool windowactivate --sync "$(window Second)" key alt+F4
 for pid in "${pids[@]:1}"; do wait "$pid"; done
