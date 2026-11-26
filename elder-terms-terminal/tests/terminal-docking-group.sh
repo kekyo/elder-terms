@@ -89,7 +89,7 @@ read -r dx dy < <(origin "$delta")
 row_y() { echo "$((dy+67+40*$1))"; }
 select_row() { xdotool mousemove "$((dx+55))" "$(row_y "$1")" click 1; }
 close_row() {
-  xdotool mousemove "$((dx+132))" "$(row_y "$1")" click 1
+  xdotool mousemove "$((dx+205))" "$(row_y "$1")" click 1
 }
 send_to() {
   local tab=$1

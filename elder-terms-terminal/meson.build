@@ -142,6 +142,14 @@ if find_program('kwin_x11', required: false).found()
     test('terminal-tab-docking-blur', find_program('bash'),
       args: [meson.current_source_dir() / 'tests/terminal-docking-blur.sh', elder_terms_terminal],
       timeout: 90, is_parallel: false)
+    if find_program('xwd', required: false).found() and find_program('convert', required: false).found()
+      test('terminal-tab-docking-layout', find_program('bash'),
+        args: [meson.current_source_dir() / 'tests/terminal-docking-layout.sh', elder_terms_terminal],
+        timeout: 90, is_parallel: false)
+      test('terminal-tab-docking-layout-compact', find_program('bash'),
+        args: [meson.current_source_dir() / 'tests/terminal-docking-layout.sh', elder_terms_terminal],
+        env: ['ELDER_TERMS_LAYOUT_COMPACT=1'], timeout: 90, is_parallel: false)
+    endif
     test('terminal-tab-docking-colored-close', find_program('bash'),
       args: [meson.current_source_dir() / 'tests/terminal-docking-group.sh', elder_terms_terminal],
       env: ['ELDER_TERMS_GROUP_COLOR_CLOSE=1'], timeout: 90, is_parallel: false)

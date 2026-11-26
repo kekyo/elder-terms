@@ -14,9 +14,10 @@
 namespace elder_terms {
 
 struct TerminalTray {
-  GtkWidget *window, *body, *sidebar, *list, *pages, *headers;
+  GtkWidget *window, *body, *frame_row, *splitter, *sidebar, *list, *pages, *headers;
   std::vector<TerminalTab *> tabs;
   TerminalTab *active = nullptr;
+  TerminalTab *framed = nullptr;
   guint16 undock_keycode = 0;
 };
 struct TerminalTab {
@@ -34,6 +35,35 @@ static GtkTargetEntry dock_targets[] = {
 
 static void unparent(GtkWidget *child) {
   if (auto *parent = gtk_widget_get_parent(child)) gtk_container_remove(GTK_CONTAINER(parent), child);
+}
+
+static void move_border(GtkWidget *border, GtkWidget *parent, int position, bool at_end) {
+  g_object_ref(border);
+  unparent(border);
+  if (at_end) gtk_box_pack_end(GTK_BOX(parent), border, FALSE, TRUE, 0);
+  else gtk_box_pack_start(GTK_BOX(parent), border, FALSE, TRUE, 0);
+  if (position >= 0) gtk_box_reorder_child(GTK_BOX(parent), border, position);
+  g_object_unref(border);
+}
+
+static void restore_frame(TerminalTray *tray) {
+  auto *tab = tray->framed;
+  if (!tab) return;
+  auto *page = tab->page;
+  move_border(page->frame_start_border, page->root_box, 0, false);
+  move_border(page->frame_end_border, page->root_box, -1, true);
+  move_border(page->frame_bottom_border, gtk_widget_get_parent(page->status_bar), 2, false);
+  tray->framed = nullptr;
+}
+
+static void frame_page(TerminalTray *tray, TerminalTab *tab) {
+  if (tray->framed == tab) return;
+  restore_frame(tray);
+  auto *page = tab->page;
+  move_border(page->frame_start_border, tray->frame_row, 0, false);
+  move_border(page->frame_end_border, tray->frame_row, -1, true);
+  move_border(page->frame_bottom_border, tray->body, -1, true);
+  tray->framed = tab;
 }
 
 static void update_drags() {
@@ -61,6 +91,7 @@ static void refresh(TerminalTray *tray) {
   }
   auto *active = tray->active;
   gtk_widget_set_visible(tray->sidebar, tray->tabs.size() > 1);
+  frame_page(tray, active);
   for (auto *tab : tray->tabs) tab->actions.host(tray->window, tray->body, tab == active);
   gtk_stack_set_visible_child(GTK_STACK(tray->headers), active->page->header_bar);
   gtk_stack_set_visible_child(GTK_STACK(tray->pages), active->page->root_box);
@@ -78,6 +109,7 @@ void select_terminal_tab(TerminalTab *tab) {
 
 static void remove_page(TerminalTab *tab) {
   auto *tray = tab->tray;
+  if (tray->framed == tab) restore_frame(tray);
   const auto pos = std::find(tray->tabs.begin(), tray->tabs.end(), tab);
   const auto next = tray->tabs.erase(pos);
   if (tray->active == tab)
@@ -153,10 +185,14 @@ static void install_drop(GtkWidget *widget) {
 static TerminalTray *make_tray(GtkWidget *window) {
   auto *tray = new TerminalTray{};
   tray->window = GTK_WIDGET(g_object_ref(window));
-  tray->body = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+  tray->body = gtk_box_new(GTK_ORIENTATION_VERTICAL, 0);
+  tray->frame_row = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
+  tray->splitter = gtk_paned_new(GTK_ORIENTATION_HORIZONTAL);
+  gtk_paned_set_position(GTK_PANED(tray->splitter), 220);
+  gtk_paned_set_wide_handle(GTK_PANED(tray->splitter), TRUE);
   tray->sidebar = gtk_scrolled_window_new(nullptr, nullptr);
   gtk_scrolled_window_set_policy(GTK_SCROLLED_WINDOW(tray->sidebar), GTK_POLICY_NEVER, GTK_POLICY_AUTOMATIC);
-  gtk_widget_set_size_request(tray->sidebar, 150, -1);
+  gtk_widget_set_size_request(tray->sidebar, 180, -1);
   gtk_widget_set_no_show_all(tray->sidebar, TRUE);
   tray->list = gtk_list_box_new();
   gtk_style_context_add_class(gtk_widget_get_style_context(tray->list), "sidebar");
@@ -165,8 +201,10 @@ static TerminalTray *make_tray(GtkWidget *window) {
   gtk_style_context_add_class(gtk_widget_get_style_context(tray->headers), "terminal-tray-headers");
   tray->pages = gtk_stack_new();
   for (auto *stack : {tray->headers, tray->pages}) gtk_stack_set_homogeneous(GTK_STACK(stack), FALSE);
-  gtk_box_pack_start(GTK_BOX(tray->body), tray->sidebar, FALSE, FALSE, 0);
-  gtk_box_pack_start(GTK_BOX(tray->body), tray->pages, TRUE, TRUE, 0);
+  gtk_paned_pack1(GTK_PANED(tray->splitter), tray->sidebar, FALSE, FALSE);
+  gtk_paned_pack2(GTK_PANED(tray->splitter), tray->pages, TRUE, FALSE);
+  gtk_box_pack_start(GTK_BOX(tray->frame_row), tray->splitter, TRUE, TRUE, 0);
+  gtk_box_pack_start(GTK_BOX(tray->body), tray->frame_row, TRUE, TRUE, 0);
   gtk_container_add(GTK_CONTAINER(window), tray->body);
   gtk_window_set_titlebar(GTK_WINDOW(window), tray->headers);
   gtk_widget_show_all(tray->body);
