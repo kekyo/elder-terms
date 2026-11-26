@@ -40,11 +40,16 @@ try {
     [1000, 'plain', 'transcript'],
   ]) {
     const report = join(directory, `${history}-${mode}-${load}.tsv`);
-    const command = `${peer} ${report} ${history} ${mode} ${load} 10 4`;
+    const command = `exec "$ELDER_LATENCY_PEER" "$ELDER_LATENCY_REPORT" ${history} ${mode} ${load} 10 4`;
     const child = spawn(
       'script',
       ['-q', '-f', '-e', '-c', command, '/dev/null'],
       {
+        env: {
+          ...process.env,
+          ELDER_LATENCY_PEER: peer,
+          ELDER_LATENCY_REPORT: report,
+        },
         stdio: ['pipe', 'pipe', 'pipe'],
       }
     );
@@ -67,15 +72,18 @@ try {
         throw new Error(
           `${mode} must retain an OSC 8 target and visible link text`
         );
-      if (initial.includes('https://example.org/text/') !== (mode === 'mixed'))
+      const hasVisibleUrl = initial
+        .split(/\s+/)
+        .includes('https://example.org/text/visible');
+      if (hasVisibleUrl !== (mode === 'mixed'))
         throw new Error(`${mode} has the wrong visible regex URL load`);
     }
     if (mode === 'sparse-url') {
       const initial = state.output.split('elder-latency:ready')[0];
-      if (
-        (initial.match(/https:\/\/example.org/g) ?? []).length !== 11 ||
-        !initial.includes('ordinary terminal line')
-      )
+      const urls = initial.split(/\s+/).filter((word) =>
+        /^https:\/\/example\.org\/latency\/\d{8}$/.test(word)
+      );
+      if (urls.length !== 11 || !initial.includes('ordinary terminal line'))
         throw new Error('Sparse URLs must occur once per 100 initial lines');
     }
     child.stdin.write('g');
