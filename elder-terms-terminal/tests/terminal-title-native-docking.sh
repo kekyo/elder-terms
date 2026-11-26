@@ -58,6 +58,13 @@ SETTINGS
 window() { xdotool search --onlyvisible --name "elder-terms .* $1$" | tail -1; }
 origin() { xwininfo -id "$1" | awk '/Absolute upper-left [XY]:/{print $NF}' | xargs; }
 at_origin() { [[ $(origin "$1") == "$2 $3" ]]; }
+window_gone() { ! xdotool getwindowname "$1" >/dev/null 2>&1; }
+close_window() {
+  local width
+  width=$(xwininfo -id "$1" | awk '/Width:/{print $2}')
+  xdotool mousemove --window "$1" "$((width-25))" 27 click 1
+  wait_until window_gone "$1"
+}
 alive() { [[ -s "$scratch/$1.pid" ]] && kill -0 "$(cat "$scratch/$1.pid")" 2>/dev/null; }
 record() {
   ffmpeg -nostdin -loglevel error -y -f x11grab -video_size 1800x1000 -framerate 15 -i "$DISPLAY" \
@@ -162,7 +169,7 @@ xdotool windowmove --sync "$locked" 40 550
 check_disabled_drop "$beta" "$locked" disabled-target
 reset_beta
 check_disabled_drop "$locked" "$alpha" disabled-source
-xdotool windowactivate --sync "$locked" key alt+F4
+close_window "$locked"
 
 begin_title_move 25 1300 500 icon
 end_title_move icon
@@ -243,7 +250,7 @@ for row in Alpha Beta Gamma; do
   xdotool key Return
   wait_until grep -qx "$(cat "$scratch/$row.pid"):native-$row" "$scratch/$row.input"
 done
-xdotool windowactivate --sync "$alpha" key alt+F4
+close_window "$alpha"
 for pid in "${pids[@]:1}"; do wait "$pid" || true; done
 if grep -E 'Gtk-CRITICAL|Gtk-WARNING' "$scratch/"{Alpha,Beta,Gamma,Locked}.log; then exit 1; fi
 succeeded=1
