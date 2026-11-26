@@ -382,19 +382,20 @@ struct Nfs2Writer final : RemoteFileWriter {
     directory.where.name = upload->name.data();
     directory.attributes = nfs2_unchanged_attributes();
     directory.attributes.mode = 0700;
-    MKDIR2res made{};
+    nfsstat3 status = NFS3_OK;
     co_await execute_nfs_raw_async(filesystem->session, [&](auto cb, auto data) {
       upload->creation = RemoteFileCreationState::unknown;
       const int queued = ELDER_NFS_RAW_CALL(rpc_nfs2_mkdir, filesystem->session->rpc, cb, &directory, data);
       if (queued < 0) upload->creation = RemoteFileCreationState::not_created;
       return queued;
     }, [&](void *data) {
-      std::memcpy(&made, data, sizeof(made));
-      upload->creation = made.status == NFS3_OK ? RemoteFileCreationState::created : RemoteFileCreationState::not_created;
-      if (made.status == NFS3_OK)
-        std::memcpy(upload->directory.data(), made.MKDIR2res_u.resok.file, upload->directory.size());
+      const auto &reply = *static_cast<const MKDIR2res *>(data);
+      status = reply.status;
+      upload->creation = status == NFS3_OK ? RemoteFileCreationState::created : RemoteFileCreationState::not_created;
+      if (status == NFS3_OK)
+        std::memcpy(upload->directory.data(), reply.MKDIR2res_u.resok.file, upload->directory.size());
     }, cancellation);
-    check_nfs2(made.status, "claim upload directory");
+    check_nfs2(status, "claim upload directory");
     // CREATE itself is not exclusive. It is safe only inside the fresh private
     // directory whose successful MKDIR response proved this upload owns it.
     CREATE2args file{};
@@ -404,12 +405,15 @@ struct Nfs2Writer final : RemoteFileWriter {
     file.attributes = nfs2_unchanged_attributes();
     file.attributes.mode = 0600;
     file.attributes.size = 0;
-    CREATE2res created{};
     co_await execute_nfs_raw_async(filesystem->session, [&](auto cb, auto data) {
       return ELDER_NFS_RAW_CALL(rpc_nfs2_create, filesystem->session->rpc, cb, &file, data);
-    }, [&](void *data) { std::memcpy(&created, data, sizeof(created)); }, cancellation);
-    check_nfs2(created.status, "create upload payload");
-    std::memcpy(upload->file.data(), created.CREATE2res_u.resok.file, upload->file.size());
+    }, [&](void *data) {
+      const auto &reply = *static_cast<const CREATE2res *>(data);
+      status = reply.status;
+      if (status == NFS3_OK)
+        std::memcpy(upload->file.data(), reply.CREATE2res_u.resok.file, upload->file.size());
+    }, cancellation);
+    check_nfs2(status, "create upload payload");
     upload->ready = true;
   }
 
