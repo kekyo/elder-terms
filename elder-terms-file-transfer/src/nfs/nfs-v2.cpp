@@ -489,11 +489,11 @@ cardio::promise<void> make_nfs2_directory_async(std::shared_ptr<Nfs2Filesystem> 
   args.where.name = parent.name.data();
   args.attributes = nfs2_unchanged_attributes();
   args.attributes.mode = permissions.value_or(0755) & 0777;
-  MKDIR2res reply{};
+  nfsstat3 status = NFS3_OK;
   co_await execute_nfs_raw_async(filesystem->session, [&](auto cb, auto data) {
     return ELDER_NFS_RAW_CALL(rpc_nfs2_mkdir, filesystem->session->rpc, cb, &args, data);
-  }, [&](void *data) { std::memcpy(&reply, data, sizeof(reply)); }, cancellation);
-  check_nfs2(reply.status, "create directory");
+  }, [&](void *data) { status = static_cast<const MKDIR2res *>(data)->status; }, cancellation);
+  check_nfs2(status, "create directory");
 }
 
 cardio::promise<void> remove_nfs2_async(std::shared_ptr<Nfs2Filesystem> filesystem,
