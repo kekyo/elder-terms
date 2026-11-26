@@ -36,9 +36,26 @@ const compact = process.argv[4] === 'compact';
 await withWaylandHarness(null, async (h) => {
   const processes = [];
   const file = (name) => join(h.directory, name);
-  const colors = { Alpha: [20, 109, 163], Beta: [179, 90, 25] };
+  const colors = {
+    Alpha: [20, 109, 163],
+    Beta: [179, 90, 25],
+    Gamma: [108, 61, 140],
+  };
   const locate = async (name) =>
     h.findColor(await h.capture('screen'), ...colors[name]);
+  const badgeVisible = async (point, rgb) => {
+    const image = await h.capture('drag');
+    return Boolean(
+      h.findColor(image, ...rgb, 3, {
+        left: point.x - 48,
+        top: point.y - 48,
+        right: point.x + 48,
+        bottom: point.y + 48,
+      })
+    );
+  };
+  const dockColor = [20, 120, 89],
+    undockColor = [66, 82, 112];
   const ready = async (name) => {
     let area;
     await h.waitUntil(async () => Boolean((area = await locate(name))), name);
@@ -89,8 +106,6 @@ await withWaylandHarness(null, async (h) => {
     await mkdir(file('config'));
     await start('Alpha');
     let b = await start('Beta');
-    const a = await ready('Alpha');
-    const inside = { x: a.left + 12, y: a.bottom - 8 };
     const headerOffset = compact ? 16 : 24;
     const startingPosition = { left: b.left, top: b.top };
     await h.drag(
@@ -120,7 +135,20 @@ await withWaylandHarness(null, async (h) => {
       );
     }, 'title whitespace moved the Wayland terminal window');
     b = await ready('Beta');
-    await h.drag({ x: b.left + 14, y: b.top - headerOffset }, inside);
+    const a = await ready('Alpha');
+    const inside = { x: a.left + 12, y: a.bottom - 8 };
+    await h.drag(
+      { x: b.left + 14, y: b.top - headerOffset },
+      inside,
+      12,
+      false,
+      async () => {
+        await h.waitUntil(
+          () => badgeVisible(inside, dockColor),
+          'dock badge over the other terminal'
+        );
+      }
+    );
     await h.waitUntil(
       async () => !(await locate('Alpha')),
       'Alpha is in the background'
@@ -131,9 +159,67 @@ await withWaylandHarness(null, async (h) => {
     await input('Beta', 'docked');
     // The two rows occupy the sidebar directly to the left of the terminal.
     const from = { x: docked.left - 100, y: docked.top + 56 };
+    const onRow = { x: from.x + 30, y: from.y };
+    // Keep a third terminal on the opposite side so a single drag crosses
+    // the source tray, an accepting peer and the source again.
+    let gamma = await start('Gamma');
+    await h.drag(
+      { x: gamma.left + 110, y: gamma.top - headerOffset },
+      { x: from.x > 630 ? 135 : 915, y: 75 }
+    );
+    gamma = await ready('Gamma');
+    const peer = { x: gamma.left + 60, y: gamma.top + 45 };
+    const text = { x: docked.left + 12, y: docked.top + 8 };
+    await h.point(text.x, text.y);
+    await h.run('xdotool', ['click', '--repeat', '3', '1']);
+    await h.drag(from, peer, 12, false, async () => {
+      await h.waitUntil(
+        () => badgeVisible(peer, undockColor),
+        'selection prevents a cross-process dock'
+      );
+      await h.point(onRow.x, onRow.y);
+    });
+    await h.point(text.x, text.y);
+    await h.run('xdotool', ['click', '1']);
+    await h.drag(from, onRow, 4, false, async () => {
+      await h.waitUntil(
+        () => badgeVisible(onRow, undockColor),
+        'undock badge on the source row with a peer open'
+      );
+      await h.point(peer.x, peer.y);
+      await h.waitUntil(
+        () => badgeVisible(peer, dockColor),
+        'tab shows the same dock badge over a peer'
+      );
+      await h.point(onRow.x, onRow.y);
+      await h.waitUntil(
+        () => badgeVisible(onRow, undockColor),
+        'tab shows undock again on leaving the peer'
+      );
+    });
+    const peerProcess = processes.at(-1);
+    peerProcess.kill();
+    await once(peerProcess, 'close');
     const wallpaper = h.findColor(await h.capture('desktop'), 224, 48, 32);
     if (!wallpaper) throw new Error('Missing Weston desktop');
-    await h.drag(from, { x: wallpaper.right - 6, y: wallpaper.bottom - 6 });
+    const outside = { x: wallpaper.right - 55, y: wallpaper.bottom - 55 };
+    await h.drag(from, onRow, 4, false, async () => {
+      await h.waitUntil(
+        () => badgeVisible(onRow, undockColor),
+        'undock cursor as the tab starts moving'
+      );
+      const terminal = { x: docked.left + 80, y: docked.top + 50 };
+      await h.point(terminal.x, terminal.y);
+      await h.waitUntil(
+        () => badgeVisible(terminal, undockColor),
+        'undock cursor across the terminal surface'
+      );
+      await h.point(outside.x, outside.y);
+      await h.waitUntil(
+        () => badgeVisible(outside, undockColor),
+        'undock cursor over the desktop'
+      );
+    });
     await ready('Alpha');
     const detached = await ready('Beta');
     await h.point(detached.left + 20, detached.top + 20);

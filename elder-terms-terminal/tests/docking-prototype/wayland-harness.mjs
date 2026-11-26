@@ -48,14 +48,16 @@ const waitUntil = async (predicate, description, timeout = 10000) => {
   throw new Error(`Timed out waiting for ${description}`);
 };
 
-const findColor = (image, red, green, blue, tolerance = 2) => {
+const findColor = (image, red, green, blue, tolerance = 2, bounds = {}) => {
   let left = image.width;
   let top = image.height;
   let right = -1;
   let bottom = -1;
   let count = 0;
-  for (let y = 0; y < image.height; y++) {
-    for (let x = 0; x < image.width; x++) {
+  const xEnd = Math.min(image.width, bounds.right ?? image.width);
+  const yEnd = Math.min(image.height, bounds.bottom ?? image.height);
+  for (let y = Math.max(0, bounds.top ?? 0); y < yEnd; y++) {
+    for (let x = Math.max(0, bounds.left ?? 0); x < xEnd; x++) {
       const offset = (y * image.width + x) * 4;
       if (
         Math.abs(image.data[offset] - red) > tolerance ||
@@ -151,7 +153,13 @@ export const withWaylandHarness = async (binary, callback) => {
     const point = async (x, y) => {
       await run('xdotool', ['mousemove', '--sync', String(x), String(y)]);
     };
-    const drag = async (from, to, steps = 12, cancel = false) => {
+    const drag = async (
+      from,
+      to,
+      steps = 12,
+      cancel = false,
+      beforeRelease
+    ) => {
       await point(from.x, from.y);
       await run('xdotool', ['mousedown', '1']);
       for (let step = 1; step <= steps; step++) {
@@ -160,6 +168,7 @@ export const withWaylandHarness = async (binary, callback) => {
         await point(x, y);
         await pause(35);
       }
+      if (beforeRelease) await beforeRelease();
       if (cancel) await run('xdotool', ['key', 'Escape']);
       await run('xdotool', ['mouseup', '1']);
     };

@@ -6,10 +6,12 @@
 #include "terminal-dock-bus.h"
 #include "titlebar-dock.h"
 #include "tab-tearoff.h"
+#include "dock-feedback.h"
 #include "terminal-background.h"
 #include "../../shared/src/connection-runtime/window-resize-border.h"
 #include <algorithm>
 #include <memory>
+#include <gdk/gdkx.h>
 #define GETTEXT_PACKAGE "elder-terms"
 #include <glib/gi18n-lib.h>
 
@@ -52,9 +54,21 @@ bool receive_terminal_window_drop(guint32 xid, const std::string &token) {
   target->active->actions.receive(token, [](bool) {});
   return true;
 }
+enum { tab_offer = 1, root_drop, local_only_hint };
 static GtkTargetEntry dock_targets[] = {
-    {const_cast<char *>("application/x-elder-terms-terminal-tabs"), 0, 1},
-    {const_cast<char *>("application/x-rootwindow-drop"), 0, 2}};
+    {const_cast<char *>("application/x-elder-terms-terminal-tabs"), 0, tab_offer},
+    {const_cast<char *>("application/x-rootwindow-drop"), 0, root_drop}};
+
+static GdkDragAction dock_action(GtkWidget *widget) {
+  // X11's root-window drop echoes the suggested action (MOVE when LINK is the
+  // other choice). Wayland transmits COPY, MOVE and ASK on the wire.
+  return GDK_IS_X11_DISPLAY(gtk_widget_get_display(widget)) ? GDK_ACTION_LINK : GDK_ACTION_COPY;
+}
+// This format carries no data. It lets peers distinguish a local-only
+// tab move before the user drops, without requesting an offer or a checkpoint.
+static GdkAtom local_only_drag() {
+  return gdk_atom_intern_static_string("application/x-elder-terms-local-only");
+}
 
 static void unparent(GtkWidget *child) {
   if (auto *parent = gtk_widget_get_parent(child)) gtk_container_remove(GTK_CONTAINER(parent), child);
@@ -93,7 +107,7 @@ static void update_drags() {
   const bool peers = external_peers || trays.size() > 1;
   for (auto *tray : trays) for (auto *tab : tray->tabs) {
     gtk_drag_source_set(tab->pick, peers ? GDK_BUTTON1_MASK : static_cast<GdkModifierType>(0),
-        dock_targets, 2, GDK_ACTION_MOVE);
+        dock_targets, 2, static_cast<GdkDragAction>(GDK_ACTION_MOVE | dock_action(tab->pick)));
     tearoff_gesture_set_enabled(tab->gesture, !peers);
   }
 }
@@ -176,8 +190,38 @@ bool dock_terminal_tabs(const std::vector<TerminalTab *> &pages, TerminalTab *ac
 
 static void install_drop(GtkWidget *widget) {
   const bool files = gtk_drag_dest_get_target_list(widget) != nullptr;
-  gtk_drag_dest_set(widget, GTK_DEST_DEFAULT_MOTION, dock_targets, 1, static_cast<GdkDragAction>(GDK_ACTION_MOVE | (files ? GDK_ACTION_COPY : 0)));
+  gtk_drag_dest_set(widget, static_cast<GtkDestDefaults>(0), dock_targets, 1,
+      static_cast<GdkDragAction>(GDK_ACTION_MOVE | GDK_ACTION_COPY | GDK_ACTION_LINK));
   if (files) gtk_drag_dest_add_uri_targets(widget);
+  g_signal_connect(widget, "drag-motion", G_CALLBACK(+[](GtkWidget *widget, GdkDragContext *ctx,
+      gint, gint, guint time, gpointer data) -> gboolean {
+    const bool files = GPOINTER_TO_INT(data);
+    const auto target = gtk_drag_dest_find_target(widget, ctx, nullptr);
+    auto action = static_cast<GdkDragAction>(0);
+    if (target == gdk_atom_intern_static_string(dock_targets[0].target)) {
+      auto *tray = static_cast<TerminalTray *>(g_object_get_data(
+          G_OBJECT(gtk_widget_get_toplevel(widget)), "terminal-tray"));
+      bool acceptable = tray && tray->active && tray->active->actions.movable();
+      auto *source = gtk_drag_get_source_widget(ctx);
+      if (source) {
+        auto *tab = static_cast<TerminalTab *>(g_object_get_data(G_OBJECT(source), "terminal-drag-tab"));
+        acceptable = acceptable && tab && tab->tray != tray && tab->actions.movable();
+        if (acceptable && source != tab->pick)
+          for (auto *member : tab->tray->tabs) acceptable = acceptable && member->actions.movable();
+      }
+      if (acceptable) action = dock_action(widget);
+      if (acceptable && !source && g_list_find(gdk_drag_context_list_targets(ctx), local_only_drag()))
+        action = GDK_ACTION_MOVE; // Preserve the source's explanation on an attempted handoff.
+    } else if (target != GDK_NONE && files) {
+      const auto offered = gdk_drag_context_get_actions(ctx);
+      const auto suggested = gdk_drag_context_get_suggested_action(ctx);
+      if (suggested & static_cast<GdkDragAction>(GDK_ACTION_MOVE | GDK_ACTION_COPY)) action = suggested;
+      else if (offered & GDK_ACTION_COPY) action = GDK_ACTION_COPY;
+      else if (offered & GDK_ACTION_MOVE) action = GDK_ACTION_MOVE;
+    }
+    gdk_drag_status(ctx, action, time);
+    return TRUE;
+  }), GINT_TO_POINTER(files));
   g_signal_connect(widget, "drag-drop", G_CALLBACK(+[](GtkWidget *widget, GdkDragContext *ctx,
       gint, gint, guint time, gpointer) -> gboolean {
     const auto target = gtk_drag_dest_find_target(widget, ctx, nullptr);
@@ -316,16 +360,50 @@ static void deferred_undock(gpointer data) {
   }, g_object_ref(row), g_object_unref);
 }
 
+static void update_drag_icon(GtkImage *icon, GtkWidget *source, bool dock) {
+  if (!dock && !GTK_IS_BUTTON(source)) {
+    gtk_image_set_from_icon_name(icon, "utilities-terminal", GTK_ICON_SIZE_LARGE_TOOLBAR);
+    return;
+  }
+  auto *surface = dock_feedback_surface(dock ? DOCK_FEEDBACK_DOCK : DOCK_FEEDBACK_UNDOCK,
+      gtk_widget_get_scale_factor(source));
+  gtk_image_set_from_surface(icon, surface);
+  cairo_surface_destroy(surface);
+}
+
 static void bind_source(GtkWidget *widget, TerminalTab *tab, bool row) {
   g_object_set_data(G_OBJECT(widget), "terminal-drag-tab", tab);
-  if (!row) gtk_drag_source_set(widget, GDK_BUTTON1_MASK, dock_targets, 1, GDK_ACTION_MOVE);
-  g_signal_connect(widget, "drag-begin", G_CALLBACK(+[](GtkWidget *, GdkDragContext *ctx, gpointer) {
-    gtk_drag_set_icon_name(ctx, "utilities-terminal", 8, 8);
+  if (!row) gtk_drag_source_set(widget, GDK_BUTTON1_MASK, dock_targets, 1,
+      static_cast<GdkDragAction>(GDK_ACTION_MOVE | dock_action(widget)));
+  g_signal_connect(widget, "button-press-event", G_CALLBACK(+[](GtkWidget *source, GdkEventButton *event,
+      gpointer data) -> gboolean {
+    if (event->button != GDK_BUTTON_PRIMARY) return FALSE;
+    auto *tab = static_cast<TerminalTab *>(data);
+    auto *targets = gtk_drag_source_get_target_list(source);
+    const bool transferable = source == tab->pick ? tab->actions.transferable() :
+        std::ranges::all_of(tab->tray->tabs, [](auto *member) { return member->actions.transferable(); });
+    gtk_target_list_remove(targets, local_only_drag());
+    if (!transferable) gtk_target_list_add(targets, local_only_drag(), 0, local_only_hint);
+    return FALSE;
+  }), tab);
+  g_signal_connect(widget, "drag-begin", G_CALLBACK(+[](GtkWidget *source, GdkDragContext *ctx, gpointer) {
+    auto *icon = GTK_IMAGE(gtk_image_new());
+    update_drag_icon(icon, source, false);
+    gtk_widget_show(GTK_WIDGET(icon));
+    gtk_drag_set_icon_widget(ctx, GTK_WIDGET(icon), -12, -12);
+    g_signal_connect_object(ctx, "action-changed", G_CALLBACK(+[](GdkDragContext *ctx,
+        GdkDragAction action, GtkImage *icon) {
+      auto *source = gtk_drag_get_source_widget(ctx);
+      if (!source) return;
+      update_drag_icon(icon, source, action == dock_action(source) &&
+          gdk_drag_context_get_protocol(ctx) != GDK_DRAG_PROTO_ROOTWIN);
+    }), icon, static_cast<GConnectFlags>(0));
   }), nullptr);
   g_signal_connect(widget, "drag-data-get", G_CALLBACK(+[](GtkWidget *source, GdkDragContext *ctx,
       GtkSelectionData *data, guint info, guint, gpointer context) {
     auto *tab = static_cast<TerminalTab *>(context);
-    if (info == 2) {
+    if (info == local_only_hint) return;
+    if (info == root_drop) {
       if (source == tab->pick && gdk_drag_context_get_protocol(ctx) == GDK_DRAG_PROTO_ROOTWIN)
         deferred_undock(source);
       return;
