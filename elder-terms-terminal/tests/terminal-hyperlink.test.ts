@@ -11,10 +11,8 @@ import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
 import { describe, expect, it } from 'vitest';
 import { waitForResult } from 'gestament/testing';
-import { PNG } from 'pngjs';
 import {
-  defaultColumns,
-  defaultRows,
+  readTerminalGridPixels,
   readWindowCellLayout,
   runGtkTest,
 } from './gtk-test-helpers.ts';
@@ -51,8 +49,6 @@ describe.concurrent('elder-terms-terminal terminal links', () => {
         context,
         ['-c', config],
         async (app, evidence) => {
-          const terminal = await app.getById('terminal_view');
-          const { bounds } = await terminal.capture();
           const layout = await readWindowCellLayout(app);
           const readClipboard = promisify(execFile);
           const reader = fileURLToPath(
@@ -68,8 +64,8 @@ describe.concurrent('elder-terms-terminal terminal links', () => {
             [3, 42, code],
           ] as const) {
             await app.input.moveMouseTo(
-              Math.trunc(bounds.x + layout.cellWidth * (column + 0.5)),
-              Math.trunc(bounds.y + layout.cellHeight * (row + 0.5))
+              Math.trunc(layout.gridX + layout.cellWidth * (column + 0.5)),
+              Math.trunc(layout.gridY + layout.cellHeight * (row + 0.5))
             );
             await app.input.setModifier('control', true);
             try {
@@ -133,8 +129,6 @@ describe.concurrent('elder-terms-terminal terminal links', () => {
           context,
           ['-c', config],
           async (app, evidence) => {
-            const terminal = await app.getById('terminal_view');
-            const { bounds } = await terminal.capture();
             const layout = await readWindowCellLayout(app);
             const readClipboard = promisify(execFile);
             const reader = fileURLToPath(
@@ -149,8 +143,8 @@ describe.concurrent('elder-terms-terminal terminal links', () => {
               [2, 4],
             ]) {
               await app.input.moveMouseTo(
-                Math.trunc(bounds.x + layout.cellWidth * (column + 0.5)),
-                Math.trunc(bounds.y + layout.cellHeight * (row + 0.5))
+                Math.trunc(layout.gridX + layout.cellWidth * (column + 0.5)),
+                Math.trunc(layout.gridY + layout.cellHeight * (row + 0.5))
               );
               await app.input.setMouseButton('right', true);
               await app.input.setMouseButton('right', false);
@@ -165,8 +159,8 @@ describe.concurrent('elder-terms-terminal terminal links', () => {
                 expect(result.stdout).toBe(target);
               });
               await app.input.moveMouseTo(
-                Math.trunc(bounds.x + layout.cellWidth * (column + 0.5)),
-                Math.trunc(bounds.y + layout.cellHeight * (row + 0.5))
+                Math.trunc(layout.gridX + layout.cellWidth * (column + 0.5)),
+                Math.trunc(layout.gridY + layout.cellHeight * (row + 0.5))
               );
               await app.input.setModifier('control', true);
               try {
@@ -265,14 +259,9 @@ describe.concurrent('elder-terms-terminal terminal links', () => {
               }
             );
 
-            const terminal = await app.getById('terminal_view');
-            const { bounds } = await terminal.capture();
-            const linkX = Math.trunc(
-              bounds.x + (bounds.width / defaultColumns) * 1.5
-            );
-            const linkY = Math.trunc(
-              bounds.y + (bounds.height / defaultRows) * 0.5
-            );
+            const layout = await readWindowCellLayout(app);
+            const linkX = Math.trunc(layout.gridX + layout.cellWidth * 1.5);
+            const linkY = Math.trunc(layout.gridY + layout.cellHeight * 0.5);
 
             await waitForResult(
               async () => {
@@ -370,14 +359,9 @@ describe.concurrent('elder-terms-terminal terminal links', () => {
                 }
               );
 
-              const terminal = await app.getById('terminal_view');
-              const { bounds } = await terminal.capture();
-              const linkX = Math.trunc(
-                bounds.x + (bounds.width / defaultColumns) * 1.5
-              );
-              const linkY = Math.trunc(
-                bounds.y + (bounds.height / defaultRows) * 0.5
-              );
+              const layout = await readWindowCellLayout(app);
+              const linkX = Math.trunc(layout.gridX + layout.cellWidth * 1.5);
+              const linkY = Math.trunc(layout.gridY + layout.cellHeight * 0.5);
 
               await waitForResult(
                 async () => {
@@ -435,10 +419,13 @@ describe.concurrent('elder-terms-terminal terminal links', () => {
           ['-c', config],
           async (app, evidence) => {
             const terminal = await app.getById('terminal_view');
+            const layout = await readWindowCellLayout(app);
             await waitForResult(async () => {
-              const frame = PNG.sync.read((await terminal.capture()).image);
-              const cellHeight = frame.height / defaultRows;
-              const cellWidth = frame.width / defaultColumns;
+              const frame = readTerminalGridPixels(
+                await terminal.capture(),
+                layout
+              );
+              const { cellWidth, cellHeight } = layout;
               let underlinePixels = 0;
               let validPixels = 0;
               let urlPixels = 0;
@@ -469,10 +456,9 @@ describe.concurrent('elder-terms-terminal terminal links', () => {
             await evidence.captureEvidence('invalid-path-dimmed', async () =>
               app.capture()
             );
-            const { bounds } = await terminal.capture();
             await app.input.moveMouseTo(
-              Math.trunc(bounds.x + (bounds.width / defaultColumns) * 2.5),
-              Math.trunc(bounds.y + (bounds.height / defaultRows) * 0.5)
+              Math.trunc(layout.gridX + layout.cellWidth * 2.5),
+              Math.trunc(layout.gridY + layout.cellHeight * 0.5)
             );
             await app.input.setModifier('control', true);
             try {

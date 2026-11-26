@@ -911,10 +911,9 @@ describe.concurrent('elder-terms-terminal settings', () => {
       await runGtkTest(context, ['-c', config], async (app, evidence) => {
         const terminal = await app.getById('terminal_view');
         const layout = await readWindowCellLayout(app);
-        const { bounds } = await terminal.capture();
         await app.input.moveMouseTo(
-          Math.trunc(bounds.x + 3 * layout.cellWidth),
-          Math.trunc(bounds.y + 5 * layout.cellHeight)
+          Math.trunc(layout.gridX + 3 * layout.cellWidth),
+          Math.trunc(layout.gridY + 5 * layout.cellHeight)
         );
         const rowPixels = (frame: PngImage, row: number): Buffer => {
           const rows: Buffer[] = [];

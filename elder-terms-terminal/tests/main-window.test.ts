@@ -37,9 +37,10 @@ import {
   defaultRows,
   expectFixtureTerminalGridSize,
   readTerminalGridLayout,
+  type WindowCellLayout,
   readWindowCellLayout,
   runGtkTest,
-} from './gtk-test-helpers';
+} from './gtk-test-helpers.ts';
 
 const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);
@@ -250,20 +251,19 @@ const openTerminalContextMenu = async (
 
 const selectTerminalCells = async (
   app: GtkApp,
-  bounds: GtkCapture['bounds'],
+  layout: WindowCellLayout,
   cellCount: number,
   row: number
 ): Promise<void> => {
-  const cellWidth = bounds.width / defaultColumns;
-  const cellHeight = bounds.height / defaultRows;
+  const { cellWidth, cellHeight } = layout;
   await app.input.moveMouseTo(
-    Math.trunc(bounds.x + cellWidth / 4),
-    Math.trunc(bounds.y + cellHeight * (row + 0.5))
+    Math.trunc(layout.gridX + cellWidth / 4),
+    Math.trunc(layout.gridY + cellHeight * (row + 0.5))
   );
   await app.input.setMouseButton('left', true);
   await app.input.moveMouseTo(
-    Math.trunc(bounds.x + cellWidth * (cellCount - 0.25)),
-    Math.trunc(bounds.y + cellHeight * (row + 0.5))
+    Math.trunc(layout.gridX + cellWidth * (cellCount - 0.25)),
+    Math.trunc(layout.gridY + cellHeight * (row + 0.5))
   );
   await app.input.setMouseButton('left', false);
 };
@@ -771,14 +771,12 @@ describe.concurrent('elder-terms-terminal main window', () => {
             await waitForResult(async () =>
               expectFixtureTerminalGridSize(app, defaultColumns, defaultRows)
             );
-            const { bounds } = layout.terminalCapture;
-            const cellWidth = bounds.width / defaultColumns;
-            const cellHeight = bounds.height / defaultRows;
+            const { cellWidth, cellHeight } = layout;
 
             await openTerminalContextMenu(
               app,
-              bounds.x + cellWidth / 2,
-              bounds.y + cellHeight / 2
+              layout.gridX + cellWidth / 2,
+              layout.gridY + cellHeight / 2
             );
             const copyItem = await waitForResult(async () => {
               const item = expectElementKind(
@@ -798,11 +796,11 @@ describe.concurrent('elder-terms-terminal main window', () => {
               expect((await copyItem.info()).states).not.toContain('showing');
             });
             await waitForResult(async () => {
-              await selectTerminalCells(app, bounds, 5, 0);
+              await selectTerminalCells(app, layout, 5, 0);
               await openTerminalContextMenu(
                 app,
-                bounds.x + cellWidth * 6.5,
-                bounds.y + cellHeight / 2
+                layout.gridX + cellWidth * 6.5,
+                layout.gridY + cellHeight / 2
               );
               const info = await copyItem.info();
               if (!info.states.includes('enabled')) {
@@ -860,8 +858,6 @@ describe.concurrent('elder-terms-terminal main window', () => {
           const layout = await waitForResult(async () =>
             readTerminalGridLayout(app)
           );
-          const { bounds } = layout.terminalCapture;
-
           await writeFile(releasePath, 'exit\n', 'utf8');
           await waitForResult(async () => {
             expect(await readFile(markerPath, 'utf8')).toBe('exited');
@@ -875,14 +871,14 @@ describe.concurrent('elder-terms-terminal main window', () => {
 
           await selectTerminalCells(
             app,
-            bounds,
+            layout,
             'READ_ONLY_COPY'.length,
             defaultRows - 1
           );
           await openTerminalContextMenu(
             app,
-            bounds.x + (bounds.width / defaultColumns) * 15.5,
-            bounds.y + (bounds.height / defaultRows) * (defaultRows - 0.5)
+            layout.gridX + layout.cellWidth * 15.5,
+            layout.gridY + layout.cellHeight * (layout.rows - 0.5)
           );
           const copyItem = await waitForResult(async () => {
             const item = expectElementKind(
@@ -899,6 +895,7 @@ describe.concurrent('elder-terms-terminal main window', () => {
           expect(await readClipboardText(app)).toBe('READ_ONLY_COPY');
 
           const initialScrollValue = await terminalScrollbar.value();
+          const { bounds } = layout.terminalCapture;
           await app.input.moveMouseTo(
             Math.trunc(bounds.x + bounds.width / 2),
             Math.trunc(bounds.y + bounds.height / 2)
@@ -1258,18 +1255,21 @@ describe.concurrent('elder-terms-terminal main window', () => {
                 }
               }
 
-              // New frames may be pending after recording; selection only
-              // needs the terminal bounds, not settled rendering metrics.
-              const { bounds } = await (
-                await app.getById('terminal_view')
-              ).capture();
+              // Wait for the final connected grid before selecting its first row.
+              const layout = await waitForResult(() =>
+                readWindowCellLayout(app)
+              );
               await selectTerminalCells(
                 app,
-                bounds,
+                layout,
                 'KEEP_SCROLLBACK'.length,
                 0
               );
-              await openTerminalContextMenu(app, bounds.x + 20, bounds.y + 10);
+              await openTerminalContextMenu(
+                app,
+                layout.gridX + 20,
+                layout.gridY + 10
+              );
               await expectElementKind(
                 await app.getById('terminal_context_copy_item'),
                 'menuItem'
