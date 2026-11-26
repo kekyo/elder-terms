@@ -108,6 +108,7 @@ block_copy_trim_trailing_spaces=false
 | `send_break_key` | The BREAK shortcut key combination; empty disables it |
 | `scrollback_lines` | Number of history lines, from 1,000 to 100,000. Defaults to 100,000 |
 | `scrollback_compression` | History storage format. Choose `none` for uncompressed rows, `packed` for custom compression (default), or `deflate` for DEFLATE level 1. Changes also apply to existing history |
+| `docking_enabled` | `true` enables terminal docking (default). Set to `false` to exclude the window as both a docking source and a destination |
 | `bell_sound` | `default` uses the desktop beep; a custom sound is an absolute path to an Ogg Vorbis or WAV (PCM) file |
 | `block_copy_trim_trailing_spaces` | `false` preserves trailing spaces in block copies; built-in default: `true` |
 

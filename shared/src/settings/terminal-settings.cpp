@@ -354,6 +354,12 @@ SettingKey terminal_scrollback_lines_setting_key() {
 
 SettingKey terminal_scrollback_compression_setting_key() { return terminal_key("scrollback_compression"); }
 
+SettingKey terminal_docking_enabled_setting_key() { return terminal_key("docking_enabled"); }
+
+bool terminal_docking_enabled(const SettingsStore &store) {
+  return setting_boolean_value_or_default(store, terminal_docking_enabled_setting_key(), true);
+}
+
 TerminalScrollbackCompression terminal_scrollback_compression(const SettingsStore &store) {
   const auto format = setting_string_value_or_default(store, terminal_scrollback_compression_setting_key(), "packed");
   if (format == "none") return TerminalScrollbackCompression::none;
@@ -690,6 +696,10 @@ terminal_setting_definitions(TerminalDisplaySettings terminal_defaults) {
           .default_value =
               SettingValue{std::string(default_terminal_send_break_key)},
           .validate = validate_key_binding,
+      },
+      {
+          .key = terminal_docking_enabled_setting_key(),
+          .default_value = SettingValue{true},
       },
       {
           .key = terminal_undock_key_setting_key(),

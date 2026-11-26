@@ -158,6 +158,7 @@ static constexpr std::array setting_labels{
     SettingLabelEntry{"terminal", "zoom_in_key", N_("Zoom in shortcut")},
     SettingLabelEntry{"terminal", "zoom_out_key", N_("Zoom out shortcut")},
     SettingLabelEntry{"terminal", "undock_key", N_("Undock terminal shortcut")},
+    SettingLabelEntry{"terminal", "docking_enabled", N_("Allow terminal docking")},
     SettingLabelEntry{"terminal", "send_break_key",
                       N_("Send BREAK shortcut")},
     SettingLabelEntry{"telnet", "address", N_("Address")},

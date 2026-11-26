@@ -51,6 +51,7 @@ command_line=$scratch/$name.sh
 [terminal]
 width=60
 height=20
+${3:+docking_enabled=$3}
 SETTINGS
   "$binary" -c "$scratch/$name.ini" >"$scratch/$name.log" 2>&1 & pids+=($!)
 }
@@ -143,6 +144,26 @@ end_title_move() {
   finish_record
   assert_video_move "$1" "$((bx+7))" "$((by+200))"
 }
+check_disabled_drop() {
+  local beta=$1 target=$2 label=$3 bx by tx ty
+  read -r bx by < <(origin "$beta")
+  read -r tx ty < <(origin "$target")
+  begin_title_move 115 "$((tx+200))" "$((ty+150))" "$label"
+  end_title_move "$label"
+  assert_dock_feedback "$label" "$((tx+200))" "$((ty+150))" off
+  [[ $(window Locked) == "$locked" && $(window Beta) == "$enabled_beta" ]]
+}
+launch Locked '#2D6AA5' false
+wait_until alive Locked
+wait_until window Locked
+locked=$(window Locked)
+enabled_beta=$beta
+xdotool windowmove --sync "$locked" 40 550
+check_disabled_drop "$beta" "$locked" disabled-target
+reset_beta
+check_disabled_drop "$locked" "$alpha" disabled-source
+xdotool windowactivate --sync "$locked" key alt+F4
+
 begin_title_move 25 1300 500 icon
 end_title_move icon
 [[ $(window Beta) == "$beta" ]]
@@ -224,5 +245,5 @@ for row in Alpha Beta Gamma; do
 done
 xdotool windowactivate --sync "$alpha" key alt+F4
 for pid in "${pids[@]:1}"; do wait "$pid" || true; done
-if grep -E 'Gtk-CRITICAL|Gtk-WARNING' "$scratch/"{Alpha,Beta,Gamma}.log; then exit 1; fi
+if grep -E 'Gtk-CRITICAL|Gtk-WARNING' "$scratch/"{Alpha,Beta,Gamma,Locked}.log; then exit 1; fi
 succeeded=1

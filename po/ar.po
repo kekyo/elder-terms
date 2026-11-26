@@ -2714,3 +2714,6 @@ msgstr "ضغط مخصص"
 
 msgid "DEFLATE (level 1)"
 msgstr "DEFLATE (المستوى 1)"
+
+msgid "Allow terminal docking"
+msgstr "السماح بإرساء النوافذ الطرفية"

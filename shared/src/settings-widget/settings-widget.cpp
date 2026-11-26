@@ -162,6 +162,7 @@ struct SettingsWidgetState {
   GtkWidget *terminal_height_entry = nullptr;
   GtkWidget *terminal_scrollback_lines_entry = nullptr;
   GtkWidget *terminal_scrollback_compression_combo = nullptr;
+  GtkWidget *terminal_docking_enabled_combo = nullptr;
   GtkWidget *terminal_font_size_dip_entry = nullptr;
   GtkWidget *terminal_font_zoom_mode_combo = nullptr;
   GtkWidget *terminal_padding_dip_entry = nullptr;
@@ -3544,6 +3545,10 @@ static void sync_widgets_from_draft(SettingsWidgetState *state, bool preserve_in
     populate_inheritable_combo(state->terminal_scrollback_compression_combo, state->draft_store, key,
         setting_choice_label(key, fallback), options, setting_string_value_or_default(state->draft_store, key, "packed"));
   }
+  if (state->terminal_docking_enabled_combo) {
+    populate_boolean_combo(state->terminal_docking_enabled_combo, state->draft_store,
+        terminal_docking_enabled_setting_key(), terminal_docking_enabled(state->draft_store));
+  }
   if (state->terminal_font_zoom_mode_combo != nullptr) {
     const auto key = terminal_font_zoom_mode_setting_key();
     const auto fallback = std::get<std::string>(setting_fallback_value(state->draft_store, key, std::string("preserve-grid")));
@@ -5750,7 +5755,18 @@ create_terminal_pages(SettingsWidgetState *state) {
   gtk_box_pack_start(GTK_BOX(undock_row),
                      state->terminal_undock_key_reset_button, FALSE,
                      FALSE, 0);
-  attach_row(page, 15, terminal_undock_key_setting_key(),
+  state->terminal_docking_enabled_combo = create_combo_box(widget_id(state, "terminal_docking_enabled_combo").c_str());
+  g_signal_connect(state->terminal_docking_enabled_combo, "changed", G_CALLBACK(+[](GtkComboBox *combo, gpointer data) {
+    auto *state = static_cast<SettingsWidgetState *>(data);
+    if (state->synchronizing) return;
+    const auto key = terminal_docking_enabled_setting_key();
+    const auto choice = active_combo_id(GTK_WIDGET(combo), inherit_choice);
+    if (choice == inherit_choice) clear_explicit_setting_value(&state->draft_store, key);
+    else set_explicit_setting_value(&state->draft_store, key, SettingValue{choice == boolean_enabled});
+    notify_changed(state);
+  }), state);
+  attach_row(page, 15, terminal_docking_enabled_setting_key(), state->terminal_docking_enabled_combo);
+  attach_row(page, 16, terminal_undock_key_setting_key(),
              undock_row);
 
   auto *font_panel = gtk_box_new(GTK_ORIENTATION_VERTICAL, 4);

@@ -108,6 +108,7 @@ block_copy_trim_trailing_spaces=false
 | `send_break_key` | BREAK送信のキーの組み合わせ。空欄で無効 |
 | `scrollback_lines` | 履歴に残す行数。1000〜100000行で指定でき、既定値は100000行 |
 | `scrollback_compression` | 履歴バッファの管理方式。`none`は非圧縮、`packed`は独自圧縮（既定）、`deflate`はDEFLATE（レベル1）。変更は保存済みの履歴にも適用 |
+| `docking_enabled` | `true`で端末のドッキングを許可（既定）。`false`にすると、そのウインドウをドッキングの移動元と移動先の両方から除外 |
 | `bell_sound` | `default`でデスクトップのビープ音。カスタム音はOgg VorbisまたはWAV（PCM）の絶対パス |
 | `block_copy_trim_trailing_spaces` | `false`でブロックコピーの行末空白を保持。組み込み既定値は`true` |
 

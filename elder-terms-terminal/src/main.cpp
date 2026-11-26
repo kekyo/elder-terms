@@ -125,7 +125,6 @@ static std::vector<std::unique_ptr<ApplicationState>> sessions;
 static cardio::dispatcher_group_glib *process_dispatcher;
 static unsigned int background_operations = 0;
 static void dispose_session(ApplicationState *state);
-static void update_peer_presence();
 static std::string offer_terminal_pages(const std::vector<elder_terms::TerminalTab *> &, elder_terms::TerminalTab *);
 static void receive_terminal_pages(ApplicationState *, std::string, std::function<void(bool)>);
 static bool can_transfer_terminal(const ApplicationState *state);
@@ -445,7 +444,6 @@ static gboolean destroy_terminal_window_idle(gpointer context) {
   elder_terms::untrack_terminal_dock_page(state->session_id);
   elder_terms::destroy_terminal_tab(state->tab);
   state->tab = nullptr;
-  update_peer_presence();
   state->window = nullptr;
   maybe_shutdown_application(state);
   return G_SOURCE_REMOVE;
@@ -865,6 +863,7 @@ static bool apply_runtime_settings(ApplicationState *state,
     return false;
   }
   state->settings_store = store;
+  elder_terms::set_terminal_tab_docking_enabled(state->tab, elder_terms::terminal_docking_enabled(store));
   if (state->owns_desktop_entry)
     elder_terms::update_connection_desktop_session(state->settings_store);
   elder_terms::set_connection_window_icon(GTK_WINDOW(state->main_window->window),
@@ -2189,7 +2188,8 @@ static ApplicationState *create_session(const elder_terms::LaunchOptions &launch
         elder_terms::TerminalSessionConnectionPhase::disconnected);
   }
 
-  app_state.tab = elder_terms::create_terminal_tab(&*main_window, connection_profile->name, {
+  app_state.tab = elder_terms::create_terminal_tab(&*main_window, connection_profile->name,
+      elder_terms::terminal_docking_enabled(app_state.settings_store), {
       .host = [&app_state](GtkWidget *window, GtkWidget *content, bool selected) {
         auto *page = app_state.main_window;
         const bool moved = page->window != window;
@@ -2271,7 +2271,6 @@ static ApplicationState *create_session(const elder_terms::LaunchOptions &launch
           std::cerr << "Failed to apply startup background image\n";
         update_settings_renderer_status(&app_state);
       });
-  update_peer_presence();
   return &app_state;
 }
 
@@ -2312,8 +2311,8 @@ static ApplicationState *find_page(const std::string &id) {
 }
 
 static bool can_transfer_terminal(const ApplicationState *s) {
-  return s && !s->closing && !s->transferring && s->runtime && s->connection_active &&
-      !s->transfer_active && !s->settings_dialog && !s->transfer_file_dialog &&
+  return s && elder_terms::terminal_tab_allows_docking(s->tab) && !s->closing && !s->transferring &&
+      s->runtime && s->connection_active && !s->transfer_active && !s->settings_dialog && !s->transfer_file_dialog &&
       !elder_terms::has_modal_dialog(s->window) &&
       (s->active_profile.kind == elder_terms::TerminalConnectionKind::local_shell ||
        s->active_profile.kind == elder_terms::TerminalConnectionKind::ssh);
@@ -2341,11 +2340,6 @@ static cardio::promise<void> commit_ssh_page(ApplicationState *s) {
   }
   s->origin_active = false;
   maybe_shutdown_application(s);
-}
-
-static void update_peer_presence() {
-  elder_terms::publish_terminal_dock_window(std::any_of(sessions.begin(), sessions.end(),
-      [](const auto &s) { return !s->closing && s->tab && s->window && gtk_widget_get_visible(s->window); }));
 }
 
 static cardio::promise<elder_terms::DockPrepared> prepare_pages(std::vector<std::string> ids, unsigned active) {
@@ -2386,7 +2380,6 @@ static cardio::promise<elder_terms::DockPrepared> prepare_pages(std::vector<std:
         update_application_terminal_presentation(s);
       }
     }
-    update_peer_presence();
   };
   try {
     for (auto *s : pages) {
@@ -2437,6 +2430,7 @@ static cardio::promise<elder_terms::DockPrepared> prepare_pages(std::vector<std:
 static std::string offer_terminal_pages(const std::vector<elder_terms::TerminalTab *> &tabs, elder_terms::TerminalTab *active) {
   std::vector<std::string> ids;
   for (auto *tab : tabs) {
+    if (!elder_terms::terminal_tab_allows_docking(tab)) return {};
     auto found = std::find_if(sessions.begin(), sessions.end(), [tab](const auto &s) { return s->tab == tab; });
     if (found == sessions.end()) return {};
     ids.push_back((*found)->session_id);
@@ -2455,6 +2449,7 @@ struct StagedPage {
 };
 
 static elder_terms::DockDecision stage_pages(ApplicationState *destination, const elder_terms::DockBatch &batch) {
+  if (!elder_terms::terminal_tab_allows_docking(destination->tab)) return {};
   std::vector<StagedPage> staged;
   bool ready = true;
   for (const auto &page : batch.pages) {
@@ -2470,6 +2465,7 @@ static elder_terms::DockDecision stage_pages(ApplicationState *destination, cons
     auto settings = elder_terms::restore_connection_settings({options.config_path, options.startup_config_path,
         elder_terms::default_global_config_path()}, page.settings, 12.0);
     if (!settings.loaded || !elder_terms::settings_theme_is_resolved(settings.store)) { for (auto &warning : settings.warnings) g_debug("%s", warning.c_str()); break; }
+    if (!elder_terms::terminal_docking_enabled(settings.store)) break;
     auto *s = create_session(options, std::move(settings), true, page.checkpoint);
     if (!s) { g_debug("Cannot create checkpoint page"); break; }
     s->session_id = page.id;
@@ -2530,7 +2526,6 @@ static elder_terms::DockDecision stage_pages(ApplicationState *destination, cons
           gtk_widget_show_all(s->window);
           gtk_window_present_with_time(GTK_WINDOW(s->window), GDK_CURRENT_TIME);
         });
-    update_peer_presence();
   };
   if (ready && staged.size() == batch.pages.size()) return finish;
   finish(false);
@@ -2547,8 +2542,8 @@ static cardio::promise<void> receive_pages_async(ApplicationState *destination, 
 }
 
 static void receive_terminal_pages(ApplicationState *destination, std::string token, std::function<void(bool)> done) {
-  if (!destination || destination->closing || destination->transferring ||
-      elder_terms::has_modal_dialog(destination->window)) { done(false); return; }
+  if (!destination || !elder_terms::terminal_tab_allows_docking(destination->tab) || destination->closing ||
+      destination->transferring || elder_terms::has_modal_dialog(destination->window)) { done(false); return; }
   std::erase_if(docking_jobs, [](const auto &task) { return task.is_ready(); });
   docking_jobs.emplace_back(receive_pages_async(destination, std::move(token), std::move(done)));
 }

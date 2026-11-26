@@ -235,6 +235,11 @@ ELDER_TERMS_API SettingKey terminal_height_setting_key();
  */
 ELDER_TERMS_API SettingKey terminal_scrollback_lines_setting_key();
 
+/** @returns Key for allowing the terminal window to dock and accept other terminals. */
+ELDER_TERMS_API SettingKey terminal_docking_enabled_setting_key();
+/** @param store Layered settings. @returns Whether this terminal permits docking. */
+ELDER_TERMS_API bool terminal_docking_enabled(const SettingsStore &store);
+
 /** @returns Key for the storage format of offscreen terminal rows. */
 ELDER_TERMS_API SettingKey terminal_scrollback_compression_setting_key();
 

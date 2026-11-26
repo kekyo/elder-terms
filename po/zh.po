@@ -2688,3 +2688,6 @@ msgstr "自定义压缩"
 
 msgid "DEFLATE (level 1)"
 msgstr "DEFLATE（级别 1）"
+
+msgid "Allow terminal docking"
+msgstr "允许终端停靠"

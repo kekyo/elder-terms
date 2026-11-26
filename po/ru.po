@@ -2718,3 +2718,6 @@ msgstr "Встроенное сжатие"
 
 msgid "DEFLATE (level 1)"
 msgstr "DEFLATE (уровень 1)"
+
+msgid "Allow terminal docking"
+msgstr "Разрешить стыковку терминалов"

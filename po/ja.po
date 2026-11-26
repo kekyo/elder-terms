@@ -3446,3 +3446,6 @@ msgstr "独自圧縮"
 
 msgid "DEFLATE (level 1)"
 msgstr "DEFLATE（レベル1）"
+
+msgid "Allow terminal docking"
+msgstr "端末のドッキングを許可"

@@ -1734,6 +1734,85 @@ describe.concurrent('elder-terms-terminal settings', () => {
     });
   });
 
+  it('updates docking availability for an open window when the preference changes', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const path = join(directory, 'dock.ini');
+      await writeFile(path, '[general]\nname=DockSettingPeer\n');
+      await runGtkTest(context, ['--test-fixture', '-c', path], async (app) => {
+        const env = await app.environment();
+        const xid = await waitForResult(async () =>
+          (
+            await execFileAsync(
+              'xdotool',
+              ['search', '--onlyvisible', '--name', 'DockSettingPeer$'],
+              { env }
+            )
+          ).stdout.trim()
+        );
+        const pid = (
+          await execFileAsync('xdotool', ['getwindowpid', xid], { env })
+        ).stdout.trim();
+        const owner = await waitForResult(async () => {
+          const { stdout } = await execFileAsync(
+            'gdbus',
+            [
+              'call',
+              '--session',
+              '--dest',
+              'org.freedesktop.DBus',
+              '--object-path',
+              '/org/freedesktop/DBus',
+              '--method',
+              'org.freedesktop.DBus.GetNameOwner',
+              'net.kekyo.ElderTerms.DockWindow.p' + pid,
+            ],
+            { env }
+          );
+          return stdout.split("'")[1];
+        });
+        const canDock = async () =>
+          (
+            await execFileAsync(
+              'gdbus',
+              [
+                'call',
+                '--session',
+                '--dest',
+                owner,
+                '--object-path',
+                '/net/kekyo/ElderTerms/Dock',
+                '--method',
+                'net.kekyo.ElderTerms.Dock.CanDropAtWindow',
+                xid,
+              ],
+              { env }
+            )
+          ).stdout.trim();
+        expect(await canDock()).toBe('(true,)');
+        for (const [choice, enabled] of [
+          [2, false],
+          [1, true],
+        ] as const) {
+          await openSettingsDialog(app);
+          await showTerminalSettingsPage(app);
+          await expectElementKind(
+            await app.getById('settings_terminal_docking_enabled_combo'),
+            'comboBox'
+          ).selectChildAt(choice);
+          await expectElementKind(
+            await app.getById('settings_save_button'),
+            'button'
+          ).click();
+          await expectSettingsDialogClosed(app);
+          expect(await canDock()).toBe(`(${enabled},)`);
+          expect(await readFile(path, 'utf8')).toContain(
+            `docking_enabled=${enabled}`
+          );
+        }
+      });
+    });
+  });
+
   it('switches scrollback compression on a running terminal and saves the selection', async (context) => {
     await withTemporaryDirectory(async (directory) => {
       const path = join(directory, 'history.ini');

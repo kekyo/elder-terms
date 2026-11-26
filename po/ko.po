@@ -2696,3 +2696,6 @@ msgstr "자체 압축"
 
 msgid "DEFLATE (level 1)"
 msgstr "DEFLATE (레벨 1)"
+
+msgid "Allow terminal docking"
+msgstr "터미널 도킹 허용"

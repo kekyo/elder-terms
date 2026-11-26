@@ -2712,3 +2712,6 @@ msgstr "Compressão personalizada"
 
 msgid "DEFLATE (level 1)"
 msgstr "DEFLATE (nível 1)"
+
+msgid "Allow terminal docking"
+msgstr "Permitir o acoplamento de terminais"
