@@ -20,18 +20,46 @@ const digestParameters = (
   value: string
 ): Record<string, string> | undefined => {
   const fields: Record<string, string> = Object.create(null);
-  // Match only at the current position. A malformed field ends the request.
-  const field =
-    /[ \t]*([\w!#$%&'*+.^`|~-]+)[ \t]*=[ \t]*(?:"((?:[^"\\\r\n]|\\[^\r\n])*)"|([\w!#$%&'*+.^`|~-]+))[ \t]*/y;
-  while (field.lastIndex < value.length) {
-    const part = field.exec(value);
-    if (!part) return undefined;
-    const name = part[1].toLowerCase();
-    if (name in fields) return undefined;
-    fields[name] = part[2]?.replace(/\\(.)/g, '$1') ?? part[3];
-    if (field.lastIndex === value.length) return fields;
-    if (value[field.lastIndex] !== ',') return undefined;
-    field.lastIndex++;
+  const token = /[\w!#$%&'*+.^`|~-]+/y;
+  let cursor = 0;
+  const skipWhitespace = () => {
+    while (value[cursor] === ' ' || value[cursor] === '\t') cursor++;
+  };
+  const readToken = () => {
+    token.lastIndex = cursor;
+    const match = token.exec(value);
+    if (!match) return undefined;
+    cursor = token.lastIndex;
+    return match[0];
+  };
+  const readValue = () => {
+    if (value[cursor] !== '"') return readToken();
+    cursor++;
+    let quoted = '';
+    while (cursor < value.length) {
+      let character = value[cursor++];
+      if (character === '"') return quoted;
+      if (character === '\\') {
+        if (cursor === value.length) return undefined;
+        character = value[cursor++];
+      }
+      if (character === '\r' || character === '\n') return undefined;
+      quoted += character;
+    }
+    return undefined;
+  };
+  while (cursor < value.length) {
+    skipWhitespace();
+    const name = readToken()?.toLowerCase();
+    skipWhitespace();
+    if (!name || name in fields || value[cursor++] !== '=') return undefined;
+    skipWhitespace();
+    const parameter = readValue();
+    if (parameter === undefined) return undefined;
+    fields[name] = parameter;
+    skipWhitespace();
+    if (cursor === value.length) return fields;
+    if (value[cursor++] !== ',') return undefined;
   }
   return undefined;
 };
