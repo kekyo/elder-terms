@@ -26,9 +26,11 @@ static cardio::promise<void> run_async(char **args, cardio::dispatcher_group_gli
     options.transport.port = settings.port;
     options.transport.ca_file = args[3];
     options.transport.prompt_certificate = std::string(args[4]) != "reject";
-    options.transport.authentication = std::string(args[6]) == "none" ? HttpAuthentication::none : HttpAuthentication::automatic;
+    const std::string auth_mode = args[6];
+    expect(auth_mode == "none" || auth_mode == "valid" || auth_mode == "invalid", "Unknown authentication case");
+    options.transport.authentication = auth_mode == "none" ? HttpAuthentication::none : HttpAuthentication::automatic;
     options.transport.username = "alice";
-    options.password = args[6];
+    if (auth_mode != "none") options.password = auth_mode == "valid" ? "secret" : "wrong";
     unsigned confirmations = 0;
     options.confirm_certificate = [&confirmations, args](const TlsCertificateFailure &certificate, cardio::cancellation) -> cardio::promise<bool> {
       ++confirmations;
@@ -71,7 +73,7 @@ static cardio::promise<void> run_async(char **args, cardio::dispatcher_group_gli
 }
 int main(int argc, char **argv) {
   try {
-    expect(argc == 7, "Expected URL, destination, CA, certificate policy, outcome and password");
+    expect(argc == 7, "Expected URL, destination, CA, certificate policy, outcome and authentication case");
     std::exception_ptr failure;
     {
       cardio::dispatcher_group_glib group;
