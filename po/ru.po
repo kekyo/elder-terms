@@ -2706,3 +2706,18 @@ msgstr "По нижнему краю"
 
 msgid "Drag to dock all tabs in another terminal window"
 msgstr "Перетащите, чтобы присоединить все вкладки к другому окну терминала"
+
+msgid "Scrollback storage"
+msgstr "Хранение истории прокрутки"
+
+msgid "Uncompressed"
+msgstr "Без сжатия"
+
+msgid "Custom compression"
+msgstr "Встроенное сжатие"
+
+msgid "DEFLATE (level 1)"
+msgstr "DEFLATE (уровень 1)"
+
+msgid "Allow terminal docking"
+msgstr "Разрешить стыковку терминалов"

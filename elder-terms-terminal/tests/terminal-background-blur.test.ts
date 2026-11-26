@@ -12,7 +12,12 @@ import { promisify } from 'node:util';
 import { PNG } from 'pngjs';
 import { expect, it } from 'vitest';
 import { waitForResult } from 'gestament/testing';
-import { runGtkTest, readTerminalGridLayout } from './gtk-test-helpers';
+import {
+  runGtkTest,
+  readTerminalGridLayout,
+  readTerminalGridPixels,
+  readWindowCellLayout,
+} from './gtk-test-helpers.ts';
 import {
   withTemporaryDirectory,
   expectElementKind,
@@ -93,7 +98,11 @@ for (const backend of ['cairo', 'opengl']) {
             const terminal = await app.getById('terminal_view');
             const expectBlur = async (blurred: boolean): Promise<void> => {
               await waitForResult(async () => {
-                const frame = PNG.sync.read((await terminal.capture()).image);
+                const cells = await readWindowCellLayout(app);
+                const frame = readTerminalGridPixels(
+                  await terminal.capture(),
+                  cells
+                );
                 let sum = 0,
                   square = 0,
                   count = 0,
@@ -114,8 +123,8 @@ for (const backend of ['cairo', 'opengl']) {
                 expect(mean).toBeLessThan(205);
                 if (blurred) expect(deviation).toBeLessThan(25);
                 else expect(deviation).toBeGreaterThan(90);
-                for (let y = 0; y < layout.cellHeight; y++)
-                  for (let x = 0; x < 10 * layout.cellWidth; x++) {
+                for (let y = 0; y < cells.cellHeight; y++)
+                  for (let x = 0; x < 10 * cells.cellWidth; x++) {
                     const at = (y * frame.width + x) * 4;
                     if (
                       frame.data[at] > 240 &&
@@ -125,8 +134,8 @@ for (const backend of ['cairo', 'opengl']) {
                       white++;
                   }
                 expect(white).toBeGreaterThan(20);
-                for (let y = layout.cellHeight; y < 2 * layout.cellHeight; y++)
-                  for (let x = 0; x < 10 * layout.cellWidth; x++) {
+                for (let y = cells.cellHeight; y < 2 * cells.cellHeight; y++)
+                  for (let x = 0; x < 10 * cells.cellWidth; x++) {
                     const at = (y * frame.width + x) * 4;
                     if (
                       frame.data[at] === 46 &&

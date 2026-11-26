@@ -42,6 +42,7 @@ import {
   readFixtureTerminalScrollbackLines,
   readTerminalGridLayout,
   readWindowCellLayout,
+  readTerminalGridPixels,
   runGtkTest,
   saveTerminalGridLayoutEvidence,
   scrollWheelWithControl,
@@ -910,10 +911,9 @@ describe.concurrent('elder-terms-terminal settings', () => {
       await runGtkTest(context, ['-c', config], async (app, evidence) => {
         const terminal = await app.getById('terminal_view');
         const layout = await readWindowCellLayout(app);
-        const { bounds } = await terminal.capture();
         await app.input.moveMouseTo(
-          Math.trunc(bounds.x + 3 * layout.cellWidth),
-          Math.trunc(bounds.y + 5 * layout.cellHeight)
+          Math.trunc(layout.gridX + 3 * layout.cellWidth),
+          Math.trunc(layout.gridY + 5 * layout.cellHeight)
         );
         const rowPixels = (frame: PngImage, row: number): Buffer => {
           const rows: Buffer[] = [];
@@ -933,7 +933,10 @@ describe.concurrent('elder-terms-terminal settings', () => {
           return Buffer.concat(rows);
         };
         const initial = await waitForResult(async () => {
-          const frame = PNG.sync.read((await terminal.capture()).image);
+          const frame = readTerminalGridPixels(
+            await terminal.capture(),
+            layout
+          );
           const plain = rowPixels(frame, 0);
           const underlined = rowPixels(frame, 1);
           expect(plain).not.toEqual(underlined);
@@ -941,7 +944,10 @@ describe.concurrent('elder-terms-terminal settings', () => {
         });
         const checkRows = async (regex: Buffer, osc8: Buffer) => {
           await toPass(async () => {
-            const frame = PNG.sync.read((await terminal.capture()).image);
+            const frame = readTerminalGridPixels(
+              await terminal.capture(),
+              layout
+            );
             expect(rowPixels(frame, 0)).toEqual(regex);
             expect(rowPixels(frame, 1)).toEqual(osc8);
           });
@@ -1102,11 +1108,10 @@ describe.concurrent('elder-terms-terminal settings', () => {
                 await app.getById('fixture_terminal_state_label'),
                 'label'
               );
-              const bounds = (await terminal.capture()).bounds;
               const move = async (column: number, row: number) => {
                 await app.input.moveMouseTo(
-                  Math.trunc(bounds.x + column * layout.cellWidth),
-                  Math.trunc(bounds.y + row * layout.cellHeight)
+                  Math.trunc(layout.gridX + column * layout.cellWidth),
+                  Math.trunc(layout.gridY + row * layout.cellHeight)
                 );
               };
               const expectCopy = async (expected: string) => {
@@ -1731,6 +1736,121 @@ describe.concurrent('elder-terms-terminal settings', () => {
           });
         }
       );
+    });
+  });
+
+  it('updates docking availability for an open window when the preference changes', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const path = join(directory, 'dock.ini');
+      await writeFile(path, '[general]\nname=DockSettingPeer\n');
+      await runGtkTest(context, ['--test-fixture', '-c', path], async (app) => {
+        const env = await app.environment();
+        const xid = await waitForResult(async () =>
+          (
+            await execFileAsync(
+              'xdotool',
+              ['search', '--onlyvisible', '--name', 'DockSettingPeer$'],
+              { env }
+            )
+          ).stdout.trim()
+        );
+        const pid = (
+          await execFileAsync('xdotool', ['getwindowpid', xid], { env })
+        ).stdout.trim();
+        const owner = await waitForResult(async () => {
+          const { stdout } = await execFileAsync(
+            'gdbus',
+            [
+              'call',
+              '--session',
+              '--dest',
+              'org.freedesktop.DBus',
+              '--object-path',
+              '/org/freedesktop/DBus',
+              '--method',
+              'org.freedesktop.DBus.GetNameOwner',
+              'net.kekyo.ElderTerms.DockWindow.p' + pid,
+            ],
+            { env }
+          );
+          return stdout.split("'")[1];
+        });
+        const canDock = async () =>
+          (
+            await execFileAsync(
+              'gdbus',
+              [
+                'call',
+                '--session',
+                '--dest',
+                owner,
+                '--object-path',
+                '/net/kekyo/ElderTerms/Dock',
+                '--method',
+                'net.kekyo.ElderTerms.Dock.CanDropAtWindow',
+                xid,
+              ],
+              { env }
+            )
+          ).stdout.trim();
+        expect(await canDock()).toBe('(true,)');
+        for (const [choice, enabled] of [
+          [2, false],
+          [1, true],
+        ] as const) {
+          await openSettingsDialog(app);
+          await showTerminalSettingsPage(app);
+          await expectElementKind(
+            await app.getById('settings_terminal_docking_enabled_combo'),
+            'comboBox'
+          ).selectChildAt(choice);
+          await expectElementKind(
+            await app.getById('settings_save_button'),
+            'button'
+          ).click();
+          await expectSettingsDialogClosed(app);
+          expect(await canDock()).toBe(`(${enabled},)`);
+          expect(await readFile(path, 'utf8')).toContain(
+            `docking_enabled=${enabled}`
+          );
+        }
+      });
+    });
+  });
+
+  it('switches scrollback compression on a running terminal and saves the selection', async (context) => {
+    await withTemporaryDirectory(async (directory) => {
+      const path = join(directory, 'history.ini');
+      await writeFile(path, '[terminal]\n');
+      await runGtkTest(context, ['--test-fixture', '-c', path], async (app) => {
+        const comboId = 'settings_terminal_scrollback_compression_combo';
+        for (const [index, mode] of [
+          [1, 'none'],
+          [3, 'deflate'],
+          [2, 'packed'],
+        ] as const) {
+          await openSettingsDialog(app);
+          await showTerminalSettingsPage(app);
+          if (index === 1)
+            await expectSelectedComboValue(
+              app,
+              comboId,
+              'Custom compression (built-in default)'
+            );
+          await expectElementKind(
+            await app.getById(comboId),
+            'comboBox'
+          ).selectChildAt(index);
+          await expectElementKind(
+            await app.getById('settings_save_button'),
+            'button'
+          ).click();
+          await expectSettingsDialogClosed(app);
+          expect(await readFile(path, 'utf8')).toContain(
+            `scrollback_compression=${mode}`
+          );
+        }
+      });
     });
   });
 
@@ -3932,7 +4052,7 @@ describe.concurrent('elder-terms-terminal settings', () => {
   it('applies runtime scrollback size changes to terminal', async (context) => {
     await runGtkTest(context, ['--test-fixture'], async (app) => {
       await waitForResult(async () => {
-        expect(await readFixtureTerminalScrollbackLines(app)).toBe(10000);
+        expect(await readFixtureTerminalScrollbackLines(app)).toBe(100000);
       });
       await openSettingsDialog(app);
       await showTerminalSettingsPage(app);

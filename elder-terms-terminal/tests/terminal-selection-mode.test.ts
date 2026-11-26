@@ -9,10 +9,13 @@ import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { PNG } from 'pngjs';
 import { describe, expect, it } from 'vitest';
 import { waitForResult } from 'gestament/testing';
-import { readWindowCellLayout, runGtkTest } from './gtk-test-helpers.ts';
+import {
+  readTerminalGridPixels,
+  readWindowCellLayout,
+  runGtkTest,
+} from './gtk-test-helpers.ts';
 import {
   withTemporaryDirectory,
   expectElementKind,
@@ -57,7 +60,6 @@ describe.concurrent('selection mode motion video', () => {
               await waitForResult(async () =>
                 expect(await status.text()).toContain('ready=1')
               );
-              const bounds = (await terminal.capture()).bounds;
               const width = layout.cellWidth * 12;
               const height = layout.cellHeight * 3;
               const frameSize = width * height * 3;
@@ -78,7 +80,7 @@ describe.concurrent('selection mode motion video', () => {
                   '-video_size',
                   `${width}x${height}`,
                   '-i',
-                  `${env.DISPLAY}+${bounds.x},${bounds.y}`,
+                  `${env.DISPLAY}+${layout.gridX},${layout.gridY}`,
                   '-map',
                   '0:v',
                   '-c:v',
@@ -133,8 +135,8 @@ describe.concurrent('selection mode motion video', () => {
               });
               const move = async (column: number) => {
                 await app.input.moveMouseTo(
-                  Math.trunc(bounds.x + column * layout.cellWidth),
-                  Math.trunc(bounds.y + 2.5 * layout.cellHeight)
+                  Math.trunc(layout.gridX + column * layout.cellWidth),
+                  Math.trunc(layout.gridY + 2.5 * layout.cellHeight)
                 );
               };
               const observe = async (
@@ -146,7 +148,10 @@ describe.concurrent('selection mode motion video', () => {
                 const observed = await waitForResult(async () => {
                   expect(failure).toBe('');
                   expect(await status.text()).toContain('ready=1');
-                  const image = PNG.sync.read((await terminal.capture()).image);
+                  const image = readTerminalGridPixels(
+                    await terminal.capture(),
+                    layout
+                  );
                   const rgb = Buffer.alloc(frameSize);
                   for (let y = 0; y < height; y++)
                     for (let x = 0; x < width; x++) {
@@ -193,8 +198,8 @@ describe.concurrent('selection mode motion video', () => {
                 const before = await observe('before', undefined, undefined);
                 await app.input.setModifier('control', rectangular);
                 await app.input.moveMouseTo(
-                  bounds.x + 1,
-                  Math.trunc(bounds.y + layout.cellHeight * 0.5)
+                  layout.gridX + 1,
+                  Math.trunc(layout.gridY + layout.cellHeight * 0.5)
                 );
                 await app.input.setMouseButton('left', true);
                 await move(3.9);

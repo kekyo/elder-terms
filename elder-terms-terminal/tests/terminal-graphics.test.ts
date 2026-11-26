@@ -100,7 +100,6 @@ process.stdout.write('\\x1b[?25l\\x1b[2J\\x1b[H\\x1b[6n');`
               cellHeight: layout.cellHeight,
               imageBytes: 1280 * 1024 * 4,
             });
-            const bounds = (await layout.terminal.capture()).bounds;
             const width = 40 * layout.cellWidth;
             const height = 12 * layout.cellHeight;
             const recorder = spawn(
@@ -118,7 +117,7 @@ process.stdout.write('\\x1b[?25l\\x1b[2J\\x1b[H\\x1b[6n');`
                 '-video_size',
                 `${width}x${height}`,
                 '-i',
-                `${(await app.environment()).DISPLAY}+${bounds.x},${bounds.y}`,
+                `${(await app.environment()).DISPLAY}+${layout.gridX},${layout.gridY}`,
                 '-c:v',
                 'ffv1',
                 '-threads',

@@ -10,6 +10,7 @@
 #include "terminal-background.h"
 #include "../../shared/src/connection-runtime/window-resize-border.h"
 #include <algorithm>
+#include <cstddef>
 #include <memory>
 #include <gdk/gdkx.h>
 #define GETTEXT_PACKAGE "elder-terms"
@@ -28,12 +29,32 @@ struct TerminalTray {
 struct TerminalTab {
   MainWindow *page;
   TerminalTabActions actions;
+  bool docking_enabled;
   TerminalTray *tray = nullptr;
-  GtkWidget *row = nullptr, *pick = nullptr;
+  GtkWidget *row = nullptr, *pick = nullptr, *handle = nullptr;
   TearoffGesture *gesture = nullptr;
 };
 static std::vector<TerminalTray *> trays;
 static bool external_peers = false;
+
+static bool allows_docking(const TerminalTray *tray) {
+  return tray && !tray->tabs.empty() &&
+      std::ranges::all_of(tray->tabs, [](const auto *tab) { return tab->docking_enabled; });
+}
+
+bool terminal_tab_allows_docking(const TerminalTab *tab) {
+  return tab && allows_docking(tab->tray);
+}
+
+static bool accepts_drop(const TerminalTray *tray) {
+  return allows_docking(tray) && tray->active && tray->active->actions.movable();
+}
+
+static std::ptrdiff_t dockable_window_count() {
+  return std::ranges::count_if(trays, [](const auto *tray) {
+    return gtk_widget_get_mapped(tray->window) && allows_docking(tray);
+  });
+}
 
 static TerminalTray *tray_by_xid(guint32 xid) {
   for (auto *tray : trays)
@@ -43,7 +64,7 @@ static TerminalTray *tray_by_xid(guint32 xid) {
 
 static TerminalTray *available_tray(guint32 xid) {
   auto *target = tray_by_xid(xid);
-  return target && target->active && target->active->actions.movable() ? target : nullptr;
+  return accepts_drop(target) ? target : nullptr;
 }
 bool can_receive_terminal_window_drop(guint32 xid) {
   return available_tray(xid) != nullptr;
@@ -104,12 +125,28 @@ static void frame_page(TerminalTray *tray, TerminalTab *tab) {
 }
 
 static void update_drags() {
-  const bool peers = external_peers || trays.size() > 1;
-  for (auto *tray : trays) for (auto *tab : tray->tabs) {
-    gtk_drag_source_set(tab->pick, peers ? GDK_BUTTON1_MASK : static_cast<GdkModifierType>(0),
-        dock_targets, 2, static_cast<GdkDragAction>(GDK_ACTION_MOVE | dock_action(tab->pick)));
-    tearoff_gesture_set_enabled(tab->gesture, !peers);
+  const auto windows = dockable_window_count();
+  publish_terminal_dock_window(windows != 0);
+  for (auto *tray : trays) {
+    const bool enabled = allows_docking(tray);
+    const bool peers = enabled && (external_peers || windows > 1);
+    for (auto *tab : tray->tabs) {
+      gtk_drag_source_set(tab->pick, peers ? GDK_BUTTON1_MASK : static_cast<GdkModifierType>(0),
+          dock_targets, 2, static_cast<GdkDragAction>(GDK_ACTION_MOVE | dock_action(tab->pick)));
+      tearoff_gesture_set_enabled(tab->gesture, !peers);
+      if (tab->handle) {
+        gtk_drag_source_set(tab->handle, enabled ? GDK_BUTTON1_MASK : static_cast<GdkModifierType>(0),
+            dock_targets, 1, static_cast<GdkDragAction>(GDK_ACTION_MOVE | dock_action(tab->handle)));
+        gtk_widget_set_has_tooltip(tab->handle, enabled);
+      }
+    }
   }
+}
+
+void set_terminal_tab_docking_enabled(TerminalTab *tab, bool enabled) {
+  if (!tab || tab->docking_enabled == enabled) return;
+  tab->docking_enabled = enabled;
+  update_drags();
 }
 
 void set_terminal_tab_external_peers(bool available) {
@@ -180,12 +217,16 @@ static void move_pages(const std::vector<TerminalTab *> &pages, TerminalTab *act
   update_drags();
 }
 bool dock_terminal_tabs(const std::vector<TerminalTab *> &pages, TerminalTab *active, TerminalTab *destination) {
-  if (pages.empty() || !destination || !destination->tray ||
+  if (pages.empty() || !terminal_tab_allows_docking(destination) ||
       std::find(pages.begin(), pages.end(), active) == pages.end()) return false;
   for (auto *tab : pages)
-    if (!tab || !tab->tray || tab->tray == destination->tray || !tab->actions.movable()) return false;
+    if (!terminal_tab_allows_docking(tab) || tab->tray == destination->tray || !tab->actions.movable()) return false;
   move_pages(pages, active, destination->tray);
   return true;
+}
+
+static TerminalTray *widget_tray(GtkWidget *widget) {
+  return static_cast<TerminalTray *>(g_object_get_data(G_OBJECT(gtk_widget_get_toplevel(widget)), "terminal-tray"));
 }
 
 static void install_drop(GtkWidget *widget) {
@@ -199,13 +240,12 @@ static void install_drop(GtkWidget *widget) {
     const auto target = gtk_drag_dest_find_target(widget, ctx, nullptr);
     auto action = static_cast<GdkDragAction>(0);
     if (target == gdk_atom_intern_static_string(dock_targets[0].target)) {
-      auto *tray = static_cast<TerminalTray *>(g_object_get_data(
-          G_OBJECT(gtk_widget_get_toplevel(widget)), "terminal-tray"));
-      bool acceptable = tray && tray->active && tray->active->actions.movable();
+      auto *tray = widget_tray(widget);
+      bool acceptable = accepts_drop(tray);
       auto *source = gtk_drag_get_source_widget(ctx);
       if (source) {
         auto *tab = static_cast<TerminalTab *>(g_object_get_data(G_OBJECT(source), "terminal-drag-tab"));
-        acceptable = acceptable && tab && tab->tray != tray && tab->actions.movable();
+        acceptable = acceptable && terminal_tab_allows_docking(tab) && tab->tray != tray && tab->actions.movable();
         if (acceptable && source != tab->pick)
           for (auto *member : tab->tray->tabs) acceptable = acceptable && member->actions.movable();
       }
@@ -226,15 +266,19 @@ static void install_drop(GtkWidget *widget) {
       gint, gint, guint time, gpointer) -> gboolean {
     const auto target = gtk_drag_dest_find_target(widget, ctx, nullptr);
     if (target == GDK_NONE) return FALSE;
+    if (target == gdk_atom_intern_static_string(dock_targets[0].target) && !accepts_drop(widget_tray(widget))) {
+      gtk_drag_finish(ctx, FALSE, FALSE, time);
+      return TRUE;
+    }
     gtk_drag_get_data(widget, ctx, target, time);
     return TRUE;
   }), nullptr);
   g_signal_connect(widget, "drag-data-received", G_CALLBACK(+[](GtkWidget *widget, GdkDragContext *ctx,
       gint, gint, GtkSelectionData *data, guint, guint time, gpointer) {
     if (gtk_selection_data_get_target(data) != gdk_atom_intern_static_string(dock_targets[0].target)) return;
-    auto *tray = static_cast<TerminalTray *>(g_object_get_data(G_OBJECT(gtk_widget_get_toplevel(widget)), "terminal-tray"));
+    auto *tray = widget_tray(widget);
     const auto count = gtk_selection_data_get_length(data);
-    if (!tray->active || count <= 0 || count > 256) { gtk_drag_finish(ctx, FALSE, FALSE, time); return; }
+    if (!accepts_drop(tray) || count <= 0 || count > 256) { gtk_drag_finish(ctx, FALSE, FALSE, time); return; }
     auto *source = gtk_drag_get_source_widget(ctx);
     auto *tab = source ? static_cast<TerminalTab *>(g_object_get_data(G_OBJECT(source), "terminal-drag-tab")) : nullptr;
     if (tab) {
@@ -281,19 +325,20 @@ static TerminalTray *make_tray(GtkWidget *window) {
   g_object_set_data(G_OBJECT(window), "terminal-tray", tray);
   auto *bus = terminal_dock_connection();
   tray->native_title_drag = install_titlebar_dock(window, bus ? g_dbus_connection_get_unique_name(bus) : nullptr,
-      [] { return external_peers || trays.size() > 1; },
+      [tray] { return allows_docking(tray) && (external_peers || dockable_window_count() > 1); },
       [tray](const std::string &name, guint32 xid, DockDecision ready) {
+        if (!allows_docking(tray)) { ready(false); return; }
         if (auto *target = tray_by_xid(xid)) {
-          ready(target != tray && target->active && target->active->actions.movable() &&
+          ready(target != tray && accepts_drop(target) &&
               std::ranges::all_of(tray->tabs, [](auto *tab) { return tab->actions.movable(); }));
         } else if (std::ranges::all_of(tray->tabs, [](auto *tab) { return tab->actions.transferable(); })) {
           probe_terminal_window_drop(name, xid, std::move(ready));
         } else ready(false);
       },
       [tray](const std::string &name, guint32 xid) {
-        if (!tray->active) return;
+        if (!allows_docking(tray) || !tray->active) return;
         if (auto *target = tray_by_xid(xid)) {
-          if (target != tray && target->active && target->active->actions.movable()) {
+          if (target != tray && accepts_drop(target)) {
             const auto pages = tray->tabs;
             dock_terminal_tabs(pages, tray->active, target->active);
           }
@@ -304,6 +349,8 @@ static TerminalTray *make_tray(GtkWidget *window) {
       });
   install_drop(tray->headers);
   install_drop(tray->body);
+  for (const auto *signal : {"map", "unmap"})
+    g_signal_connect_after(window, signal, G_CALLBACK(+[](GtkWidget *, gpointer) { update_drags(); }), nullptr);
   g_signal_connect(window, "delete-event", G_CALLBACK(+[](GtkWidget *, GdkEvent *, gpointer data) -> gboolean {
     auto tabs = static_cast<TerminalTray *>(data)->tabs;
     for (auto *tab : tabs) tab->actions.close();
@@ -373,8 +420,6 @@ static void update_drag_icon(GtkImage *icon, GtkWidget *source, bool dock) {
 
 static void bind_source(GtkWidget *widget, TerminalTab *tab, bool row) {
   g_object_set_data(G_OBJECT(widget), "terminal-drag-tab", tab);
-  if (!row) gtk_drag_source_set(widget, GDK_BUTTON1_MASK, dock_targets, 1,
-      static_cast<GdkDragAction>(GDK_ACTION_MOVE | dock_action(widget)));
   g_signal_connect(widget, "button-press-event", G_CALLBACK(+[](GtkWidget *source, GdkEventButton *event,
       gpointer data) -> gboolean {
     if (event->button != GDK_BUTTON_PRIMARY) return FALSE;
@@ -446,8 +491,8 @@ static GtkWidget *dock_handle(GtkWidget *child, TerminalTab *tab) {
   return button;
 }
 
-TerminalTab *create_terminal_tab(MainWindow *page, std::string label, TerminalTabActions actions) {
-  auto *tab = new TerminalTab{page, std::move(actions)};
+TerminalTab *create_terminal_tab(MainWindow *page, std::string label, bool docking_enabled, TerminalTabActions actions) {
+  auto *tab = new TerminalTab{page, std::move(actions), docking_enabled};
   auto *window = page->window;
   // Keep the complete per-session chrome and page alive across container changes.
   g_object_ref(page->header_bar);
@@ -457,8 +502,8 @@ TerminalTab *create_terminal_tab(MainWindow *page, std::string label, TerminalTa
   auto *tray = make_tray(window);
   install_drop(page->terminal_attachment);
   if (!tray->native_title_drag) {
-    auto *handle = dock_handle(page->header_connection_icon, tab);
-    gtk_header_bar_pack_start(GTK_HEADER_BAR(page->header_bar), handle);
+    tab->handle = dock_handle(page->header_connection_icon, tab);
+    gtk_header_bar_pack_start(GTK_HEADER_BAR(page->header_bar), tab->handle);
   }
   tab->row = gtk_list_box_row_new();
   g_object_ref_sink(tab->row);

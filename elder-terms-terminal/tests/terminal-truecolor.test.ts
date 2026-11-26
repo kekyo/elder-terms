@@ -9,12 +9,12 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { promisify } from 'node:util';
-import { PNG } from 'pngjs';
 import { expect, it } from 'vitest';
 import { waitForResult } from 'gestament/testing';
 import {
   pressKeyWithModifiers,
   readTerminalGridLayout,
+  readTerminalGridPixels,
   runGtkTest,
 } from './gtk-test-helpers.ts';
 import {
@@ -85,7 +85,10 @@ process.stdout.write('\\x1b[?25l\\x1b[2J' + outputs[0]);`
           for (const [phase, colors] of palettes.entries()) {
             if (phase > 0) await app.input.pressKey('g');
             await waitForResult(async () => {
-              const frame = PNG.sync.read((await terminal.capture()).image);
+              const frame = readTerminalGridPixels(
+                await terminal.capture(),
+                layout
+              );
               for (const [column, occupied] of quadrants.entries()) {
                 for (let y = 0; y < height; y++) {
                   for (let x = 0; x < width; x++) {
@@ -125,20 +128,19 @@ process.stdout.write('\\x1b[?25l\\x1b[2J' + outputs[0]);`
               app.capture()
             );
           }
-          const bounds = (await terminal.capture()).bounds;
           for (const [row, length, expected] of [
             [0, blocks.length, blocks],
             [1, 8, fontGlyphs],
           ] as const) {
             await app.input.pressKey('Escape');
             await app.input.moveMouseTo(
-              bounds.x + 1,
-              Math.trunc(bounds.y + height * (row + 0.5))
+              layout.gridX + 1,
+              Math.trunc(layout.gridY + height * (row + 0.5))
             );
             await app.input.setMouseButton('left', true);
             await app.input.moveMouseTo(
-              bounds.x + width * length - 1,
-              Math.trunc(bounds.y + height * (row + 0.5))
+              layout.gridX + width * length - 1,
+              Math.trunc(layout.gridY + height * (row + 0.5))
             );
             await app.input.setMouseButton('left', false);
             await pressKeyWithModifiers(app, ['control', 'shift'], 'c');

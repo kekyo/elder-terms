@@ -26,8 +26,19 @@ struct TerminalTabActions {
   /** Receives a peer offer on this page's tray. */
   std::function<void(std::string, std::function<void(bool)>)> receive;
 };
-/** Installs a single page before the builder window is first shown. */
-TerminalTab *create_terminal_tab(MainWindow *window, std::string label, TerminalTabActions actions);
+/**
+ * Installs a single page before the builder window is first shown.
+ * @param window Terminal page and its initial host window.
+ * @param label Title shown in the tab list.
+ * @param docking_enabled Whether this page permits docking in either direction.
+ * @param actions Operations on the page's live session.
+ * @returns The new tab, owned by the session.
+ */
+TerminalTab *create_terminal_tab(MainWindow *window, std::string label, bool docking_enabled, TerminalTabActions actions);
+/** @param tab Page to update. @param enabled Whether it permits incoming and outgoing dock operations. */
+void set_terminal_tab_docking_enabled(TerminalTab *tab, bool enabled);
+/** @param tab Page in the addressed window. @returns Whether every page in the window permits docking. */
+bool terminal_tab_allows_docking(const TerminalTab *tab);
 /** Removes the tab after its session is stopped or ownership is transferred. */
 void destroy_terminal_tab(TerminalTab *tab);
 /** Selects the page and focuses its terminal. */

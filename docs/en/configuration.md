@@ -106,7 +106,9 @@ block_copy_trim_trailing_spaces=false
 | `accessibility_enabled` | `true` exposes terminal text to screen readers; built-in default: `false` |
 | `return_code` | `auto`, `cr`, `lf`, or `crlf` |
 | `send_break_key` | The BREAK shortcut key combination; empty disables it |
-| `scrollback_lines` | 1000–100000 lines; built-in default: 10000 |
+| `scrollback_lines` | Number of history lines, from 1,000 to 100,000. Defaults to 100,000 |
+| `scrollback_compression` | History storage format. Choose `none` for uncompressed rows, `packed` for custom compression (default), or `deflate` for DEFLATE level 1. Changes also apply to existing history |
+| `docking_enabled` | `true` enables terminal docking (default). Set to `false` to exclude the window as both a docking source and a destination |
 | `bell_sound` | `default` uses the desktop beep; a custom sound is an absolute path to an Ogg Vorbis or WAV (PCM) file |
 | `block_copy_trim_trailing_spaces` | `false` preserves trailing spaces in block copies; built-in default: `true` |
 
@@ -138,7 +140,7 @@ Applying the mode leaves the current text and window sizes unchanged; it takes e
 You can still edit the text size, rows, or columns directly and resize the window manually in either mode.
 When the window size is constrained, such as when maximized or full screen, both modes fit the row and column counts to the actual display area.
 
-In Terminal Appearance, Terminal padding sets the inset between each edge and the cells. It uses device-independent pixels (DIPs) and defaults to zero. Vertical grid alignment places the height left over after fitting whole cells below the grid with `top` (the default), or above it with `bottom`. Extra width stays on the right.
+In Terminal Appearance, Terminal padding sets the inset between each edge and the cells. It defaults to 2 device-independent pixels (DIPs). Vertical grid alignment defaults to `bottom`, which leaves any height left over after fitting whole cells above the grid. Choose `top` to leave that space below the grid. Extra width stays on the right.
 
 For example, an inset of 4 DIP and 7 DIP of excess height give an 11 DIP top margin and a 4 DIP bottom margin with bottom alignment. Both zoom modes use this placement, including in maximized and tiled windows.
 

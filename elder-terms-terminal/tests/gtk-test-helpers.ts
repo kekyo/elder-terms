@@ -189,30 +189,7 @@ export const telnetLocalhostConfigPath = fileURLToPath(
 /**
  * Captured geometry and widget handles for terminal grid assertions.
  */
-export interface TerminalGridLayout {
-  /** Effective cell width in GTK logical pixels. */
-  readonly cellWidth: number;
-  /** Effective cell height in GTK logical pixels. */
-  readonly cellHeight: number;
-  /** Actual non-terminal width of the window. */
-  readonly chromeWidth: number;
-  /** Actual non-terminal height of the window. */
-  readonly chromeHeight: number;
-  /** Committed terminal columns. */
-  readonly columns: number;
-  /** Committed terminal rows. */
-  readonly rows: number;
-  /** Requested font size in device-independent pixels. */
-  readonly fontSizeDip: number;
-  /** Main window element. */
-  readonly mainWindow: GtkWindowElement;
-  /** Main window bounds. */
-  readonly mainBounds: {
-    readonly height: number;
-    readonly width: number;
-    readonly x: number;
-    readonly y: number;
-  };
+export interface TerminalGridLayout extends WindowCellLayout {
   /** Captured status bar image. */
   readonly statusBarCapture: GtkCapture;
   /** Terminal widget element. */
@@ -229,6 +206,10 @@ export interface TerminalGridLayout {
  * Captured geometry and widget handle for window cell sizing assertions.
  */
 export interface WindowCellLayout {
+  /** Screen position of the first cell in GTK logical pixels. */
+  readonly gridX: number;
+  /** Screen position of the first row in GTK logical pixels. */
+  readonly gridY: number;
   /** Effective cell width in GTK logical pixels. */
   readonly cellWidth: number;
   /** Effective cell height in GTK logical pixels. */
@@ -298,19 +279,31 @@ const cropPng = (
   const cropped = new PNG({ width, height }) as PngImage;
 
   for (let y = 0; y < height; ++y) {
-    for (let x = 0; x < width; ++x) {
-      const sourceOffset = ((startY + y) * image.width + startX + x) * 4;
-      const targetOffset = (y * width + x) * 4;
-      image.data.copy(
-        cropped.data,
-        targetOffset,
-        sourceOffset,
-        sourceOffset + 4
-      );
-    }
+    const source = ((startY + y) * image.width + startX) * 4;
+    image.data.copy(cropped.data, y * width * 4, source, source + width * 4);
   }
 
   return cropped;
+};
+
+/**
+ * Extracts the cells for pixel assertions relative to the first row and column.
+ * @param capture Terminal widget capture.
+ * @param layout Published grid position and cell metrics for this allocation.
+ * @returns The rendered grid without surrounding padding or fractional cells.
+ */
+export const readTerminalGridPixels = (
+  capture: GtkCapture,
+  layout: WindowCellLayout
+): PngImage => {
+  const image = readPng(capture);
+  const scale = image.width / capture.bounds.width;
+  return cropPng(image, {
+    x: (layout.gridX - capture.bounds.x) * scale,
+    y: (layout.gridY - capture.bounds.y) * scale,
+    width: layout.columns * layout.cellWidth * scale,
+    height: layout.rows * layout.cellHeight * scale,
+  });
 };
 
 /**
@@ -847,7 +840,7 @@ export const expectWindowCellSize = (
   layout: TerminalGridLayout | WindowCellLayout,
   columns: number,
   rows: number,
-  padding = 0
+  padding = 2
 ): void => {
   expect(layout.columns).toBe(columns);
   expect(layout.rows).toBe(rows);
@@ -948,7 +941,9 @@ export const readWindowCellLayout = async (
   expect(report).toContain('ready=1');
   const grid = /grid=(\d+)x(\d+)/.exec(report);
   const metrics = /cell=(\d+)x(\d+)/.exec(report);
-  if (!grid || !metrics) throw new Error('Missing native terminal metrics');
+  const origin = /origin=([\d.]+)x([\d.]+)/.exec(report);
+  if (!grid || !metrics || !origin)
+    throw new Error('Missing native terminal metrics');
   const scale = Number(/scale=(\d+)/.exec(report)?.[1] ?? 1);
   const cellWidth = Number(metrics[1]) / scale;
   const cellHeight = Number(metrics[2]) / scale;
@@ -962,6 +957,8 @@ export const readWindowCellLayout = async (
     mainWindow,
     cellWidth,
     cellHeight,
+    gridX: terminalBounds.x + Number(origin[1]) / scale,
+    gridY: terminalBounds.y + Number(origin[2]) / scale,
     chromeWidth: mainBounds.width - terminalBounds.width,
     chromeHeight: mainBounds.height - terminalBounds.height,
     columns: Number(grid[1]),

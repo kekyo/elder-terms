@@ -193,6 +193,8 @@ Open two local or SSH terminal windows. On supported X11 desktops, drag either w
 
 Click a row on the left to display its terminal on the right and give it keyboard focus. The list initially spans 220 logical pixels, and you can drag the splitter between the list and terminal to adjust its width.
 
+“Allow terminal docking” on the Terminal tab is enabled by default. Turning it off prevents the window from joining other terminals or accepting them. If a window already has several tabs, turning it off for any tab applies this restriction to the whole window.
+
 Drag a row onto another terminal window to move just that session. Press `Ctrl+Shift+U` to detach the selected session. You can change this shortcut in the terminal settings. Dropping a row on the desktop also detaches it. On Wayland, use the shortcut when other terminal windows are open.
 
 Hover over a row and click its close button to end that session. The list disappears when one session remains. Closing the window ends all the sessions it contains.
@@ -710,7 +712,7 @@ The default for TELNET and SSH is `xterm-256color`. Use global or connection set
 ![Scrollback buffer settings](./images/scrollback-settings.png)
 
 "Scrollback lines" on the "Terminal" tab sets the normal-screen history, from 1,000 to 100,000 lines.
-The built-in default is 10,000 lines.
+The default is 100,000 lines. “Scrollback storage” offers uncompressed history, custom compression (the default), and DEFLATE level 1. Custom compression packs text and attributes for each offscreen row.
 
 ## Configuring the BEL Sound
 

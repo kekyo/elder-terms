@@ -2684,3 +2684,18 @@ msgstr "아래쪽"
 
 msgid "Drag to dock all tabs in another terminal window"
 msgstr "다른 터미널 창으로 끌어서 모든 탭 도킹"
+
+msgid "Scrollback storage"
+msgstr "스크롤 기록 저장 방식"
+
+msgid "Uncompressed"
+msgstr "압축 안 함"
+
+msgid "Custom compression"
+msgstr "자체 압축"
+
+msgid "DEFLATE (level 1)"
+msgstr "DEFLATE (레벨 1)"
+
+msgid "Allow terminal docking"
+msgstr "터미널 도킹 허용"

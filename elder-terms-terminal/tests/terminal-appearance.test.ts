@@ -10,7 +10,11 @@ import { join } from 'node:path';
 import { PNG } from 'pngjs';
 import { describe, expect, it } from 'vitest';
 import { waitForResult } from 'gestament/testing';
-import { runGtkTest, readTerminalGridLayout } from './gtk-test-helpers';
+import {
+  runGtkTest,
+  readTerminalGridLayout,
+  readTerminalGridPixels,
+} from './gtk-test-helpers.ts';
 import {
   withTemporaryDirectory,
   expectElementKind,
@@ -56,7 +60,10 @@ process.stdout.write('\\x1b]12;#ffffff\\x07\\x1b[48;2;0;0;0m\\x1b[2J\\x1b[H\\x1b
             const layout = await readTerminalGridLayout(app);
             const terminal = await app.getById('terminal_view');
             await waitForResult(async () => {
-              const png = PNG.sync.read((await terminal.capture()).image);
+              const png = readTerminalGridPixels(
+                await terminal.capture(),
+                layout
+              );
               let white = 0;
               for (let y = 0; y < layout.cellHeight; y++)
                 for (let x = 0; x < layout.cellWidth; x++) {
@@ -80,7 +87,10 @@ process.stdout.write('\\x1b]12;#ffffff\\x07\\x1b[48;2;0;0;0m\\x1b[2J\\x1b[H\\x1b
             // The existing modal overlay dims white to 166 while Settings is open.
             // Count the box geometry in both states, preserving that behavior.
             const count = async (): Promise<number> => {
-              const png = PNG.sync.read((await terminal.capture()).image);
+              const png = readTerminalGridPixels(
+                await terminal.capture(),
+                layout
+              );
               let ink = 0;
               for (let y = 0; y < layout.cellHeight; y++)
                 for (let x = 0; x < layout.cellWidth; x++) {
@@ -126,7 +136,7 @@ process.stdout.write('\\x1b]12;#ffffff\\x07\\x1b[48;2;0;0;0m\\x1b[2J\\x1b[H\\x1b
                   '-video_size',
                   `${layout.cellWidth}x${layout.cellHeight}`,
                   '-i',
-                  `${env.DISPLAY}+${layout.terminalCapture.bounds.x},${layout.terminalCapture.bounds.y}`,
+                  `${env.DISPLAY}+${layout.gridX},${layout.gridY}`,
                   '-frames:v',
                   '90',
                   '-c:v',

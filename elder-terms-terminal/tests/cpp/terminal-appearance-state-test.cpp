@@ -97,16 +97,19 @@ static cardio::promise<void> check_selection_pixels(Fixture *fixture) {
   boxrig_font_effective_metrics metrics{};
   expect(boxrig_gtk3_terminal_widget_get_effective_metrics(widget, &metrics) == BOXRIG_FONT_CATALOG_OK,
       "read native selection metrics");
+  boxrig_ui_layout_result layout{};
+  expect(boxrig_ui_view_get_layout(view, &layout) == BOXRIG_UI_OK, "locate the first cell");
+  const auto sample_y = layout.origin_y + (metrics.cell_height * 3 / 2) * BOXRIG_UI_FIXED_ONE;
   for (const auto shape : {BOXRIG_UI_SELECTION_LINEAR, BOXRIG_UI_SELECTION_RECTANGULAR}) {
     boxrig_ui_selection_options options{};
     options.kind = BOXRIG_UI_SELECTION_CHARACTER;
     options.shape = shape;
     boxrig_ui_hit_test_result hit{};
-    expect(boxrig_ui_view_hit_test(view, BOXRIG_UI_FIXED_ONE,
-        (metrics.cell_height * 3 / 2) * BOXRIG_UI_FIXED_ONE, &hit) == BOXRIG_UI_OK, "hit selection start");
+    expect(boxrig_ui_view_hit_test(view, layout.origin_x + BOXRIG_UI_FIXED_ONE, sample_y, &hit) == BOXRIG_UI_OK,
+        "hit selection start");
     expect(boxrig_ui_view_begin_selection_with_options(view, &options, &hit) == BOXRIG_UI_OK, "begin selection");
-    expect(boxrig_ui_view_hit_test(view, (metrics.cell_width * 6 - 1) * BOXRIG_UI_FIXED_ONE,
-        (metrics.cell_height * 3 / 2) * BOXRIG_UI_FIXED_ONE, &hit) == BOXRIG_UI_OK, "hit selection end");
+    expect(boxrig_ui_view_hit_test(view, layout.origin_x + (metrics.cell_width * 6 - 1) * BOXRIG_UI_FIXED_ONE,
+        sample_y, &hit) == BOXRIG_UI_OK, "hit selection end");
     expect(boxrig_ui_view_update_selection(view, &hit) == BOXRIG_UI_OK, "extend selection");
     for (const bool focused : {true, false}) {
       expect(boxrig_ui_view_set_focused(view, focused) == BOXRIG_UI_OK, "change selection focus");
@@ -124,8 +127,9 @@ static cardio::promise<void> check_selection_pixels(Fixture *fixture) {
       const auto *data = gdk_pixbuf_read_pixels(pixels);
       const auto stride = gdk_pixbuf_get_rowstride(pixels);
       const auto channels = gdk_pixbuf_get_n_channels(pixels);
-      const auto *ink = data + metrics.cell_height * 3 / 2 * stride + metrics.cell_width / 2 * channels;
-      const auto *fill = data + metrics.cell_height * 3 / 2 * stride + metrics.cell_width * 5 / 2 * channels;
+      const auto *row = data + sample_y / BOXRIG_UI_FIXED_ONE * stride + layout.origin_x / BOXRIG_UI_FIXED_ONE * channels;
+      const auto *ink = row + metrics.cell_width / 2 * channels;
+      const auto *fill = row + metrics.cell_width * 5 / 2 * channels;
       const bool black = ink[0] == 0 && ink[1] == 0 && ink[2] == 0;
       const bool gray = fill[0] == 179 && fill[1] == 179 && fill[2] == 179;
       if (!black || !gray) std::fprintf(stderr, "selection shape=%d focus=%d ink=%02x%02x%02x fill=%02x%02x%02x\n",
@@ -145,6 +149,19 @@ static cardio::promise<void> scenarios(Fixture *fixture) {
   while (!terminal_runtime_is_settled(runtime)) co_await fixture->changed.wait();
   auto *core = boxrig_ui_model_terminal(boxrig_ui_view_model(boxrig_gtk3_terminal_widget_view(terminal_runtime_widget(runtime))));
   auto store = create_default_settings(default_terminal_display_settings(16), "Appearance");
+  expect(apply_terminal_presentation(fixture->presentation, store, nullptr) &&
+      boxrig_terminal_scrollback_compression(core) == BOXRIG_SCROLLBACK_COMPRESSION_PACKED,
+      "new terminals use packed history");
+  const auto compression = make_setting_key("terminal", "scrollback_compression");
+  const std::pair<const char *, boxrig_scrollback_compression> formats[] = {
+      {"none", BOXRIG_SCROLLBACK_COMPRESSION_NONE}, {"deflate", BOXRIG_SCROLLBACK_COMPRESSION_DEFLATE_LEVEL_1},
+      {"packed", BOXRIG_SCROLLBACK_COMPRESSION_PACKED}};
+  for (const auto &[name, format] : formats) {
+    expect(set_explicit_setting_value(&store, compression, std::string(name)) &&
+        apply_terminal_presentation(fixture->presentation, store, nullptr) &&
+        boxrig_terminal_scrollback_compression(core) == format, "change storage on the existing terminal");
+  }
+  expect(!set_explicit_setting_value(&store, compression, std::string("unknown")), "reject unknown history formats");
   set_setting_value(&store, general_background_setting_key(), std::string("#202020"));
   set_setting_value(&store, terminal_cursor_blink_setting_key(), false);
   set_setting_value(&store, terminal_background_mode_setting_key(), std::string("blur"));

@@ -144,7 +144,8 @@ static void verify_tab_structure(const Fixture &fixture, bool terminal_visible) 
       "terminal_encoding_combo", "terminal_backspace_code_combo",
       "terminal_cursor_key_mode_combo", "terminal_return_code_combo",
       "terminal_width_entry", "terminal_height_entry",
-      "terminal_scrollback_lines_entry", "terminal_bell_sound_entry",
+      "terminal_scrollback_lines_entry", "terminal_scrollback_compression_combo", "terminal_docking_enabled_combo",
+      "terminal_bell_sound_entry",
       "terminal_zoom_in_key_entry", "terminal_zoom_out_key_entry",
       "terminal_send_break_key_entry", "terminal_accessibility_enabled_combo",
       "terminal_block_copy_trim_trailing_spaces_combo", "terminal_ambiguous_width_combo"};

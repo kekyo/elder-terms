@@ -2676,3 +2676,18 @@ msgstr "底部"
 
 msgid "Drag to dock all tabs in another terminal window"
 msgstr "拖动以将所有标签页停靠到另一个终端窗口"
+
+msgid "Scrollback storage"
+msgstr "回滚历史存储方式"
+
+msgid "Uncompressed"
+msgstr "不压缩"
+
+msgid "Custom compression"
+msgstr "自定义压缩"
+
+msgid "DEFLATE (level 1)"
+msgstr "DEFLATE（级别 1）"
+
+msgid "Allow terminal docking"
+msgstr "允许终端停靠"
