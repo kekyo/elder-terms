@@ -102,12 +102,15 @@ static gboolean draw_caption(GtkWidget *label, cairo_t *cr, TabCaption *caption)
   int offset = std::min(distance, static_cast<int>(std::round(caption->offset)));
   const auto *line = pango_layout_get_line_readonly(caption->scrolling, 0);
   if (line && line->resolved_dir == PANGO_DIRECTION_RTL) offset = distance - offset;
+  GtkAllocation allocation;
+  gtk_widget_get_allocation(label, &allocation);
   int y;
   gtk_label_get_layout_offsets(GTK_LABEL(label), nullptr, &y);
   cairo_save(cr);
   cairo_rectangle(cr, 0, 0, width, gtk_widget_get_allocated_height(label));
   cairo_clip(cr);
-  gtk_render_layout(gtk_widget_get_style_context(label), cr, -offset, y, caption->scrolling);
+  // GTK reports the layout origin in its GdkWindow; ::draw uses label-local coordinates.
+  gtk_render_layout(gtk_widget_get_style_context(label), cr, -offset, y - allocation.y, caption->scrolling);
   cairo_restore(cr);
   return TRUE;
 }

@@ -124,6 +124,34 @@ static bool same_glyphs(const std::string &sample, const std::string &reference)
   return true;
 }
 
+static void check_second_row_scroll(MainWindow &page, TabVideo &video) {
+  auto *caption = descendant(page.tab_row, GTK_TYPE_LABEL);
+  constexpr int sample_width = 32;
+  set_main_window_title(&page, "Building");
+  video.next();
+  const auto head = glyphs(video, caption, 0, sample_width);
+  assert(head.find(char{1}) != std::string::npos);
+  set_main_window_title(&page, "finished");
+  video.next();
+  int tail_width;
+  pango_layout_get_pixel_size(gtk_label_get_layout(GTK_LABEL(caption)), &tail_width, nullptr);
+  const auto tail = glyphs(video, caption, tail_width - sample_width, sample_width);
+
+  set_main_window_title(&page, "Building the terminal application / finished");
+  video.next();
+  assert(same_glyphs(glyphs(video, caption, 0, sample_width), head));
+  const unsigned char output[] = {'x'};
+  note_main_window_output(&page, output);
+  const int width = gtk_widget_get_allocated_width(caption);
+  const auto deadline = g_get_monotonic_time() + 5 * G_TIME_SPAN_SECOND;
+  do {
+    video.next();
+    assert(glyphs(video, caption, 0, width).find(char{1}) != std::string::npos);
+    if (same_glyphs(glyphs(video, caption, width - sample_width, sample_width), tail)) return;
+  } while (g_get_monotonic_time() < deadline);
+  assert(false && "the end of the title must be visible on the second row");
+}
+
 static void check_title_scroll(MainWindow &page, TerminalTab *tab, TabVideo &video, GtkWidget *caption) {
   constexpr int sample_width = 32;
   auto *settings = gtk_widget_get_settings(caption);
@@ -350,6 +378,7 @@ extern "C" int __wrap_main(int argc, char **argv) {
     assert(video.red(b_center) == b_base && video.red(b_header) == header_base);
   } while (titlebar_effects_running(first->header_bar));
   assert(saw_flash && video.red(a_center) == 0x6c);
+  check_second_row_scroll(*second, video);
   check_title_scroll(*first, a, video, GTK_WIDGET(caption));
   destroy_terminal_runtime(second->runtime);
   second->runtime = nullptr;
