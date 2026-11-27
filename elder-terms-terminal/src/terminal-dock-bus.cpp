@@ -15,7 +15,7 @@ static constexpr char interface[] = "net.kekyo.ElderTerms.Dock";
 static constexpr char prefix[] = "net.kekyo.ElderTerms.DockWindow.p";
 static constexpr char methods[] = "<node><interface name='net.kekyo.ElderTerms.Dock'>"
     "<method name='Prepare'><arg type='s' direction='in'/><arg type='u' direction='out'/>"
-    "<arg type='a(ssssssssaybhisuuu(asaybb))' direction='out'/></method>"
+    "<arg type='a(ssssssssaybhisuuu(asaybb)ii)' direction='out'/></method>"
     "<method name='Finish'><arg type='s' direction='in'/><arg type='b' direction='in'/></method>"
     "<method name='State'><arg type='s' direction='in'/><arg type='b' direction='out'/></method>"
     "<method name='Release'><arg type='s' direction='in'/></method>"
@@ -75,14 +75,15 @@ static cardio::promise<void> prepare_offer(std::shared_ptr<Offer> offer, std::st
     offer->finish = std::move(prepared.finish);
     if (!offer->finish || offer->abandoned) throw std::runtime_error("The terminal cannot move now");
     GVariantBuilder pages;
-    g_variant_builder_init(&pages, G_VARIANT_TYPE("a(ssssssssaybhisuuu(asaybb))"));
+    g_variant_builder_init(&pages, G_VARIANT_TYPE("a(ssssssssaybhisuuu(asaybb)ii)"));
     for (const auto &page : prepared.batch.pages) {
       auto *bytes = g_variant_new_fixed_array(G_VARIANT_TYPE_BYTE, page.checkpoint.data(), page.checkpoint.size(), 1);
-      g_variant_builder_add(&pages, "(ssssssss@aybhisuuu@(asaybb))", page.id.c_str(), page.config.c_str(), page.startup.c_str(),
-          page.title.c_str(), page.launcher.c_str(), page.settings.c_str(), page.log.c_str(), page.sftp_origin.c_str(), bytes, page.eof, page.descriptor, page.control_descriptor, page.encoding.c_str(), page.child, page.capacity, page.chunk, page.host_state.get());
+      g_variant_builder_add(&pages, "(ssssssss@aybhisuuu@(asaybb)ii)", page.id.c_str(), page.config.c_str(), page.startup.c_str(),
+          page.title.c_str(), page.launcher.c_str(), page.settings.c_str(), page.log.c_str(), page.sftp_origin.c_str(), bytes, page.eof, page.descriptor, page.control_descriptor, page.encoding.c_str(), page.child, page.capacity, page.chunk, page.host_state.get(),
+          page.decoder_descriptor, page.encoder_descriptor);
     }
     g_dbus_method_invocation_return_value_with_unix_fd_list(invocation,
-        g_variant_new("(ua(ssssssssaybhisuuu(asaybb)))", prepared.batch.active, &pages), prepared.batch.descriptors.get());
+        g_variant_new("(ua(ssssssssaybhisuuu(asaybb)ii))", prepared.batch.active, &pages), prepared.batch.descriptors.get());
   } catch (const std::exception &error) {
     if (offer->finish) std::exchange(offer->finish, {})(false);
     offer->abandoned = true;
@@ -285,32 +286,34 @@ cardio::promise<bool> terminal_dock_receive(std::string token, std::function<Doc
     if (!co_await product_peer(peer)) co_return false;
     GUnixFDList *fds = nullptr;
     auto reply = co_await call(peer, path, interface, "Prepare", g_variant_new("(s)", key.c_str()),
-        G_VARIANT_TYPE("(ua(ssssssssaybhisuuu(asaybb)))"), &fds);
+        G_VARIANT_TYPE("(ua(ssssssssaybhisuuu(asaybb)ii))"), &fds);
     prepared = true;
     DockBatch batch;
     if (!fds) throw std::runtime_error("Missing terminal descriptors");
     batch.descriptors.reset(fds, g_object_unref);
     GVariant *array;
-    g_variant_get(reply.get(), "(u@a(ssssssssaybhisuuu(asaybb)))", &batch.active, &array);
+    g_variant_get(reply.get(), "(u@a(ssssssssaybhisuuu(asaybb)ii))", &batch.active, &array);
     auto pages = take_variant(array);
     for (gsize i = 0; i < g_variant_n_children(array); ++i) {
       auto item = take_variant(g_variant_get_child_value(array, i));
       const char *id, *config, *startup, *title, *launcher, *settings, *log, *sftp;
       GVariant *bytes, *host_state;
       gboolean eof;
-      gint fd, control_fd;
+      gint fd, control_fd, decoder_fd, encoder_fd;
       const char *encoding;
       guint child, capacity, chunk;
-      g_variant_get(item.get(), "(&s&s&s&s&s&s&s&s@aybhi&suuu@(asaybb))", &id, &config, &startup, &title, &launcher, &settings, &log, &sftp,
-          &bytes, &eof, &fd, &control_fd, &encoding, &child, &capacity, &chunk, &host_state);
+      g_variant_get(item.get(), "(&s&s&s&s&s&s&s&s@aybhi&suuu@(asaybb)ii)", &id, &config, &startup, &title, &launcher, &settings, &log, &sftp,
+          &bytes, &eof, &fd, &control_fd, &encoding, &child, &capacity, &chunk, &host_state, &decoder_fd, &encoder_fd);
       auto host = take_variant(host_state);
       auto checkpoint = take_variant(bytes);
       gsize size;
       auto *data = static_cast<const std::uint8_t *>(g_variant_get_fixed_array(bytes, &size, 1));
-      if (size == 0 || size > 64 * 1024 * 1024 || fd < 0 || fd >= g_unix_fd_list_get_length(fds) ||
-          control_fd < -1 || control_fd >= g_unix_fd_list_get_length(fds) ||
+      const int fd_count = g_unix_fd_list_get_length(fds);
+      const auto valid_optional_fd = [fd_count](int index) { return index >= -1 && index < fd_count; };
+      if (size == 0 || size > 64 * 1024 * 1024 || fd < 0 || fd >= fd_count ||
+          !valid_optional_fd(control_fd) || !valid_optional_fd(decoder_fd) || !valid_optional_fd(encoder_fd) ||
           !g_uuid_string_is_valid(id)) throw std::runtime_error("Invalid terminal checkpoint");
-      batch.pages.push_back({id, config, startup, title, launcher, settings, log, sftp, {data, data + size}, eof != FALSE, fd, control_fd, encoding, child, capacity, chunk, std::move(host)});
+      batch.pages.push_back({id, config, startup, title, launcher, settings, log, sftp, {data, data + size}, eof != FALSE, fd, control_fd, encoding, child, capacity, chunk, std::move(host), decoder_fd, encoder_fd});
     }
     if (batch.active >= batch.pages.size()) throw std::runtime_error("Missing active tab");
     finish = stage(batch);

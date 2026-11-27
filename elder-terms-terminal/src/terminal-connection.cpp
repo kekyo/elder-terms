@@ -53,6 +53,26 @@ struct ProxyEndpoint {
   cardio::primitives::mutex control_lock;
 };
 
+struct TerminalCodecEndpoint {
+  int fd = -1;
+  ~TerminalCodecEndpoint() { if (fd >= 0) ::close(fd); }
+};
+
+int terminal_codec_descriptor(const std::shared_ptr<TerminalCodecEndpoint> &endpoint) {
+  return endpoint ? endpoint->fd : -1;
+}
+std::shared_ptr<TerminalCodecEndpoint> adopt_terminal_codec_descriptor(int fd) {
+  if (fd < 0) return {};
+  try {
+    auto endpoint = std::make_shared<TerminalCodecEndpoint>();
+    endpoint->fd = fd;
+    return endpoint;
+  } catch (...) {
+    ::close(fd);
+    throw;
+  }
+}
+
 struct TerminalTransportOrigin {
   TerminalTransport transport;
   int data_fd = -1;
@@ -105,8 +125,8 @@ struct ConnectionOperation {
   bool write_closed = false;
   bool peer_closed = false;
   bool finishing = false;
-  TerminalTextStreamPtr decoder{nullptr, destroy_terminal_text_stream};
-  TerminalTextStreamPtr encoder{nullptr, destroy_terminal_text_stream};
+  std::shared_ptr<TerminalTextStream> decoder, encoder;
+  TerminalCodecEndpoints codecs;
   std::vector<unsigned char> decoded;
   std::size_t decoded_offset = 0;
   bool decoder_finished = false;
@@ -245,20 +265,32 @@ static cardio::promise<void> queue_decoded(TerminalConnection *connection,
   operation.decoded_offset = 0;
 }
 
-static std::vector<unsigned char> finish_decoder(TerminalConnection *connection) {
-  auto &operation = *connection->operation;
-  if (!operation.decoder || operation.decoder_finished) return {};
-  auto result = finish_terminal_text(operation.decoder.get());
-  operation.decoder_finished = true;
-  if (connection->output && !result.bytes.empty()) connection->output({}, result.bytes);
-  return std::move(result.bytes);
+static cardio::promise<std::vector<unsigned char>> request_conversion(
+    std::shared_ptr<TerminalCodecEndpoint> endpoint, std::span<const unsigned char> bytes, bool finish);
+
+static cardio::promise<std::vector<unsigned char>> finish_converter(
+    const std::shared_ptr<TerminalCodecEndpoint> &endpoint, TerminalTextStream *converter) {
+  if (endpoint) return request_conversion(endpoint, {}, true);
+  return cardio::resolved(finish_terminal_text(converter).bytes);
 }
 
-static std::vector<unsigned char> decode_received(TerminalConnection *connection,
+static cardio::promise<std::vector<unsigned char>> finish_decoder(TerminalConnection *connection) {
+  auto &operation = *connection->operation;
+  if (!operation.decoder || operation.decoder_finished) co_return std::vector<unsigned char>{};
+  auto bytes = co_await finish_converter(operation.codecs.decoder, operation.decoder.get());
+  operation.decoder_finished = true;
+  if (connection->output && !bytes.empty()) connection->output({}, bytes);
+  co_return bytes;
+}
+
+static cardio::promise<std::vector<unsigned char>> decode_received(TerminalConnection *connection,
     std::span<const unsigned char> bytes) {
-  auto converted = convert_terminal_text(connection->operation->decoder.get(), bytes);
-  if (connection->output) connection->output(bytes, converted.bytes);
-  return std::move(converted.bytes);
+  auto &operation = *connection->operation;
+  std::vector<unsigned char> converted;
+  if (operation.codecs.decoder) converted = co_await request_conversion(operation.codecs.decoder, bytes, false);
+  else converted = convert_terminal_text(operation.decoder.get(), bytes).bytes;
+  if (connection->output) connection->output(bytes, converted);
+  co_return converted;
 }
 
 static cardio::promise<void> queue_pending_raw(TerminalConnection *connection, cardio::cancellation cancellation) {
@@ -266,7 +298,7 @@ static cardio::promise<void> queue_pending_raw(TerminalConnection *connection, c
   if (!operation.transfer_prefetch.empty()) {
     const auto bytes = std::span(reinterpret_cast<const unsigned char *>(operation.transfer_prefetch.data()),
         operation.transfer_prefetch.size()).subspan(operation.transfer_prefetch_offset);
-    auto converted = decode_received(connection, bytes);
+    auto converted = co_await decode_received(connection, bytes);
     operation.transfer_prefetch.clear();
     operation.transfer_prefetch_offset = 0;
     co_await queue_decoded(connection, std::move(converted), cancellation);
@@ -274,19 +306,19 @@ static cardio::promise<void> queue_pending_raw(TerminalConnection *connection, c
   while (operation.transfer_incoming.length != 0) {
     const auto bytes = front(operation.transfer_incoming).first(
         std::min(front(operation.transfer_incoming).size(), operation.chunk_size));
-    auto converted = decode_received(connection, bytes);
+    auto converted = co_await decode_received(connection, bytes);
     consume(operation.transfer_incoming, bytes.size());
     co_await queue_decoded(connection, std::move(converted), cancellation);
   }
 }
 
-static std::vector<unsigned char> finish_auto_start_prefix(TerminalConnection *connection) {
+static cardio::promise<std::vector<unsigned char>> finish_auto_start_prefix(TerminalConnection *connection) {
   auto &tail = connection->operation->auto_start_detector.tail;
-  if (tail.empty()) return {};
-  auto converted = decode_received(connection,
+  if (tail.empty()) co_return std::vector<unsigned char>{};
+  auto converted = co_await decode_received(connection,
       {reinterpret_cast<const unsigned char *>(tail.data()), tail.size()});
   tail.clear();
-  return converted;
+  co_return converted;
 }
 
 static cardio::promise<void> read_stream(TerminalConnection *connection) {
@@ -302,7 +334,7 @@ static cardio::promise<void> read_stream(TerminalConnection *connection) {
       if (operation.read_policy_changed) {
         operation.read_policy_changed = false;
         operation.read_active = true;
-        co_await queue_decoded(connection, finish_auto_start_prefix(connection), cancellation);
+        co_await queue_decoded(connection, co_await finish_auto_start_prefix(connection), cancellation);
         continue;
       }
       if (!operation.transfer_prepared &&
@@ -353,22 +385,22 @@ static cardio::promise<void> read_stream(TerminalConnection *connection) {
           auto filtered = filter_terminal_zmodem_auto_start(&operation.auto_start_detector,
               {reinterpret_cast<const char *>(bytes.data()), bytes.size()});
           if (!filtered.terminal_data.empty())
-            co_await queue_decoded(connection, decode_received(connection,
+            co_await queue_decoded(connection, co_await decode_received(connection,
                 {reinterpret_cast<const unsigned char *>(filtered.terminal_data.data()), filtered.terminal_data.size()}), cancellation);
           if (filtered.direction) {
             if (connection->auto_start && connection->auto_start(*filtered.direction)) {
               operation.transfer_prefetch = std::move(filtered.transfer_data);
               operation.transfer_prefetch_offset = 0;
               operation.transfer_ready.trigger();
-            } else co_await queue_decoded(connection, decode_received(connection,
+            } else co_await queue_decoded(connection, co_await decode_received(connection,
                 {reinterpret_cast<const unsigned char *>(filtered.transfer_data.data()), filtered.transfer_data.size()}), cancellation);
           }
           continue;
         }
-        co_await queue_decoded(connection, finish_auto_start_prefix(connection), cancellation);
+        co_await queue_decoded(connection, co_await finish_auto_start_prefix(connection), cancellation);
         // Conversion and notifications happen once, before bounded queue and
         // parser retries. The reader retains at most one converted chunk.
-        co_await queue_decoded(connection, decode_received(connection, bytes), cancellation);
+        co_await queue_decoded(connection, co_await decode_received(connection, bytes), cancellation);
       } else {
         operation.transport_eof = true;
         connection->state.receive_ended = true;
@@ -378,9 +410,9 @@ static cardio::promise<void> read_stream(TerminalConnection *connection) {
         operation.stream_changed.trigger();
         while (operation.transfer_prepared || operation.read_paused)
           co_await operation.read_resumed.wait(cancellation);
-        co_await queue_decoded(connection, finish_auto_start_prefix(connection), cancellation);
+        co_await queue_decoded(connection, co_await finish_auto_start_prefix(connection), cancellation);
         co_await queue_pending_raw(connection, cancellation);
-        co_await queue_decoded(connection, finish_decoder(connection), cancellation);
+        co_await queue_decoded(connection, co_await finish_decoder(connection), cancellation);
         operation.eof = true;
         connection->wake();
         break;
@@ -411,16 +443,24 @@ static cardio::promise<void> write_stream(TerminalConnection *connection) {
         co_await operation.send_ready.wait(cancellation);
       operation.write_active = true;
       const auto bytes = front(operation.outgoing).first(std::min(front(operation.outgoing).size(), operation.chunk_size));
-      auto converted = convert_terminal_text(operation.encoder.get(), bytes);
-      consume(operation.outgoing, bytes.size());
-      connection->wake();
       auto writing = cardio::cancellations::any(cancellation, operation.carrier_stop.get_cancellation());
       CancellationScope writing_scope{writing};
+      std::vector<unsigned char> encoded;
+      if (operation.codecs.encoder) {
+        // Release the queue before yielding. A carrier drop can discard it while the converter replies.
+        std::vector<unsigned char> input(bytes.begin(), bytes.end());
+        consume(operation.outgoing, bytes.size());
+        encoded = co_await request_conversion(operation.codecs.encoder, input, false);
+      } else {
+        encoded = convert_terminal_text(operation.encoder.get(), bytes).bytes;
+        consume(operation.outgoing, bytes.size());
+      }
+      connection->wake();
       try {
         std::size_t offset = 0;
-        while (offset < converted.bytes.size()) {
-          const auto count = std::min(operation.chunk_size, converted.bytes.size() - offset);
-          co_await operation.transport.write(std::span(converted.bytes).subspan(offset, count), writing.get_cancellation());
+        while (offset < encoded.size()) {
+          const auto count = std::min(operation.chunk_size, encoded.size() - offset);
+          co_await operation.transport.write(std::span(encoded).subspan(offset, count), writing.get_cancellation());
           offset += count;
         }
       } catch (const cardio::canceled_exception &) {
@@ -532,6 +572,85 @@ static cardio::promise<void> read_socket_exact(int fd, std::span<unsigned char> 
     if (count == 0) throw std::system_error(EPIPE, std::generic_category(), "terminal proxy closed");
     offset += count;
   }
+}
+
+// iconv has no exportable shift state. Keep a live converter only when a fresh
+// descriptor cannot continue the stream. Separate sockets let reads and writes
+// progress independently, and a second move passes the same socket onward.
+static constexpr std::uint32_t finish_codec = UINT32_MAX;
+static constexpr std::size_t max_codec_frame = 64U * 1024 * 1024;
+
+static cardio::promise<void> write_codec_size(int fd, std::uint32_t size) {
+  co_await write_socket_fd(fd, {reinterpret_cast<const unsigned char *>(&size), sizeof(size)}, {});
+}
+
+static cardio::promise<std::uint32_t> read_codec_size(int fd) {
+  std::uint32_t size;
+  co_await read_socket_exact(fd, {reinterpret_cast<unsigned char *>(&size), sizeof(size)}, {});
+  co_return size;
+}
+
+static cardio::promise<std::vector<unsigned char>> read_codec_bytes(int fd, std::uint32_t size) {
+  if (size > max_codec_frame) throw std::system_error(EMSGSIZE, std::generic_category());
+  std::vector<unsigned char> bytes(size);
+  co_await read_socket_exact(fd, bytes, {});
+  co_return bytes;
+}
+
+static cardio::promise<std::vector<unsigned char>> request_conversion(
+    std::shared_ptr<TerminalCodecEndpoint> endpoint, std::span<const unsigned char> bytes, bool finish) {
+  if (bytes.size() > max_codec_frame) throw std::system_error(EMSGSIZE, std::generic_category());
+  co_await write_codec_size(endpoint->fd, finish ? finish_codec : static_cast<std::uint32_t>(bytes.size()));
+  co_await write_socket_fd(endpoint->fd, bytes, {});
+  const auto size = co_await read_codec_size(endpoint->fd);
+  co_return co_await read_codec_bytes(endpoint->fd, size);
+}
+
+static cardio::promise<void> serve_converter(std::shared_ptr<TerminalCodecEndpoint> socket,
+    std::shared_ptr<TerminalTextStream> converter) {
+  try {
+    for (;;) {
+      const auto size = co_await read_codec_size(socket->fd);
+      TerminalTextConversionResult result;
+      if (size == finish_codec) {
+        result = finish_terminal_text(converter.get());
+      } else {
+        const auto input = co_await read_codec_bytes(socket->fd, size);
+        result = convert_terminal_text(converter.get(), input);
+      }
+      if (result.bytes.size() > max_codec_frame) break;
+      co_await write_codec_size(socket->fd, static_cast<std::uint32_t>(result.bytes.size()));
+      co_await write_socket_fd(socket->fd, result.bytes, {});
+      if (size == finish_codec) break;
+    }
+  } catch (const std::exception &) {
+    // Closing the last receiver or a conversion failure ends this stream.
+  }
+  ::shutdown(socket->fd, SHUT_RDWR);
+}
+
+static TerminalCodecHandoff prepare_codecs(const ConnectionOperation &operation, const std::string &encoding) {
+  constexpr std::string_view stateless[] = {"UTF-8", "ASCII", "ISO-8859-1", "ISO-8859-15",
+      "WINDOWS-1252", "WINDOWS-1251", "KOI8-R", "CP437", "SHIFT-JIS", "CP932", "EUC-JP", "GB18030",
+      "BIG5", "EUC-KR"};
+  const bool restartable = std::ranges::find(stateless, encoding) != std::end(stateless);
+  TerminalCodecHandoff handoff;
+  const auto retain = [&](const std::shared_ptr<TerminalTextStream> &converter,
+      const std::shared_ptr<TerminalCodecEndpoint> &existing) -> std::shared_ptr<TerminalCodecEndpoint> {
+    if (existing || (restartable && !terminal_text_stream_has_pending(converter.get()))) return existing;
+    auto client = std::make_shared<TerminalCodecEndpoint>();
+    auto server = std::make_shared<TerminalCodecEndpoint>();
+    int fds[2];
+    if (::socketpair(AF_UNIX, SOCK_STREAM | SOCK_NONBLOCK | SOCK_CLOEXEC, 0, fds) < 0)
+      throw std::system_error(errno, std::generic_category(), "terminal character converter");
+    client->fd = fds[0];
+    server->fd = fds[1];
+    handoff.origins.push_back(std::make_shared<cardio::promise<void>>(serve_converter(std::move(server), converter)));
+    return client;
+  };
+  handoff.endpoints.decoder = retain(operation.decoder, operation.codecs.decoder);
+  handoff.endpoints.encoder = retain(operation.encoder, operation.codecs.encoder);
+  return handoff;
 }
 
 static cardio::promise<void> proxy_control(ProxyEndpoint *endpoint, std::uint32_t operation,
@@ -688,7 +807,7 @@ static bool finish_input(TerminalConnection *connection) {
 static cardio::promise<void> finish_stream(TerminalConnection *connection) {
   auto &operation = *connection->operation;
   try {
-    const auto prefix = finish_auto_start_prefix(connection);
+    const auto prefix = co_await finish_auto_start_prefix(connection);
     operation.decoded.insert(operation.decoded.end(), prefix.begin(), prefix.end());
     // A successful binary transfer may have prefetched ordinary text. Keep
     // that accepted suffix even if shutdown cancelled the resumed reader.
@@ -696,14 +815,14 @@ static cardio::promise<void> finish_stream(TerminalConnection *connection) {
       if (!operation.transfer_prefetch.empty()) {
         const auto bytes = std::span(reinterpret_cast<const unsigned char *>(operation.transfer_prefetch.data()),
             operation.transfer_prefetch.size()).subspan(operation.transfer_prefetch_offset);
-        const auto converted = decode_received(connection, bytes);
+        const auto converted = co_await decode_received(connection, bytes);
         operation.transfer_prefetch.clear();
         operation.transfer_prefetch_offset = 0;
         operation.decoded.insert(operation.decoded.end(), converted.begin(), converted.end());
       }
       while (operation.transfer_incoming.length != 0) {
         const auto bytes = front(operation.transfer_incoming);
-        const auto converted = decode_received(connection, bytes);
+        const auto converted = co_await decode_received(connection, bytes);
         consume(operation.transfer_incoming, bytes.size());
         operation.decoded.insert(operation.decoded.end(), converted.begin(), converted.end());
       }
@@ -711,11 +830,11 @@ static cardio::promise<void> finish_stream(TerminalConnection *connection) {
     if (operation.transport.finish_read) {
       const auto raw = operation.transport.finish_read();
       if (!raw.empty()) {
-        const auto converted = decode_received(connection, raw);
+        const auto converted = co_await decode_received(connection, raw);
         operation.decoded.insert(operation.decoded.end(), converted.begin(), converted.end());
       }
     }
-    auto tail = finish_decoder(connection);
+    auto tail = co_await finish_decoder(connection);
     operation.decoded.insert(operation.decoded.end(), tail.begin(), tail.end());
   } catch (const std::system_error &error) {
     connection->state.operation_error = error.code().value();
@@ -924,6 +1043,7 @@ static cardio::promise<void> watch_carrier(TerminalConnection *connection) {
         discard_outgoing(connection->terminal);
         // All writers retain converted bytes, never a borrowed encoder. Drop
         // its old partial UTF-8 and shift state before accepting a new carrier.
+        current.codecs.encoder.reset();
         current.encoder = create_terminal_text_encoder(connection->state.encoding);
       } else current.carrier_stop = {};
       current.send_ready.trigger();
@@ -1043,9 +1163,11 @@ bool terminal_connection_start_local(TerminalConnection *connection, TerminalLoc
 }
 
 bool terminal_connection_resume_local(TerminalConnection *connection, int master_fd,
-    bool input_finished, pid_t child, std::string encoding, std::size_t queue_capacity, std::size_t io_chunk_size) {
+    bool input_finished, pid_t child, std::string encoding, std::size_t queue_capacity, std::size_t io_chunk_size,
+    TerminalCodecEndpoints codecs) {
   if (master_fd < 0 || child <= 0 || encoding.empty() ||
       !prepare_connection(connection, queue_capacity, io_chunk_size)) return false;
+  connection->operation->codecs = std::move(codecs);
   connection->state.child = child;
   connection->state.encoding = std::move(encoding);
   connection->state.spawn.state = BOXRIG_POSIX_PTY_SPAWN_SUCCEEDED;
@@ -1056,12 +1178,13 @@ bool terminal_connection_resume_local(TerminalConnection *connection, int master
 
 bool terminal_connection_resume_transport(TerminalConnection *connection, int data_fd,
     int control_fd, bool input_finished, std::string encoding,
-    std::size_t queue_capacity, std::size_t io_chunk_size) {
+    std::size_t queue_capacity, std::size_t io_chunk_size, TerminalCodecEndpoints codecs) {
   if (data_fd < 0 || control_fd < 0 || encoding.empty() ||
       !prepare_connection(connection, queue_capacity, io_chunk_size)) return false;
   auto endpoint = std::make_shared<ProxyEndpoint>();
   endpoint->data_fd = data_fd;
   endpoint->control_fd = control_fd;
+  connection->operation->codecs = std::move(codecs);
   connection->operation->proxy = endpoint;
   connection->operation->transport = proxy_transport(endpoint);
   TerminalTransportRequest request;
@@ -1072,9 +1195,10 @@ bool terminal_connection_resume_transport(TerminalConnection *connection, int da
 }
 
 bool terminal_connection_resume_serial(TerminalConnection *connection, int fd,
-    bool input_finished, const TerminalTransportRequest &request) {
+    bool input_finished, const TerminalTransportRequest &request, TerminalCodecEndpoints codecs) {
   if (fd < 0 || !request.adopt_serial_port || request.encoding.empty() ||
       !prepare_connection(connection, request.queue_capacity, request.io_chunk_size)) return false;
+  connection->operation->codecs = std::move(codecs);
   connection->operation->transport = request.adopt_serial_port(fd);
   connection->completion.emplace(run_transport(connection, request, input_finished));
   connection->wake();
@@ -1152,9 +1276,7 @@ cardio::promise<std::optional<TerminalLocalHandoff>> terminal_connection_prepare
     cancellation.throw_if_cancellation_requested();
     if (operation.pending_operations != 0 || operation.eof || operation.transport_eof ||
         operation.transfer_incoming.length != 0 || !operation.transfer_prefetch.empty() ||
-        !operation.auto_start_detector.tail.empty() ||
-        terminal_text_stream_has_pending(operation.decoder.get()) ||
-        terminal_text_stream_has_pending(operation.encoder.get())) {
+        !operation.auto_start_detector.tail.empty()) {
       terminal_connection_rollback_local_handoff(connection);
       co_return std::nullopt;
     }
@@ -1175,6 +1297,7 @@ cardio::promise<std::optional<TerminalLocalHandoff>> terminal_connection_prepare
       throw;
     }
     boxrig_checkpoint_free(data);
+    handoff.codecs = prepare_codecs(operation, connection->state.encoding);
     const int source_fd = operation.pty ? boxrig_posix_pty_descriptor(operation.pty) : operation.local_fd;
     const int fd = ::fcntl(source_fd, F_DUPFD_CLOEXEC, 0);
     if (fd < 0) {
@@ -1223,9 +1346,7 @@ cardio::promise<std::optional<TerminalTransportHandoff>> terminal_connection_pre
     cancellation.throw_if_cancellation_requested();
     if (operation.pending_operations != 0 || operation.eof || operation.transport_eof ||
         operation.transfer_incoming.length != 0 || !operation.transfer_prefetch.empty() ||
-        !operation.auto_start_detector.tail.empty() ||
-        terminal_text_stream_has_pending(operation.decoder.get()) ||
-        terminal_text_stream_has_pending(operation.encoder.get())) {
+        !operation.auto_start_detector.tail.empty()) {
       terminal_connection_rollback_transport_handoff(connection);
       co_return std::nullopt;
     }
@@ -1246,6 +1367,7 @@ cardio::promise<std::optional<TerminalTransportHandoff>> terminal_connection_pre
     handoff.encoding = connection->state.encoding;
     handoff.queue_capacity = operation.incoming.storage.size();
     handoff.io_chunk_size = operation.chunk_size;
+    handoff.codecs = prepare_codecs(operation, connection->state.encoding);
     if (operation.transport.duplicate_serial_port) {
       handoff.data_fd = operation.transport.duplicate_serial_port();
     } else if (operation.proxy) {
@@ -1451,6 +1573,7 @@ cardio::promise<bool> terminal_connection_change_encoding(TerminalConnection *co
   if (starting) {
     // Open/spawn has not started either stream runner. Replace the unused
     // converters now so the first peer byte observes the latest preference.
+    operation.codecs = {};
     operation.decoder = std::move(decoder);
     operation.encoder = std::move(encoder);
     connection->state.encoding = std::move(encoding);
@@ -1470,9 +1593,9 @@ cardio::promise<bool> terminal_connection_change_encoding(TerminalConnection *co
     while (operation.read_active) co_await operation.stream_changed.wait(receiving);
     receiving.throw_if_cancellation_requested();
     if (operation.eof) throw cardio::canceled_exception();
-    co_await queue_decoded(connection, finish_auto_start_prefix(connection), receiving);
+    co_await queue_decoded(connection, co_await finish_auto_start_prefix(connection), receiving);
     co_await queue_pending_raw(connection, receiving);
-    co_await queue_decoded(connection, finish_decoder(connection), receiving);
+    co_await queue_decoded(connection, co_await finish_decoder(connection), receiving);
     cancellation.throw_if_cancellation_requested();
     connection->wake();
     while (operation.write_active || operation.outgoing.length != 0 ||
@@ -1482,9 +1605,10 @@ cardio::promise<bool> terminal_connection_change_encoding(TerminalConnection *co
       co_await operation.stream_changed.wait(cancellation);
     }
     operation.write_paused = true;
-    auto tail = finish_terminal_text(operation.encoder.get());
-    if (!tail.bytes.empty()) co_await operation.transport.write(tail.bytes, cancellation);
+    auto tail = co_await finish_converter(operation.codecs.encoder, operation.encoder.get());
+    if (!tail.empty()) co_await operation.transport.write(tail, cancellation);
     cancellation.throw_if_cancellation_requested();
+    operation.codecs = {};
     operation.decoder = std::move(decoder);
     operation.encoder = std::move(encoder);
     operation.decoder_finished = false;
@@ -1494,6 +1618,7 @@ cardio::promise<bool> terminal_connection_change_encoding(TerminalConnection *co
     if (!receiving.is_cancellation_requested() && operation.decoder_finished) {
       // The old receive boundary has already been delivered in full. Resume
       // the unchanged encoding with a fresh decoder after a carrier drop.
+      operation.codecs.decoder.reset();
       operation.decoder = create_terminal_text_decoder(connection->state.encoding);
       operation.decoder_finished = false;
     }
@@ -1581,9 +1706,10 @@ cardio::promise<bool> terminal_connection_send_text(TerminalConnection *connecti
     operation.write_paused = true;
     // A separate text-send encoder starts in its initial state. Finish the
     // normal writer's shift state before handing over the wire.
-    auto tail = finish_terminal_text(operation.encoder.get());
+    auto tail = co_await finish_converter(operation.codecs.encoder, operation.encoder.get());
+    operation.codecs.encoder.reset();
     operation.encoder = create_terminal_text_encoder(connection->state.encoding);
-    if (!tail.bytes.empty()) co_await operation.transport.write(tail.bytes, stop.get_cancellation());
+    if (!tail.empty()) co_await operation.transport.write(tail, stop.get_cancellation());
     TerminalTextSendTransport transport{
         [&operation](std::span<const unsigned char> bytes, cardio::cancellation token) {
           return operation.transport.write(bytes, token);

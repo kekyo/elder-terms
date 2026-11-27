@@ -1509,8 +1509,8 @@ bool terminal_runtime_connect_transport(TerminalRuntime *runtime, TerminalTransp
 }
 
 bool terminal_runtime_resume_serial(TerminalRuntime *runtime, int fd, bool input_finished,
-    const TerminalTransportRequest &request) {
-  if (!terminal_connection_resume_serial(runtime->connection, fd, input_finished, request)) return false;
+    const TerminalTransportRequest &request, TerminalCodecEndpoints codecs) {
+  if (!terminal_connection_resume_serial(runtime->connection, fd, input_finished, request, std::move(codecs))) return false;
   monitor_transport_availability(runtime, request);
   runtime->attempted_recovery_epoch = runtime->recovery_epoch;
   return true;

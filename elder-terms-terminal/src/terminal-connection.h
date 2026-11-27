@@ -49,6 +49,23 @@ struct TerminalLocalCommand {
   std::function<void(bool outgoing)> activity = {};
 };
 
+/** Socket to an existing character converter whose shift state must survive a move. */
+struct TerminalCodecEndpoint;
+/** Optional endpoints for the two independent directions of conversion. */
+struct TerminalCodecEndpoints {
+  std::shared_ptr<TerminalCodecEndpoint> decoder; /**< Peer bytes to UTF-8. */
+  std::shared_ptr<TerminalCodecEndpoint> encoder; /**< UTF-8 to peer bytes. */
+};
+/** Returns the borrowed socket, or -1 for a converter that can be recreated. */
+int terminal_codec_descriptor(const std::shared_ptr<TerminalCodecEndpoint> &endpoint);
+/** Adopts one transferred converter socket; a negative descriptor yields an empty endpoint. */
+std::shared_ptr<TerminalCodecEndpoint> adopt_terminal_codec_descriptor(int fd);
+/** Converter endpoints for the receiver and jobs retained by the current owner until the sockets close. */
+struct TerminalCodecHandoff {
+  TerminalCodecEndpoints endpoints; /**< Pass the live endpoints to the receiver. */
+  std::vector<std::shared_ptr<cardio::promise<void>>> origins; /**< Keep the owner running until these jobs finish. */
+};
+
 /** One prepared local PTY handoff; the caller owns and closes master_fd. */
 struct TerminalLocalHandoff {
   /** Versioned boxrig terminal image, including unsent core output. */
@@ -65,6 +82,7 @@ struct TerminalLocalHandoff {
   std::size_t queue_capacity = 0;
   /** Maximum operating-system I/O chunk size. */
   std::size_t io_chunk_size = 0;
+  TerminalCodecHandoff codecs; /**< Character conversion state at the checkpoint. */
 };
 
 /** Final child status collected by the original spawning process. */
@@ -98,6 +116,7 @@ struct TerminalTransportHandoff {
   int data_fd = -1;
   /** Duplicate of the proxy control socket, or -1 for a direct serial port. */
   int control_fd = -1;
+  TerminalCodecHandoff codecs; /**< Character conversion state at the checkpoint. */
 };
 
 /** Original live channel retained independently of the old terminal. */
@@ -211,12 +230,14 @@ void destroy_terminal_local_child_reaper(TerminalLocalChildReaper *reaper);
  * @param encoding Active PTY character encoding at the handoff.
  * @param queue_capacity Bounded queue size from the source.
  * @param io_chunk_size Maximum I/O chunk size from the source.
+ * @param codecs Existing converters for encodings that cannot restart at this boundary.
  * @return True if the descriptor was adopted.
  */
 bool terminal_connection_resume_local(TerminalConnection *connection, int master_fd,
-    bool input_finished, pid_t child, std::string encoding, std::size_t queue_capacity, std::size_t io_chunk_size);
+    bool input_finished, pid_t child, std::string encoding, std::size_t queue_capacity, std::size_t io_chunk_size,
+    TerminalCodecEndpoints codecs = {});
 
-/** Pauses a connected SSH or other nonlocal transport at a checkpoint boundary. */
+/** Pauses a connected network or serial transport at a checkpoint boundary. */
 cardio::promise<std::optional<TerminalTransportHandoff>> terminal_connection_prepare_transport_handoff(
     TerminalConnection *connection);
 
@@ -225,16 +246,27 @@ void terminal_connection_rollback_transport_handoff(TerminalConnection *connecti
 
 /**
  * Commits a prepared nonlocal handoff and returns the original channel.
- * @remarks Returns nullptr after a proxy connection is moved again; the
- * original owner keeps its existing handle, so no relay hop is added.
+ * @return The origin for a new network relay, or nullptr for a directly
+ * transferred serial port or an existing relay passed on to another receiver.
  */
 cardio::promise<TerminalTransportOrigin *> terminal_connection_commit_transport_handoff(
     TerminalConnection *connection);
 
-/** Starts a resumed terminal over an already opened proxy channel. */
+/**
+ * Starts a resumed terminal over an already opened network proxy channel.
+ * @param connection Inactive owner borrowing the imported terminal.
+ * @param data_fd Data socket. Ownership transfers on success.
+ * @param control_fd Control socket. Ownership transfers on success.
+ * @param input_finished EOF state from the handoff.
+ * @param encoding Active peer encoding at the handoff.
+ * @param queue_capacity Bounded queue size from the source.
+ * @param io_chunk_size Maximum I/O chunk size from the source.
+ * @param codecs Existing converters from the handoff.
+ * @return True if both sockets were adopted.
+ */
 bool terminal_connection_resume_transport(TerminalConnection *connection, int data_fd,
     int control_fd, bool input_finished, std::string encoding,
-    std::size_t queue_capacity, std::size_t io_chunk_size);
+    std::size_t queue_capacity, std::size_t io_chunk_size, TerminalCodecEndpoints codecs = {});
 
 /**
  * Resumes an imported terminal on its original serial port.
@@ -242,10 +274,11 @@ bool terminal_connection_resume_transport(TerminalConnection *connection, int da
  * @param fd Open, configured port. Ownership transfers on success.
  * @param input_finished EOF state of the imported session.
  * @param request Serial factory, encoding and bounded queues for this session.
+ * @param codecs Existing converters from the handoff.
  * @return True if the port was adopted.
  */
 bool terminal_connection_resume_serial(TerminalConnection *connection, int fd,
-    bool input_finished, const TerminalTransportRequest &request);
+    bool input_finished, const TerminalTransportRequest &request, TerminalCodecEndpoints codecs);
 
 /** Shares the SSH connection used by a still-live origin channel. */
 std::shared_ptr<AuthenticatedSshTransport> terminal_transport_origin_authenticated_ssh(

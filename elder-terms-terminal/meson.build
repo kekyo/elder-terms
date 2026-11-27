@@ -130,6 +130,8 @@ elder_terms_terminal = executable(
 )
 
 if get_option('build_tests')
+clipboard_write_helper = executable('clipboard-write-helper', 'tests/cpp/clipboard-write-helper.cpp',
+  dependencies: [gtk_dep])
 tab_tearoff_cursor_test = executable('tab-tearoff-cursor-test',
   ['tests/cpp/tab-tearoff-cursor-test.c', 'src/tab-tearoff.c', 'src/dock-feedback.c'],
   dependencies: [gtk_dep, dependency('x11'), dependency('xfixes')])
@@ -175,11 +177,18 @@ if find_program('kwin_x11', required: false).found()
     test('terminal-tab-docking-colored-close', find_program('bash'),
       args: [meson.current_source_dir() / 'tests/terminal-docking-group.sh', elder_terms_terminal],
       env: ['ELDER_TERMS_GROUP_COLOR_CLOSE=1'], timeout: 90, is_parallel: false)
+    stream_docking_test = meson.current_source_dir() / 'tests/terminal-docking-stream.sh'
+    test('terminal-tab-docking-local', find_program('bash'),
+      args: [stream_docking_test, elder_terms_terminal, 'local'],
+      depends: clipboard_write_helper, timeout: 90, is_parallel: false)
+    test('terminal-tab-docking-stateful-encoding', find_program('bash'),
+      args: [stream_docking_test, elder_terms_terminal, 'local', 'ISO-2022-JP'],
+      depends: clipboard_write_helper, timeout: 90, is_parallel: false)
     if find_program('socat', required: false).found()
-      foreach kind : ['telnet', 'serial', 'local']
+      foreach kind : ['telnet', 'serial']
         test('terminal-tab-docking-' + kind, find_program('bash'),
-          args: [meson.current_source_dir() / 'tests/terminal-docking-stream.sh', elder_terms_terminal, kind],
-          timeout: 90, is_parallel: false)
+          args: [stream_docking_test, elder_terms_terminal, kind],
+          depends: clipboard_write_helper, timeout: 90, is_parallel: false)
       endforeach
     endif
     if find_program('/usr/sbin/sshd', required: false).found() and find_program('socat', required: false).found() and find_program('/usr/lib/openssh/sftp-server', required: false).found()
@@ -498,12 +507,6 @@ test('boxrig-png-isolation-test', boxrig_png_isolation_test)
 executable(
   'clipboard-read-helper',
   'tests/cpp/clipboard-read-helper.cpp',
-  dependencies: [gtk_dep],
-)
-
-executable(
-  'clipboard-write-helper',
-  'tests/cpp/clipboard-write-helper.cpp',
   dependencies: [gtk_dep],
 )
 

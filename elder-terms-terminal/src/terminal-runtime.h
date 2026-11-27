@@ -243,10 +243,11 @@ bool terminal_runtime_connect_transport(TerminalRuntime *runtime, TerminalTransp
  * @param fd Open port, adopted on success.
  * @param input_finished EOF state from the handoff.
  * @param request Factory with the device settings, live callbacks and encoding.
+ * @param codecs Character converters from the original terminal.
  * @return True if the port was adopted.
  */
 bool terminal_runtime_resume_serial(TerminalRuntime *runtime, int fd, bool input_finished,
-    const TerminalTransportRequest &request);
+    const TerminalTransportRequest &request, TerminalCodecEndpoints codecs);
 
 /**
  * Requests a normal-state grid and schedules its layout work.

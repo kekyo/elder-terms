@@ -2330,6 +2330,13 @@ static cardio::promise<void> wait_for_shell(elder_terms::TerminalLocalChildReape
   stop_if_finished();
 }
 
+static cardio::promise<void> retain_dock_converter(std::shared_ptr<cardio::promise<void>> job) {
+  ++background_operations;
+  co_await *job;
+  --background_operations;
+  stop_if_finished();
+}
+
 static cardio::promise<void> commit_transport_page(ApplicationState *s) {
   s->origin_active = true;
   auto *origin = co_await elder_terms::terminal_connection_commit_transport_handoff(
@@ -2396,6 +2403,7 @@ static cardio::promise<elder_terms::DockPrepared> prepare_pages(std::vector<std:
         close(fd);
         return index;
       };
+      elder_terms::TerminalCodecHandoff codecs;
       if (s->active_profile.kind != elder_terms::TerminalConnectionKind::local_shell) {
         auto image = co_await elder_terms::terminal_connection_prepare_transport_handoff(connection);
         if (!image) { finish(false); co_return result; }
@@ -2405,6 +2413,7 @@ static cardio::promise<elder_terms::DockPrepared> prepare_pages(std::vector<std:
           if (page.control_descriptor < 0) { finish(false); co_return result; }
         }
         page.encoding = std::move(image->encoding);
+        codecs = std::move(image->codecs);
         page.checkpoint = std::move(image->checkpoint);
         page.eof = image->input_finished;
         page.capacity = image->queue_capacity;
@@ -2414,13 +2423,22 @@ static cardio::promise<elder_terms::DockPrepared> prepare_pages(std::vector<std:
         if (!image) { finish(false); co_return result; }
         page.descriptor = keep_fd(image->master_fd);
         page.encoding = std::move(image->encoding);
+        codecs = std::move(image->codecs);
         page.checkpoint = std::move(image->checkpoint);
         page.eof = image->input_finished;
         page.capacity = image->queue_capacity;
         page.chunk = image->io_chunk_size;
         page.child = image->child;
       }
-      if (page.descriptor < 0) { finish(false); co_return result; }
+      for (auto &job : codecs.origins) docking_jobs.emplace_back(retain_dock_converter(std::move(job)));
+      const auto keep_codec = [&](const auto &endpoint) {
+        return endpoint ? g_unix_fd_list_append(result.batch.descriptors.get(),
+            elder_terms::terminal_codec_descriptor(endpoint), nullptr) : -1;
+      };
+      page.decoder_descriptor = keep_codec(codecs.endpoints.decoder);
+      page.encoder_descriptor = keep_codec(codecs.endpoints.encoder);
+      if (page.descriptor < 0 || (codecs.endpoints.decoder && page.decoder_descriptor < 0) ||
+          (codecs.endpoints.encoder && page.encoder_descriptor < 0)) { finish(false); co_return result; }
       page.host_state = elder_terms::terminal_runtime_save_host_state(s->runtime);
       if (!page.host_state) { finish(false); co_return result; }
       page.log = co_await elder_terms::terminal_log_handoff_path(s->log_state);
@@ -2453,6 +2471,7 @@ struct StagedPage {
   bool eof;
   unsigned child, capacity, chunk;
   std::shared_ptr<GVariant> host_state;
+  elder_terms::TerminalCodecEndpoints codecs;
 };
 
 static elder_terms::DockDecision stage_pages(ApplicationState *destination, const elder_terms::DockBatch &batch) {
@@ -2488,10 +2507,17 @@ static elder_terms::DockDecision stage_pages(ApplicationState *destination, cons
     const int fd = g_unix_fd_list_get(batch.descriptors.get(), page.descriptor, nullptr);
     const auto control_fd = page.control_descriptor < 0 ? -1 :
         g_unix_fd_list_get(batch.descriptors.get(), page.control_descriptor, nullptr);
-    staged.push_back({s, fd, control_fd, page.encoding, page.eof, page.child, page.capacity, page.chunk, page.host_state});
+    const auto receive_codec = [&](int index) {
+      return elder_terms::adopt_terminal_codec_descriptor(index < 0 ? -1 :
+          g_unix_fd_list_get(batch.descriptors.get(), index, nullptr));
+    };
+    staged.push_back({s, fd, control_fd, page.encoding, page.eof, page.child, page.capacity, page.chunk,
+        page.host_state, {receive_codec(page.decoder_descriptor), receive_codec(page.encoder_descriptor)}});
     const auto phase = elder_terms::terminal_connection_state(
         elder_terms::terminal_runtime_connection(s->runtime)).phase;
     ready = fd >= 0 && (page.control_descriptor < 0 || control_fd >= 0) &&
+        (page.decoder_descriptor < 0 || staged.back().codecs.decoder) &&
+        (page.encoder_descriptor < 0 || staged.back().codecs.encoder) &&
         (phase == elder_terms::TerminalConnectionPhase::idle ||
          phase == elder_terms::TerminalConnectionPhase::closed) &&
         track_session(s);
@@ -2517,16 +2543,16 @@ static elder_terms::DockDecision stage_pages(ApplicationState *destination, cons
           bool resumed;
           if (page.control_fd >= 0) {
             resumed = elder_terms::terminal_connection_resume_transport(connection, page.fd, page.control_fd,
-                page.eof, page.encoding, page.capacity, page.chunk);
+                page.eof, page.encoding, page.capacity, page.chunk, page.codecs);
           } else if (page.child) {
             resumed = elder_terms::terminal_connection_resume_local(connection, page.fd, page.eof, page.child,
-                page.encoding, page.capacity, page.chunk);
+                page.encoding, page.capacity, page.chunk, page.codecs);
           } else {
             auto &request = s->transport.emplace(elder_terms::make_serial_transport_request(
                 std::get<elder_terms::SerialConnectionSettings>(s->active_profile.settings), page.encoding, session_callbacks(s)));
             request.queue_capacity = page.capacity;
             request.io_chunk_size = page.chunk;
-            resumed = elder_terms::terminal_runtime_resume_serial(s->runtime, page.fd, page.eof, request);
+            resumed = elder_terms::terminal_runtime_resume_serial(s->runtime, page.fd, page.eof, request, page.codecs);
           }
           if (resumed) {
             elder_terms::terminal_runtime_restore_host_state(s->runtime, s->terminal_title, page.host_state.get());

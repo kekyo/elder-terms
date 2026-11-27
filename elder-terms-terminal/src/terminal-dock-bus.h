@@ -26,6 +26,8 @@ struct DockPageImage {
   unsigned capacity;               /**< Bounded communication queue size in bytes. */
   unsigned chunk;                  /**< Preferred maximum I/O chunk size in bytes. */
   std::shared_ptr<GVariant> host_state; /**< Frozen title history and macro line context. */
+  int decoder_descriptor = -1; /**< Optional converter FD for incoming text. */
+  int encoder_descriptor = -1; /**< Optional converter FD for outgoing text. */
 };
 /** Prepared group in tab order. A staged receiver may start reading only after commit. */
 struct DockBatch {
