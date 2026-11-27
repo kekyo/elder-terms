@@ -2411,6 +2411,10 @@ static cardio::promise<elder_terms::DockPrepared> prepare_pages(std::vector<std:
         if (image->control_fd >= 0) {
           page.control_descriptor = keep_fd(image->control_fd);
           if (page.control_descriptor < 0) { finish(false); co_return result; }
+        } else {
+          const auto &serial = std::get<elder_terms::SerialConnectionSettings>(s->active_profile.settings);
+          page.serial = {serial.device, elder_terms::serial_device_match_mode_to_string(serial.device_match_mode),
+              serial.device_usb_serial.value_or(""), image->serial_carrier_observed};
         }
         page.encoding = std::move(image->encoding);
         codecs = std::move(image->codecs);
@@ -2472,6 +2476,7 @@ struct StagedPage {
   unsigned child, capacity, chunk;
   std::shared_ptr<GVariant> host_state;
   elder_terms::TerminalCodecEndpoints codecs;
+  bool serial_carrier_observed;
 };
 
 static elder_terms::DockDecision stage_pages(ApplicationState *destination, const elder_terms::DockBatch &batch) {
@@ -2492,12 +2497,21 @@ static elder_terms::DockDecision stage_pages(ApplicationState *destination, cons
         elder_terms::default_global_config_path()}, page.settings, 12.0);
     if (!settings.loaded || !elder_terms::settings_theme_is_resolved(settings.store)) { for (auto &warning : settings.warnings) g_debug("%s", warning.c_str()); break; }
     if (!elder_terms::terminal_docking_enabled(settings.store)) break;
+    std::optional<elder_terms::SerialConnectionSettings> active_serial;
     if (page.control_descriptor < 0 && page.child == 0) {
       const auto profile = elder_terms::terminal_connection_profile(settings.store);
-      if (!profile || profile->kind != elder_terms::TerminalConnectionKind::serial) break;
+      const auto mode = elder_terms::parse_serial_device_match_mode(page.serial.match_mode);
+      if (!profile || profile->kind != elder_terms::TerminalConnectionKind::serial || !mode) break;
+      // Profile edits can select a different device for the next connection.
+      // Keep this open port and its recovery target associated with the original device.
+      active_serial = std::get<elder_terms::SerialConnectionSettings>(profile->settings);
+      active_serial->device = page.serial.device;
+      active_serial->device_match_mode = *mode;
+      active_serial->device_usb_serial = page.serial.usb_serial.empty() ? std::nullopt : std::optional(page.serial.usb_serial);
     }
     auto *s = create_session(options, std::move(settings), true, page.checkpoint);
     if (!s) { g_debug("Cannot create checkpoint page"); break; }
+    if (active_serial) s->active_profile.settings = std::move(*active_serial);
     s->session_id = page.id;
     s->launcher = page.launcher;
     s->sftp_origin = page.sftp_origin;
@@ -2512,7 +2526,8 @@ static elder_terms::DockDecision stage_pages(ApplicationState *destination, cons
           g_unix_fd_list_get(batch.descriptors.get(), index, nullptr));
     };
     staged.push_back({s, fd, control_fd, page.encoding, page.eof, page.child, page.capacity, page.chunk,
-        page.host_state, {receive_codec(page.decoder_descriptor), receive_codec(page.encoder_descriptor)}});
+        page.host_state, {receive_codec(page.decoder_descriptor), receive_codec(page.encoder_descriptor)},
+        page.serial.carrier_observed});
     const auto phase = elder_terms::terminal_connection_state(
         elder_terms::terminal_runtime_connection(s->runtime)).phase;
     ready = fd >= 0 && (page.control_descriptor < 0 || control_fd >= 0) &&
@@ -2552,11 +2567,13 @@ static elder_terms::DockDecision stage_pages(ApplicationState *destination, cons
                 std::get<elder_terms::SerialConnectionSettings>(s->active_profile.settings), page.encoding, session_callbacks(s)));
             request.queue_capacity = page.capacity;
             request.io_chunk_size = page.chunk;
-            resumed = elder_terms::terminal_runtime_resume_serial(s->runtime, page.fd, page.eof, request, page.codecs);
+            resumed = elder_terms::terminal_runtime_resume_serial(s->runtime, {page.fd, page.serial_carrier_observed},
+                page.eof, request, page.codecs);
           }
           if (resumed) {
             elder_terms::terminal_runtime_restore_host_state(s->runtime, s->terminal_title, page.host_state.get());
-            set_application_connection_phase(s, elder_terms::TerminalSessionConnectionPhase::connected);
+            set_application_connection_phase(s, elder_terms::terminal_connection_state(connection).carrier_connected ?
+                elder_terms::TerminalSessionConnectionPhase::connected : elder_terms::TerminalSessionConnectionPhase::disconnected);
           }
           return resumed;
         }, close_page,

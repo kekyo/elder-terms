@@ -116,6 +116,7 @@ struct TerminalTransportHandoff {
   int data_fd = -1;
   /** Duplicate of the proxy control socket, or -1 for a direct serial port. */
   int control_fd = -1;
+  bool serial_carrier_observed = false; /**< Whether the serial carrier was ever high on this open port. */
   TerminalCodecHandoff codecs; /**< Character conversion state at the checkpoint. */
 };
 
@@ -271,13 +272,13 @@ bool terminal_connection_resume_transport(TerminalConnection *connection, int da
 /**
  * Resumes an imported terminal on its original serial port.
  * @param connection Inactive owner with the imported terminal.
- * @param fd Open, configured port. Ownership transfers on success.
+ * @param port Open, configured port and its carrier history. Ownership transfers on success.
  * @param input_finished EOF state of the imported session.
  * @param request Serial factory, encoding and bounded queues for this session.
  * @param codecs Existing converters from the handoff.
  * @return True if the port was adopted.
  */
-bool terminal_connection_resume_serial(TerminalConnection *connection, int fd,
+bool terminal_connection_resume_serial(TerminalConnection *connection, TerminalSerialPort port,
     bool input_finished, const TerminalTransportRequest &request, TerminalCodecEndpoints codecs);
 
 /** Shares the SSH connection used by a still-live origin channel. */

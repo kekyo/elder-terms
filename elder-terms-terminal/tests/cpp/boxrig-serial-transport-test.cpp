@@ -75,6 +75,7 @@ static cardio::promise<void> scenarios(Fixture *fixture, bool signals, bool hand
       .baudrate = 9600, .bits = 8, .parity = SerialParity::none, .stop_bit = 1,
       .flow_control = SerialFlowControl::none, .carrier_detect = SerialCarrierDetect::ignore};
   TerminalSessionCallbacks callbacks;
+  if (handoff) settings.carrier_detect = SerialCarrierDetect::cd;
   callbacks.indicator_state = [fixture](ActivityIndicatorId id, bool active) {
     fixture->indicators.push_back({id, active});
     fixture->changed.trigger();
@@ -89,14 +90,35 @@ static cardio::promise<void> scenarios(Fixture *fixture, bool signals, bool hand
   }
   fixture->channel = co_await opening;
   if (handoff) {
+    fixture->monitoring.emplace(fixture->channel->watch_carrier([fixture](bool connected) {
+      fixture->carrier.push_back(connected);
+      fixture->changed.trigger();
+    }, fixture->stop.get_cancellation()));
+    while (fixture->carrier.empty()) co_await fixture->changed.wait();
+    expect(fixture->carrier.back(), "carrier is high before docking");
     const auto port = fixture->channel->duplicate_serial_port();
-    expect(port >= 0, "retain the open serial device");
+    expect(port.fd >= 0, "retain the open serial device");
+    fixture->stop.cancel();
+    try { co_await *fixture->monitoring; } catch (const cardio::canceled_exception &) {}
+    fixture->monitoring.reset();
+    fixture->stop = {};
     co_await fixture->channel->close();
     request = make_serial_transport_request(settings, "CP932", callbacks);
     recovery = request;
     const auto updates = termios_updates;
     fixture->channel = request.adopt_serial_port(port);
     expect(termios_updates == updates, "adoption leaves line settings and queued port data intact");
+    modem_status &= ~TIOCM_CAR;
+    fixture->carrier.clear();
+    fixture->monitoring.emplace(fixture->channel->watch_carrier([fixture](bool connected) {
+      fixture->carrier.push_back(connected);
+      fixture->changed.trigger();
+    }, fixture->stop.get_cancellation()));
+    while (fixture->carrier.empty()) co_await fixture->changed.wait();
+    expect(!fixture->carrier.back(), "a carrier drop during docking is visible on the same port");
+    fixture->stop.cancel();
+    try { co_await *fixture->monitoring; } catch (const cardio::canceled_exception &) {}
+    fixture->monitoring.reset();
     co_await fixture->channel->send_break({});
   }
   if (signals) {

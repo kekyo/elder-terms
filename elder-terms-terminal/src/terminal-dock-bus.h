@@ -28,6 +28,12 @@ struct DockPageImage {
   std::shared_ptr<GVariant> host_state; /**< Frozen title history and macro line context. */
   int decoder_descriptor = -1; /**< Optional converter FD for incoming text. */
   int encoder_descriptor = -1; /**< Optional converter FD for outgoing text. */
+  struct SerialState {
+    std::string device; /**< Original device identity used to recover this open port. */
+    std::string match_mode; /**< How to match the device on reattachment. */
+    std::string usb_serial; /**< Optional USB serial number of the original device. */
+    bool carrier_observed = false; /**< Whether the selected modem line has been high. */
+  } serial = {}; /**< State of a directly transferred serial port. */
 };
 /** Prepared group in tab order. A staged receiver may start reading only after commit. */
 struct DockBatch {

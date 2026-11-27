@@ -1194,12 +1194,12 @@ bool terminal_connection_resume_transport(TerminalConnection *connection, int da
   return true;
 }
 
-bool terminal_connection_resume_serial(TerminalConnection *connection, int fd,
+bool terminal_connection_resume_serial(TerminalConnection *connection, TerminalSerialPort port,
     bool input_finished, const TerminalTransportRequest &request, TerminalCodecEndpoints codecs) {
-  if (fd < 0 || !request.adopt_serial_port || request.encoding.empty() ||
+  if (port.fd < 0 || !request.adopt_serial_port || request.encoding.empty() ||
       !prepare_connection(connection, request.queue_capacity, request.io_chunk_size)) return false;
   connection->operation->codecs = std::move(codecs);
-  connection->operation->transport = request.adopt_serial_port(fd);
+  connection->operation->transport = request.adopt_serial_port(port);
   connection->completion.emplace(run_transport(connection, request, input_finished));
   connection->wake();
   return true;
@@ -1369,7 +1369,9 @@ cardio::promise<std::optional<TerminalTransportHandoff>> terminal_connection_pre
     handoff.io_chunk_size = operation.chunk_size;
     handoff.codecs = prepare_codecs(operation, connection->state.encoding);
     if (operation.transport.duplicate_serial_port) {
-      handoff.data_fd = operation.transport.duplicate_serial_port();
+      const auto port = operation.transport.duplicate_serial_port();
+      handoff.data_fd = port.fd;
+      handoff.serial_carrier_observed = port.carrier_observed;
     } else if (operation.proxy) {
       handoff.data_fd = ::fcntl(operation.proxy->data_fd, F_DUPFD_CLOEXEC, 0);
       if (handoff.data_fd >= 0)
