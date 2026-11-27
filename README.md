@@ -189,7 +189,9 @@ Well then, enjoy elder-terms!
 
 ## Grouping running terminals
 
-Open two local or SSH terminal windows. On supported X11 desktops, drag either window by its title text, empty title bar, or connection icon. Release it inside the other terminal window to group them. Releasing it elsewhere leaves the window at its new position. On Wayland and other desktops, drag the connection icon onto the other terminal to group them.
+You can group running local, SSH, Telnet, and serial terminals in the same window. You can mix connection types and add a terminal to a window that already has tabs.
+
+On supported X11 desktops, drag a window by its title text, empty title bar, or connection icon. Release it inside another terminal window to add its tabs there. Releasing it elsewhere leaves the window at its new position. On Wayland and other desktops, drag the connection icon onto the other terminal.
 
 Click a row on the left to display its terminal on the right and give it keyboard focus. The list initially spans 220 logical pixels, and you can drag the splitter between the list and terminal to adjust its width.
 
@@ -199,7 +201,7 @@ Drag a row onto another terminal window to move just that session. Press `Ctrl+S
 
 Hover over a row and click its close button to end that session. The list disappears when one session remains. Closing the window ends all the sessions it contains.
 
-UTF-8 local shells and authenticated SSH shells can move between processes. Clear any text selection and let file transfers running inside the terminal finish before moving it. A separate SFTP window stays connected during the move.
+Each terminal keeps its running shell, network connection, or open serial port, along with its character encoding, including CP932. Clear any text selection and let file transfers running inside the terminal finish before moving it. A separate SFTP window stays connected during the move.
 
 ## INI File Locations
 
