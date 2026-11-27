@@ -50,7 +50,7 @@ try {
     'subjectAltName=IP:127.0.0.1,DNS:proxy-test.invalid',
   ]);
   let index = 0;
-  const check = async (scheme, policy, trusted, password, env, host) => {
+  const check = async (scheme, policy, trusted, authMode, env, host) => {
     const requests = [];
     const server =
       scheme === 'https'
@@ -59,7 +59,7 @@ try {
     server.on('request', (req, res) => {
       requests.push(`${req.method} ${req.url}`);
       if (
-        password !== 'none' &&
+        authMode !== 'none' &&
         req.headers.authorization !==
           'Basic ' + Buffer.from('alice:secret').toString('base64')
       ) {
@@ -101,7 +101,7 @@ try {
     const output = join(directory, `download-${index++}`);
     await mkdir(output);
     const failed =
-      password === 'wrong' ||
+      authMode === 'invalid' ||
       (scheme === 'https' && !trusted && policy !== 'allow');
     try {
       await run(
@@ -112,7 +112,7 @@ try {
           trusted ? certificate : '',
           policy,
           failed ? 'failure' : 'success',
-          password,
+          authMode,
         ],
         env
       );
@@ -122,7 +122,7 @@ try {
         ),
         requests.join('\n')
       );
-      if (scheme === 'https' && failed && password !== 'wrong')
+      if (scheme === 'https' && failed && authMode !== 'invalid')
         assert.equal(requests.length, 0);
       if (!failed)
         assert.equal(
@@ -136,7 +136,7 @@ try {
           'A redirect alias shared by multiple pages must be visited only once per job'
         );
       console.log(
-        `PASS ${scheme} ${policy} CA=${trusted} authentication=${password} host=${host}`
+        `PASS ${scheme} ${policy} CA=${trusted} authentication=${authMode} host=${host}`
       );
     } finally {
       server.closeAllConnections();
@@ -145,16 +145,8 @@ try {
     }
   };
   for (const scheme of ['http', 'https']) {
-    await check(scheme, 'reject', scheme === 'https', 'none', {}, '127.0.0.1');
-    await check(
-      scheme,
-      'reject',
-      scheme === 'https',
-      'secret',
-      {},
-      '127.0.0.1'
-    );
-    await check(scheme, 'reject', scheme === 'https', 'wrong', {}, '127.0.0.1');
+    for (const mode of ['none', 'valid', 'invalid'])
+      await check(scheme, 'reject', scheme === 'https', mode, {}, '127.0.0.1');
   }
   for (const policy of ['reject', 'allow', 'decline'])
     await check('https', policy, false, 'none', {}, '127.0.0.1');
@@ -165,7 +157,7 @@ try {
       NO_PROXY: '*',
       no_proxy: '*',
     };
-    await check('https', 'allow', false, 'secret', env, 'proxy-test.invalid');
+    await check('https', 'allow', false, 'valid', env, 'proxy-test.invalid');
     assert.ok(
       gateway.requests.length > 0 &&
         gateway.requests.every(

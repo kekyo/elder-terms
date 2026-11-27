@@ -1467,32 +1467,29 @@ exit 1
         'utf8'
       )
     ).toContain(`<release version="${installedVersion}"`);
+    const terminalBinary = join(
+      libraryDirectory,
+      'elder-terms/elder-terms-terminal/elder-terms-terminal'
+    );
+    const transferBinary = join(
+      libraryDirectory,
+      'elder-terms/elder-terms-file-transfer/elder-terms-file-transfer'
+    );
     const expectedLinks = new Map([
       [
         'bin/elder-terms',
         join('..', libraryDirectory, 'elder-terms/launcher/elder-terms'),
       ],
-      [
-        'bin/elder-terms-terminal',
-        join(
-          '..',
-          libraryDirectory,
-          'elder-terms/elder-terms-terminal/elder-terms-terminal'
-        ),
-      ],
-      [
-        'bin/elder-terms-file-transfer',
-        join(
-          '..',
-          libraryDirectory,
-          'elder-terms/elder-terms-file-transfer/elder-terms-file-transfer'
-        ),
-      ],
+      ['bin/elder-terms-terminal', join('..', terminalBinary)],
+      ['bin/elder-terms-file-transfer', join('..', transferBinary)],
     ]);
     for (const [linkPath, expectedTarget] of expectedLinks) {
       const path = join(installedRoot, linkPath);
       expect(lstatSync(path).isSymbolicLink()).toBe(true);
       expect(readlinkSync(path)).toBe(expectedTarget);
+      expect(realpathSync(path)).toBe(
+        join(realpathSync(installedRoot), 'bin', expectedTarget)
+      );
     }
     for (const relativePath of [
       join(libraryDirectory, 'elder-terms/libelder-terms.so.0'),
@@ -1553,12 +1550,19 @@ exit 1
     const environment = { ...process.env };
     delete environment.LD_LIBRARY_PATH;
     delete environment.LD_PRELOAD;
-    // ldd's direct loader invocation does not resolve executable symlinks as exec does.
-    const loaded = run('ldd', [realpathSync(terminal)], environment);
+    // Inspect the staged binaries at their verified installation paths.
+    const loaded = run(
+      'ldd',
+      ['--', join(installedRoot, terminalBinary)],
+      environment
+    );
     expectSuccess(loaded, 'installed terminal dependency resolution failed');
     expect(loaded.stdout).not.toContain('not found');
-    const transfer = join(installedRoot, 'bin/elder-terms-file-transfer');
-    const transferLibraries = run('ldd', [realpathSync(transfer)], environment);
+    const transferLibraries = run(
+      'ldd',
+      ['--', join(installedRoot, transferBinary)],
+      environment
+    );
     expectSuccess(
       transferLibraries,
       'installed file transfer dependency resolution failed'
@@ -1584,7 +1588,7 @@ exit 1
       libraryDirectory,
       'elder-terms/elder-terms-file-transfer/elder-terms-smb1-worker'
     );
-    const helperLibraries = run('ldd', [helper], environment);
+    const helperLibraries = run('ldd', ['--', helper], environment);
     expectSuccess(
       helperLibraries,
       'installed SMB1 helper dependency resolution failed'

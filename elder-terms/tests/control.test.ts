@@ -71,7 +71,10 @@ it('controls the resident launcher and saved connections without D-Bus or a disp
     XDG_DATA_HOME: join(runtime, 'data'),
     ELDER_TERMS_TERMINAL_PATH: child,
   };
-  const control = async (args: string[]) =>
+  const control = async (
+    args: string[],
+    activationToken = 'test-control-token'
+  ) =>
     await execute(ctl, args, {
       env: {
         ...process.env,
@@ -79,7 +82,7 @@ it('controls the resident launcher and saved connections without D-Bus or a disp
         DBUS_SESSION_BUS_ADDRESS: 'unix:path=/nonexistent/elder-terms-bus',
         DISPLAY: '',
         WAYLAND_DISPLAY: '',
-        XDG_ACTIVATION_TOKEN: 'test-control-token',
+        XDG_ACTIVATION_TOKEN: activationToken,
       },
     });
   try {
@@ -98,7 +101,8 @@ it('controls the resident launcher and saved connections without D-Bus or a disp
       },
       async ({ app, connections }) => {
         expect(await app.getWindowCount()).toBe(0);
-        expect((await control(['setup'])).stdout).toContain(
+        // Setup must omit the unused token even when it exceeds the packet limit.
+        expect((await control(['setup'], 'x'.repeat(17000))).stdout).toContain(
           'X11 hotkeys are registered'
         );
         await expect(
@@ -290,6 +294,7 @@ it.each(['setup', 'open-connection-id'])(
     const config = join(directory, 'config');
     const runtime = join(directory, 'runtime');
     const pidFile = join(directory, 'launcher.pid');
+    const inheritedToken = join(directory, 'launcher-token-present');
     const capture = join(directory, 'connection-opened');
     const child = join(directory, 'child');
     const id = '3225a971-2dc1-45fb-9887-d0e533eeb0ab';
@@ -314,7 +319,7 @@ it.each(['setup', 'open-connection-id'])(
       await copyFile(ctl, join(bin, 'etctl'));
       await writeFile(
         join(bin, 'elder-terms'),
-        `#!/bin/sh\nprintf '%s' "$$" > '${pidFile}'\nexec '${launcherBinary}' "$@"\n`
+        `#!/bin/sh\nprintf '%s' "$$" > '${pidFile}'\nprintf '%s' "\${XDG_ACTIVATION_TOKEN+present}" > '${inheritedToken}'\nexec '${launcherBinary}' "$@"\n`
       );
       await chmod(join(bin, 'elder-terms'), 0o700);
       const env = {
@@ -324,6 +329,7 @@ it.each(['setup', 'open-connection-id'])(
         XDG_RUNTIME_DIR: runtime,
         ELDER_TERMS_TERMINAL_PATH: child,
         DBUS_SESSION_BUS_ADDRESS: 'unix:path=/nonexistent/elder-terms-bus',
+        XDG_ACTIVATION_TOKEN: 'test-cold-start-token',
       };
       const result = await execute(
         join(bin, 'etctl'),
@@ -339,6 +345,7 @@ it.each(['setup', 'open-connection-id'])(
           );
         });
       launcherPid = Number(await readFile(pidFile, 'utf8'));
+      expect(await readFile(inheritedToken, 'utf8')).toBe('');
       expect(Number.isInteger(launcherPid)).toBe(true);
       await execute(join(bin, 'etctl'), ['open-application'], { env });
     } finally {

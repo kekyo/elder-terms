@@ -34,8 +34,6 @@ struct Fixture {
   TerminalPresentation *presentation;
   cardio::primitives::conditional changed;
   int attachments = 0;
-  cardio::primitives::conditional painted;
-  guint paint_source = 0;
 };
 
 static void expect(bool condition, const char *message) {
@@ -116,8 +114,17 @@ static cardio::promise<void> check_selection_pixels(Fixture *fixture) {
       terminal_runtime_refresh(runtime);
       while (!terminal_runtime_is_settled(runtime)) co_await fixture->changed.wait();
       // The prepared component image can precede GTK's actual window paint.
+      // Wait for this draw so an earlier frame cannot satisfy the capture.
+      auto *clock = gtk_widget_get_frame_clock(GTK_WIDGET(widget));
+      expect(clock != nullptr, "the mapped terminal has a frame clock");
+      cardio::primitives::conditional painted;
+      const auto handler = g_signal_connect_after(clock, "after-paint",
+          G_CALLBACK(+[](GdkFrameClock *, gpointer context) {
+            static_cast<cardio::primitives::conditional *>(context)->trigger();
+          }), &painted);
       gtk_widget_queue_draw(GTK_WIDGET(widget));
-      co_await fixture->painted.wait();
+      co_await painted.wait();
+      g_signal_handler_disconnect(clock, handler);
       gint x = 0, y = 0;
       expect(gtk_widget_translate_coordinates(GTK_WIDGET(widget), fixture->window->window, 0, 0, &x, &y),
           "locate native selection pixels");
@@ -231,23 +238,12 @@ extern "C" int __wrap_main(int argc, char **argv) {
   cardio::dispatcher_host_glib_auto dispatcher(group);
   auto window = load_main_window(TerminalAmbiguousWidth::narrow);
   if (!window) return 1;
-  Fixture fixture{&*window, create_terminal_presentation(&*window, {}, {}, {}), {}, 0, {}, 0};
+  Fixture fixture{&*window, create_terminal_presentation(&*window, {}, {}, {}), {}, 0};
   terminal_runtime_set_host_callbacks(window->runtime, {
       [&fixture](BoxrigGtk3TerminalWidget *) {
         ++fixture.attachments;
         attach_main_window_terminal(fixture.window);
         attach_terminal_presentation(fixture.presentation);
-        g_signal_connect_after(terminal_runtime_widget(fixture.window->runtime), "draw",
-            G_CALLBACK(+[](GtkWidget *, cairo_t *, gpointer context) -> gboolean {
-              auto *current = static_cast<Fixture *>(context);
-              if (!current->paint_source) current->paint_source = g_idle_add(+[](gpointer context) -> gboolean {
-                auto *current = static_cast<Fixture *>(context);
-                current->paint_source = 0;
-                current->painted.trigger();
-                return G_SOURCE_REMOVE;
-              }, current);
-              return FALSE;
-            }), &fixture);
       }, {}, {}});
   terminal_runtime_set_changed_callback(window->runtime, [](void *context) {
     static_cast<Fixture *>(context)->changed.trigger();
@@ -256,7 +252,6 @@ extern "C" int __wrap_main(int argc, char **argv) {
   std::exception_ptr failure;
   auto completion = run(&fixture, &failure);
   gtk_main();
-  if (fixture.paint_source) g_source_remove(fixture.paint_source);
   terminal_runtime_set_changed_callback(window->runtime, nullptr, nullptr);
   terminal_runtime_set_host_callbacks(window->runtime, {});
   destroy_terminal_presentation(fixture.presentation);

@@ -16,6 +16,54 @@ import {
 /** Authentication mechanisms supported by the independent HTTP fixture. */
 export type WebdavTestAuthentication = 'none' | 'basic' | 'digest';
 
+const digestParameters = (
+  value: string
+): Record<string, string> | undefined => {
+  const fields: Record<string, string> = Object.create(null);
+  const token = /[\w!#$%&'*+.^`|~-]+/y;
+  let cursor = 0;
+  const skipWhitespace = () => {
+    while (value[cursor] === ' ' || value[cursor] === '\t') cursor++;
+  };
+  const readToken = () => {
+    token.lastIndex = cursor;
+    const match = token.exec(value);
+    if (!match) return undefined;
+    cursor = token.lastIndex;
+    return match[0];
+  };
+  const readValue = () => {
+    if (value[cursor] !== '"') return readToken();
+    cursor++;
+    let quoted = '';
+    while (cursor < value.length) {
+      let character = value[cursor++];
+      if (character === '"') return quoted;
+      if (character === '\\') {
+        if (cursor === value.length) return undefined;
+        character = value[cursor++];
+      }
+      if (character === '\r' || character === '\n') return undefined;
+      quoted += character;
+    }
+    return undefined;
+  };
+  while (cursor < value.length) {
+    skipWhitespace();
+    const name = readToken()?.toLowerCase();
+    skipWhitespace();
+    if (!name || name in fields || value[cursor++] !== '=') return undefined;
+    skipWhitespace();
+    const parameter = readValue();
+    if (parameter === undefined) return undefined;
+    fields[name] = parameter;
+    skipWhitespace();
+    if (cursor === value.length) return fields;
+    if (value[cursor++] !== ',') return undefined;
+  }
+  return undefined;
+};
+
 /**
  * Starts a real DAV endpoint with namespace-qualified multistatus responses.
  * @param authentication Required mechanism; credentials are alice/secret.
@@ -92,13 +140,9 @@ export const createWebdavTestServer = async (
       authentication === 'digest' &&
       authorization.startsWith('Digest ')
     ) {
-      const fields = Object.fromEntries(
-        [
-          ...authorization.slice(7).matchAll(/(\w+)=(?:"([^"]*)"|([^,\s]+))/g),
-        ].map((match) => [match[1], match[2] ?? match[3]])
-      );
+      const fields = digestParameters(authorization.slice(7));
       const validCredentials =
-        fields.username === 'alice' &&
+        fields?.username === 'alice' &&
         fields.realm === realm &&
         typeof fields.nonce === 'string' &&
         fields.uri === url &&
@@ -132,6 +176,7 @@ export const createWebdavTestServer = async (
       receivedBytes: 0,
     };
     requests.push(observation);
+    response.setHeader('X-Content-Type-Options', 'nosniff');
     request.resume();
     if (!authenticated) {
       response.writeHead(401, {
@@ -430,6 +475,7 @@ export const createWebdavTestServer = async (
         return;
       }
       if (file !== undefined) {
+        response.setHeader('Content-Type', 'application/octet-stream');
         if (decodedPath === '/dav/unknown-held.bin') {
           response.writeHead(200);
           response.write(file.content.subarray(0, 1024));
@@ -476,7 +522,6 @@ export const createWebdavTestServer = async (
       }
       return;
     }
-    const collectionPath = url.replace(/\/+$/, '');
     if (
       method !== 'PROPFIND' ||
       (!directories.has(resourcePath) &&
@@ -494,11 +539,11 @@ export const createWebdavTestServer = async (
       return;
     }
     const entry = (
-      href: string,
+      path: string,
       collection: boolean,
       size: number | undefined
     ) =>
-      `<d:response><d:href>${href}</d:href><d:propstat><d:prop>` +
+      `<d:response><d:href>${encodeURIComponent(path).replace(/%2F/g, '/')}</d:href><d:propstat><d:prop>` +
       `<d:displayname>Not the resource identity</d:displayname>` +
       `<d:resourcetype>${collection ? '<d:collection/>' : ''}</d:resourcetype>` +
       (size === undefined
@@ -533,33 +578,28 @@ export const createWebdavTestServer = async (
       });
       response.end(
         '<?xml version="1.0"?><d:multistatus xmlns:d="DAV:">' +
-          entry(url, false, size) +
+          entry(decodedPath, false, size) +
           '</d:multistatus>'
       );
       return;
     }
     let children = '';
     if (request.headers.depth !== '0') {
-      const href = (path: string) =>
-        path
-          .split('/')
-          .map((part) => encodeURIComponent(part))
-          .join('/');
       for (const [path, value] of files)
         if (path.slice(0, path.lastIndexOf('/')) === resourcePath)
-          children += entry(href(path), false, value.reportedSize);
+          children += entry(path, false, value.reportedSize);
       for (const path of directories)
         if (
           path !== resourcePath &&
           path.slice(0, path.lastIndexOf('/')) === resourcePath
         )
-          children += entry(href(path) + '/', true, undefined);
+          children += entry(path + '/', true, undefined);
     }
     response.writeHead(207, {
       'Content-Type': 'application/xml; charset=utf-8',
     });
     response.end(
-      `<?xml version="1.0"?><d:multistatus xmlns:d="DAV:">${entry(`${collectionPath}/`, true, undefined)}${children}</d:multistatus>`
+      `<?xml version="1.0"?><d:multistatus xmlns:d="DAV:">${entry(`${resourcePath}/`, true, undefined)}${children}</d:multistatus>`
     );
   };
   const server =
