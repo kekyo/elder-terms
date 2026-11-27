@@ -441,7 +441,8 @@ static cardio::promise<void> scenarios(Test *test) {
         destination.changed.trigger();
       });
   expect(terminal_connection_resume_local(destination.connection, handoff->master_fd,
-      handoff->input_finished, handoff->child, handoff->encoding, handoff->queue_capacity, handoff->io_chunk_size),
+      handoff->input_finished, handoff->child, handoff->encoding, handoff->queue_capacity, handoff->io_chunk_size,
+      std::move(handoff->codecs.endpoints)),
       "resume direct PTY I/O");
   handoff->master_fd = -1;
   auto *reaper = terminal_connection_commit_local_handoff(test->connection);
@@ -470,7 +471,7 @@ static cardio::promise<void> scenarios(Test *test) {
       });
   expect(terminal_connection_resume_local(third.connection, second_handoff->master_fd,
       second_handoff->input_finished, second_handoff->child, second_handoff->encoding,
-      second_handoff->queue_capacity, second_handoff->io_chunk_size),
+      second_handoff->queue_capacity, second_handoff->io_chunk_size, std::move(second_handoff->codecs.endpoints)),
       "adopt second-generation PTY master");
   second_handoff->master_fd = -1;
   expect(terminal_connection_commit_local_handoff(destination.connection) == nullptr,
@@ -607,6 +608,7 @@ static cardio::promise<void> scenarios(Test *test) {
   std::size_t resized_rows = 0;
   std::size_t resized_columns = 0;
   TerminalTransportRequest remote;
+  remote.encoding = "ISO-2022-JP";
   remote.open = [&](std::size_t, std::size_t, cardio::cancellation) -> cardio::promise<TerminalTransport> {
     co_return TerminalTransport{
         [&](std::span<unsigned char> bytes, cardio::cancellation stop) -> cardio::promise<std::size_t> {
@@ -643,6 +645,9 @@ static cardio::promise<void> scenarios(Test *test) {
       "send after remote handoff rollback");
   wake(test);
   while (contents(test).find("REMOTE_ROLLBACK") == std::string::npos) co_await test->changed.wait();
+  expect(boxrig_terminal_send_text(test->core, "日", 3) == BOXRIG_STATUS_OK, "send in JIS mode before docking");
+  wake(test);
+  while (!peer_output.ends_with("\x1b$BF|")) co_await test->changed.wait();
   remote_handoff = co_await terminal_connection_prepare_transport_handoff(test->connection);
   expect(remote_handoff.has_value(), "prepare remote channel again after rollback");
   Test remote_destination;
@@ -656,7 +661,7 @@ static cardio::promise<void> scenarios(Test *test) {
       });
   expect(terminal_connection_resume_transport(remote_destination.connection,
       remote_handoff->data_fd, remote_handoff->control_fd, remote_handoff->input_finished,
-      remote_handoff->encoding, remote_handoff->queue_capacity, remote_handoff->io_chunk_size),
+      remote_handoff->encoding, remote_handoff->queue_capacity, remote_handoff->io_chunk_size, std::move(remote_handoff->codecs.endpoints)),
       "adopt remote proxy sockets");
   remote_handoff->data_fd = -1;
   remote_handoff->control_fd = -1;
@@ -664,13 +669,14 @@ static cardio::promise<void> scenarios(Test *test) {
   expect(remote_origin != nullptr &&
       terminal_connection_state(test->connection).phase == TerminalConnectionPhase::closed,
       "source terminal releases independent origin channel");
-  expect(boxrig_terminal_send_text(remote_destination.core, "REMOTE_ONE\n", 11) == BOXRIG_STATUS_OK,
+  constexpr std::string_view after_move = "本REMOTE_ONE\n";
+  expect(boxrig_terminal_send_text(remote_destination.core, after_move.data(), after_move.size()) == BOXRIG_STATUS_OK,
       "send through remote proxy");
   wake(&remote_destination);
   while (contents(&remote_destination).find("REMOTE_ONE") == std::string::npos)
     co_await remote_destination.changed.wait();
-  expect(peer_output.find("REMOTE_ONE") != std::string::npos,
-      "remote origin receives proxy output");
+  expect(peer_output.find("\x1b$BF|K\\\x1b(BREMOTE_ONE") != std::string::npos,
+      "keyboard input on both sides of the move continues the same ISO-2022-JP shift sequence");
   expect(co_await terminal_connection_resize(remote_destination.connection, 9, 90),
       "resize through control socket");
   expect(resized_rows == 9 && resized_columns == 90, "origin receives requested grid");
@@ -687,7 +693,7 @@ static cardio::promise<void> scenarios(Test *test) {
       });
   expect(terminal_connection_resume_transport(remote_third.connection,
       remote_second->data_fd, remote_second->control_fd, remote_second->input_finished,
-      remote_second->encoding, remote_second->queue_capacity, remote_second->io_chunk_size),
+      remote_second->encoding, remote_second->queue_capacity, remote_second->io_chunk_size, std::move(remote_second->codecs.endpoints)),
       "resume remote proxy on a third terminal");
   remote_second->data_fd = -1;
   remote_second->control_fd = -1;
@@ -764,7 +770,7 @@ static int handoff_receiver_main(int socket, bool abandon) {
   test.connection = create_terminal_connection(test.core, [&] { wake(&test); },
       [&test](std::span<const unsigned char>, std::span<const unsigned char>) { test.changed.trigger(); });
   expect(terminal_connection_resume_local(test.connection, master, wire.input_finished != 0,
-      wire.child, "UTF-8", wire.capacity, wire.chunk), "adopt master in receiving process");
+      wire.child, "UTF-8", wire.capacity, wire.chunk, {}), "adopt master in receiving process");
   char ready = 'R';
   socket_bytes(socket, &ready, 1, true);
   char commit = 0;

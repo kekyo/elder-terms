@@ -236,7 +236,7 @@ void destroy_terminal_local_child_reaper(TerminalLocalChildReaper *reaper);
  */
 bool terminal_connection_resume_local(TerminalConnection *connection, int master_fd,
     bool input_finished, pid_t child, std::string encoding, std::size_t queue_capacity, std::size_t io_chunk_size,
-    TerminalCodecEndpoints codecs = {});
+    TerminalCodecEndpoints codecs);
 
 /** Pauses a connected network or serial transport at a checkpoint boundary. */
 cardio::promise<std::optional<TerminalTransportHandoff>> terminal_connection_prepare_transport_handoff(
@@ -267,7 +267,7 @@ cardio::promise<TerminalTransportOrigin *> terminal_connection_commit_transport_
  */
 bool terminal_connection_resume_transport(TerminalConnection *connection, int data_fd,
     int control_fd, bool input_finished, std::string encoding,
-    std::size_t queue_capacity, std::size_t io_chunk_size, TerminalCodecEndpoints codecs = {});
+    std::size_t queue_capacity, std::size_t io_chunk_size, TerminalCodecEndpoints codecs);
 
 /**
  * Resumes an imported terminal on its original serial port.
