@@ -50,6 +50,8 @@ struct TerminalTransport {
    * link's per-write deadline.
    */
   bool buffer_ymodem_output = false;
+  /** Duplicates the open serial port for a handoff, or returns -1 on error. */
+  std::function<int()> duplicate_serial_port = {};
 };
 
 /** A reusable channel factory and bounded stream-conversion policy. */
@@ -75,6 +77,8 @@ struct TerminalTransportRequest {
    * Empty for non-serial transports. Device changes require a new factory.
    */
   std::function<void(const SerialConnectionSettings &)> configure_serial = {};
+  /** Adopts an already configured port on success and resumes its live controls. */
+  std::function<TerminalTransport(int)> adopt_serial_port = {};
 };
 
 }

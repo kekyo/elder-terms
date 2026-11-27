@@ -80,7 +80,7 @@ struct TerminalLocalChildExit {
 /** Independent child reaper retained after the source terminal is destroyed. */
 struct TerminalLocalChildReaper;
 
-/** Snapshot of a paused nonlocal channel for a remote transport proxy. */
+/** Snapshot of an open serial port or a paused network channel. */
 struct TerminalTransportHandoff {
   /** Versioned terminal image. */
   std::vector<std::uint8_t> checkpoint;
@@ -92,9 +92,9 @@ struct TerminalTransportHandoff {
   std::size_t queue_capacity = 0;
   /** Maximum source I/O chunk. */
   std::size_t io_chunk_size = 0;
-  /** Duplicate of the full-duplex proxy data socket, owned by the caller. */
+  /** Duplicate of the serial port or proxy data socket, owned by the caller. */
   int data_fd = -1;
-  /** Duplicate of the resize/BREAK control socket, owned by the caller. */
+  /** Duplicate of the proxy control socket, or -1 for a direct serial port. */
   int control_fd = -1;
 };
 
@@ -232,6 +232,17 @@ cardio::promise<TerminalTransportOrigin *> terminal_connection_commit_transport_
 bool terminal_connection_resume_transport(TerminalConnection *connection, int data_fd,
     int control_fd, bool input_finished, std::string encoding,
     std::size_t queue_capacity, std::size_t io_chunk_size);
+
+/**
+ * Resumes an imported terminal on its original serial port.
+ * @param connection Inactive owner with the imported terminal.
+ * @param fd Open, configured port. Ownership transfers on success.
+ * @param input_finished EOF state of the imported session.
+ * @param request Serial factory, encoding and bounded queues for this session.
+ * @return True if the port was adopted.
+ */
+bool terminal_connection_resume_serial(TerminalConnection *connection, int fd,
+    bool input_finished, const TerminalTransportRequest &request);
 
 /** Shares the SSH connection used by a still-live origin channel. */
 std::shared_ptr<AuthenticatedSshTransport> terminal_transport_origin_authenticated_ssh(

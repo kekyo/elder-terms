@@ -5,6 +5,7 @@ if [[ ${1:-} != --inside ]]; then
   exec xvfb-run -a -s '-screen 0 1800x1000x24' dbus-run-session -- bash "$0" --inside "$@"
 fi
 binary=$(realpath "$2")
+kind=$3
 scratch=$(mktemp -d)
 pids=()
 finish() {
@@ -60,19 +61,27 @@ xdotool windowmove --sync "$alpha" 60 100 windowmove --sync "$beta" 930 100
 dock "$beta" "$alpha"
 [[ $(window Beta) == "$alpha" ]]
 
-# One accept only: reconnecting cannot satisfy any assertion after the drop.
 mkfifo "$scratch/input"
 exec 3<>"$scratch/input"
-socat -d -d TCP4-LISTEN:0,bind=127.0.0.1 STDIO <"$scratch/input" >"$scratch/output" 2>"$scratch/peer.log" & pids+=($!)
-wait_for grep -q 'listening on' "$scratch/peer.log"
+if [[ $kind == telnet ]]; then
+  # One accept only: reconnecting cannot satisfy any assertion after the drop.
+  socat -d -d TCP4-LISTEN:0,bind=127.0.0.1 STDIO <"$scratch/input" >"$scratch/output" 2>"$scratch/peer.log" & pids+=($!)
+  wait_for grep -q 'listening on' "$scratch/peer.log"
+  peer="address=127.0.0.1
+port=$(sed -n '/listening on/s/.*://p' "$scratch/peer.log")"
+else
+  socat PTY,raw,echo=0,wait-slave,link="$scratch/port" STDIO <"$scratch/input" >"$scratch/output" 2>"$scratch/peer.log" & pids+=($!)
+  wait_for test -L "$scratch/port"
+  peer="device=$scratch/port
+baudrate=19200"
+fi
 cat > "$scratch/Remote.ini" <<INI
 [general]
 name=Remote
-type=telnet
+type=$kind
 auto_close=false
-[telnet]
-address=127.0.0.1
-port=$(sed -n '/listening on/s/.*://p' "$scratch/peer.log")
+[$kind]
+$peer
 [terminal]
 encoding=CP932
 width=60
@@ -83,13 +92,24 @@ wait_for window Remote >/dev/null
 remote=$(window Remote)
 xdotool windowmove --sync "$remote" 930 100
 # Leave a TTYPE SEND subnegotiation open across the handoff.
-printf '\377\375\030\033]2;Ready\007\377\372\030\001' >&3
+if [[ $kind == telnet ]]; then
+  printf '\377\375\030\033]2;Ready\007\377\372\030\001' >&3
+else
+  printf '\033]2;Ready\007' >&3
+fi
 titled() { [[ $(xdotool getwindowname "$1") == "$2 | Remote" ]]; }
 wait_for titled "$remote" Ready
+if [[ $kind == serial ]]; then
+  # The open device remains attached even if the configured path disappears.
+  mv "$scratch/port" "$scratch/original-port"
+fi
 dock "$remote" "$alpha"
 wait_for titled "$alpha" Ready
-printf '\377\360\033]2;\223\372\226\173\007' >&3
+if [[ $kind == telnet ]]; then
+  printf '\377\360' >&3
+  wait_for grep -aq 'xterm-256color' "$scratch/output"
+fi
+printf '\033]2;\223\372\226\173\007' >&3
 wait_for titled "$alpha" 日本
-wait_for grep -aq 'xterm-256color' "$scratch/output"
 xdotool windowactivate --sync "$alpha" type 'docked'
 wait_for grep -aq docked "$scratch/output"

@@ -176,9 +176,11 @@ if find_program('kwin_x11', required: false).found()
       args: [meson.current_source_dir() / 'tests/terminal-docking-group.sh', elder_terms_terminal],
       env: ['ELDER_TERMS_GROUP_COLOR_CLOSE=1'], timeout: 90, is_parallel: false)
     if find_program('socat', required: false).found()
-      test('terminal-tab-docking-telnet', find_program('bash'),
-        args: [meson.current_source_dir() / 'tests/terminal-docking-stream.sh', elder_terms_terminal],
-        timeout: 90, is_parallel: false)
+      foreach kind : ['telnet', 'serial']
+        test('terminal-tab-docking-' + kind, find_program('bash'),
+          args: [meson.current_source_dir() / 'tests/terminal-docking-stream.sh', elder_terms_terminal, kind],
+          timeout: 90, is_parallel: false)
+      endforeach
     endif
     if find_program('/usr/sbin/sshd', required: false).found() and find_program('socat', required: false).found() and find_program('/usr/lib/openssh/sftp-server', required: false).found()
       test('terminal-tab-docking-ssh', find_program('node'),
@@ -380,6 +382,7 @@ boxrig_serial_transport_test = executable('boxrig-serial-transport-test',
   link_args: ['-Wl,--wrap=ioctl', '-Wl,--wrap=tcsetattr'])
 test('boxrig-serial-settings-test', boxrig_serial_transport_test, timeout: 30)
 test('boxrig-serial-signals-test', boxrig_serial_transport_test, args: ['signals'], timeout: 30)
+test('boxrig-serial-handoff-settings-test', boxrig_serial_transport_test, args: ['handoff'], timeout: 30)
 
 boxrig_macros_test = executable('boxrig-macros-test',
   ['tests/cpp/boxrig-macros-test.cpp', 'src/terminal-received-macros.cpp'],

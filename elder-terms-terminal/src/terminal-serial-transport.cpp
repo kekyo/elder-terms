@@ -163,6 +163,21 @@ static void configure_serial(SerialFactory *factory, const SerialConnectionSetti
   factory->settings = std::move(next);
 }
 
+static TerminalTransport serial_transport(SerialFactory *factory, std::shared_ptr<SerialChannel> channel) {
+  channel->callbacks = factory->callbacks;
+  channel->carrier = factory->settings.carrier_detect;
+  factory->channel = channel;
+  return TerminalTransport{
+      [channel](std::span<unsigned char> bytes, cardio::cancellation stop) { return read_serial(channel.get(), bytes, stop); },
+      [channel](std::span<const unsigned char> bytes, cardio::cancellation stop) { return write_serial(channel.get(), bytes, stop); },
+      [](std::size_t, std::size_t, cardio::cancellation stop) -> cardio::promise<void> { stop.throw_if_cancellation_requested(); co_return; },
+      [channel] { return close_serial(channel.get()); }, {},
+      [channel](cardio::cancellation stop) { return break_serial(channel.get(), stop); }, {},
+      [channel](std::function<void(bool)> notify, cardio::cancellation stop) {
+        return watch_serial_carrier(channel.get(), std::move(notify), stop);
+      }, false, [channel] { return ::fcntl(channel->descriptor, F_DUPFD_CLOEXEC, 0); }};
+}
+
 static cardio::promise<TerminalTransport> open_serial(std::shared_ptr<SerialFactory> factory,
     cardio::cancellation cancellation) {
   auto resolving = cardio::promises::start_new([settings = factory->settings] {
@@ -174,22 +189,11 @@ static cardio::promise<TerminalTransport> open_serial(std::shared_ptr<SerialFact
     throw std::system_error(ENOENT, std::generic_category(), resolved.warnings.empty() ?
         "serial device is unavailable" : resolved.warnings.front());
   auto channel = std::make_shared<SerialChannel>();
-  channel->callbacks = factory->callbacks;
   channel->descriptor = co_await cardio::io_urings::open(channel->io, resolved.path.string(),
       O_RDWR | O_NOCTTY | O_NONBLOCK | O_CLOEXEC, 0, cancellation);
   cancellation.throw_if_cancellation_requested();
   configure_serial_port(channel->descriptor, factory->settings);
-  channel->carrier = factory->settings.carrier_detect;
-  factory->channel = channel;
-  co_return TerminalTransport{
-      [channel](std::span<unsigned char> bytes, cardio::cancellation stop) { return read_serial(channel.get(), bytes, stop); },
-      [channel](std::span<const unsigned char> bytes, cardio::cancellation stop) { return write_serial(channel.get(), bytes, stop); },
-      [](std::size_t, std::size_t, cardio::cancellation stop) -> cardio::promise<void> { stop.throw_if_cancellation_requested(); co_return; },
-      [channel] { return close_serial(channel.get()); }, {},
-      [channel](cardio::cancellation stop) { return break_serial(channel.get(), stop); }, {},
-      [channel](std::function<void(bool)> notify, cardio::cancellation stop) {
-        return watch_serial_carrier(channel.get(), std::move(notify), stop);
-      }};
+  co_return serial_transport(factory.get(), std::move(channel));
 }
 
 static cardio::promise<void> watch_serial_device(std::string device,
@@ -224,6 +228,12 @@ TerminalTransportRequest make_serial_transport_request(SerialConnectionSettings 
   auto factory = std::make_shared<SerialFactory>(SerialFactory{std::move(settings), std::move(callbacks), {}});
   request.open = [factory](std::size_t, std::size_t, cardio::cancellation cancellation) {
     return open_serial(factory, cancellation);
+  };
+  request.adopt_serial_port = [factory](int fd) {
+    auto channel = std::make_shared<SerialChannel>();
+    auto transport = serial_transport(factory.get(), channel);
+    channel->descriptor = fd;
+    return transport;
   };
   request.configure_serial = [factory](const SerialConnectionSettings &settings) {
     configure_serial(factory.get(), settings);

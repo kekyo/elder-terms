@@ -628,7 +628,7 @@ static cardio::promise<void> pump_proxy_controls(TerminalTransportOrigin *origin
   }
 }
 
-static void create_session(TerminalConnection *connection) {
+static void create_session(TerminalConnection *connection, std::optional<bool> resumed_eof = std::nullopt) {
   auto &operation = *connection->operation;
   // All grid changes await the transport explicitly. Registering a synchronous
   // resize callback here would send the same request twice on remote channels.
@@ -636,8 +636,10 @@ static void create_session(TerminalConnection *connection) {
   auto config = boxrig_session_config_default();
   config.input_capacity = operation.incoming.storage.size();
   config.maximum_read_bytes_per_dispatch = operation.incoming.storage.size();
-  if (boxrig_session_create(connection->terminal, &transport, &config, &operation.session) != BOXRIG_SESSION_OK)
-    throw std::bad_alloc();
+  const auto status = resumed_eof.has_value()
+      ? boxrig_session_create_resumed(connection->terminal, &transport, &config, *resumed_eof, &operation.session)
+      : boxrig_session_create(connection->terminal, &transport, &config, &operation.session);
+  if (status != BOXRIG_SESSION_OK) throw std::bad_alloc();
 }
 
 struct SpawnResult {
@@ -875,13 +877,7 @@ static cardio::promise<void> run_resumed_local(TerminalConnection *connection, i
         throw std::system_error(errno, std::generic_category(), "resize transferred PTY");
       co_return;
     };
-    const boxrig_session_transport transport{connection, receive_connection, send, nullptr, nullptr};
-    auto config = boxrig_session_config_default();
-    config.input_capacity = operation.incoming.storage.size();
-    config.maximum_read_bytes_per_dispatch = operation.incoming.storage.size();
-    if (boxrig_session_create_resumed(connection->terminal, &transport, &config,
-        input_finished, &operation.session) != BOXRIG_SESSION_OK)
-      throw std::bad_alloc();
+    create_session(connection, input_finished);
     connection->state.phase = TerminalConnectionPhase::connected;
     connection->wake();
     reader.emplace(read_stream(connection));
@@ -942,7 +938,8 @@ static cardio::promise<void> watch_carrier(TerminalConnection *connection) {
   }
 }
 
-static cardio::promise<void> run_transport(TerminalConnection *connection, TerminalTransportRequest request) {
+static cardio::promise<void> run_transport(TerminalConnection *connection, TerminalTransportRequest request,
+    std::optional<bool> resumed_eof) {
   auto &operation = *connection->operation;
   const auto cancellation = operation.stop.get_cancellation();
   std::optional<cardio::promise<void>> reader;
@@ -954,7 +951,7 @@ static cardio::promise<void> run_transport(TerminalConnection *connection, Termi
     connection->state.encoding = request.encoding;
     size_t rows = 0, columns = 0;
     boxrig_terminal_size(connection->terminal, &rows, &columns);
-    operation.transport = co_await request.open(rows, columns, cancellation);
+    if (!resumed_eof.has_value()) operation.transport = co_await request.open(rows, columns, cancellation);
     if (!operation.transport.read || !operation.transport.write || !operation.transport.resize || !operation.transport.close)
       throw std::system_error(EINVAL, std::generic_category(), "terminal transport operations");
     size_t current_rows = 0, current_columns = 0;
@@ -962,7 +959,7 @@ static cardio::promise<void> run_transport(TerminalConnection *connection, Termi
     if (current_rows != rows || current_columns != columns)
       co_await operation.transport.resize(current_rows, current_columns, cancellation);
     cancellation.throw_if_cancellation_requested();
-    create_session(connection);
+    create_session(connection, resumed_eof);
     connection->state.phase = TerminalConnectionPhase::connected;
     connection->wake();
     reader.emplace(read_stream(connection));
@@ -1001,49 +998,6 @@ static cardio::promise<void> run_transport(TerminalConnection *connection, Termi
     co_await finish_stream(connection);
     if (operation.transport.close) co_await operation.transport.close();
   }
-  operation.transport = {};
-  connection->state.phase = TerminalConnectionPhase::closed;
-  connection->wake();
-}
-
-static cardio::promise<void> run_resumed_transport(TerminalConnection *connection,
-    bool input_finished) {
-  auto &operation = *connection->operation;
-  const auto cancellation = operation.stop.get_cancellation();
-  std::optional<cardio::promise<void>> reader;
-  std::optional<cardio::promise<void>> writer;
-  try {
-    operation.decoder = create_terminal_text_decoder(connection->state.encoding);
-    operation.encoder = create_terminal_text_encoder(connection->state.encoding);
-    const boxrig_session_transport transport{connection, receive_connection, send, nullptr, nullptr};
-    auto config = boxrig_session_config_default();
-    config.input_capacity = operation.incoming.storage.size();
-    config.maximum_read_bytes_per_dispatch = operation.incoming.storage.size();
-    if (boxrig_session_create_resumed(connection->terminal, &transport, &config,
-        input_finished, &operation.session) != BOXRIG_SESSION_OK)
-      throw std::bad_alloc();
-    connection->state.phase = TerminalConnectionPhase::connected;
-    connection->wake();
-    reader.emplace(read_stream(connection));
-    writer.emplace(write_stream(connection));
-    co_await *reader;
-    while (!operation.peer_closed) co_await operation.drained.wait(cancellation);
-  } catch (const cardio::canceled_exception &) {
-  } catch (const std::system_error &error) {
-    connection->state.operation_error = error.code().value();
-    connection->state.operation_error_message = error.what();
-  } catch (...) {
-    connection->state.operation_error = EIO;
-  }
-  operation.io_stop.cancel();
-  if (reader) co_await *reader;
-  if (writer) co_await *writer;
-  while (operation.pending_operations != 0) co_await operation.drained.wait();
-  if (operation.handoff_committed) {
-    boxrig_session_destroy(operation.session);
-    operation.session = nullptr;
-  } else co_await finish_stream(connection);
-  if (operation.transport.close) co_await operation.transport.close();
   operation.transport = {};
   connection->state.phase = TerminalConnectionPhase::closed;
   connection->wake();
@@ -1110,15 +1064,26 @@ bool terminal_connection_resume_transport(TerminalConnection *connection, int da
   endpoint->control_fd = control_fd;
   connection->operation->proxy = endpoint;
   connection->operation->transport = proxy_transport(endpoint);
-  connection->state.encoding = std::move(encoding);
-  connection->completion.emplace(run_resumed_transport(connection, input_finished));
+  TerminalTransportRequest request;
+  request.encoding = std::move(encoding);
+  connection->completion.emplace(run_transport(connection, std::move(request), input_finished));
+  connection->wake();
+  return true;
+}
+
+bool terminal_connection_resume_serial(TerminalConnection *connection, int fd,
+    bool input_finished, const TerminalTransportRequest &request) {
+  if (fd < 0 || !request.adopt_serial_port || request.encoding.empty() ||
+      !prepare_connection(connection, request.queue_capacity, request.io_chunk_size)) return false;
+  connection->operation->transport = request.adopt_serial_port(fd);
+  connection->completion.emplace(run_transport(connection, request, input_finished));
   connection->wake();
   return true;
 }
 
 bool terminal_connection_start_transport(TerminalConnection *connection, TerminalTransportRequest request) {
   if (!request.open || !prepare_connection(connection, request.queue_capacity, request.io_chunk_size)) return false;
-  connection->completion.emplace(run_transport(connection, std::move(request)));
+  connection->completion.emplace(run_transport(connection, std::move(request), std::nullopt));
   connection->wake();
   return true;
 }
@@ -1281,7 +1246,9 @@ cardio::promise<std::optional<TerminalTransportHandoff>> terminal_connection_pre
     handoff.encoding = connection->state.encoding;
     handoff.queue_capacity = operation.incoming.storage.size();
     handoff.io_chunk_size = operation.chunk_size;
-    if (operation.proxy) {
+    if (operation.transport.duplicate_serial_port) {
+      handoff.data_fd = operation.transport.duplicate_serial_port();
+    } else if (operation.proxy) {
       handoff.data_fd = ::fcntl(operation.proxy->data_fd, F_DUPFD_CLOEXEC, 0);
       if (handoff.data_fd >= 0)
         handoff.control_fd = ::fcntl(operation.proxy->control_fd, F_DUPFD_CLOEXEC, 0);
@@ -1303,7 +1270,7 @@ cardio::promise<std::optional<TerminalTransportHandoff>> terminal_connection_pre
         if (control_pair[1] >= 0) ::close(control_pair[1]);
       }
     }
-    if (handoff.data_fd < 0 || handoff.control_fd < 0) {
+    if (handoff.data_fd < 0 || (!operation.transport.duplicate_serial_port && handoff.control_fd < 0)) {
       if (handoff.data_fd >= 0) ::close(handoff.data_fd);
       if (handoff.control_fd >= 0) ::close(handoff.control_fd);
       terminal_connection_rollback_transport_handoff(connection);

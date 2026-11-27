@@ -19,8 +19,8 @@ struct DockPageImage {
   std::string sftp_origin;         /**< SSH process hosting shared SFTP operations. */
   std::vector<std::uint8_t> checkpoint; /**< Serialized boxrig terminal and parser state. */
   bool eof;                        /**< Whether boxrig input was finalized. */
-  int descriptor;                  /**< FD list index of the PTY master or SSH data socket. */
-  int control_descriptor;          /**< SSH control socket index, or -1 for a local PTY. */
+  int descriptor;                  /**< FD list index of the PTY master, serial port or network proxy socket. */
+  int control_descriptor;          /**< Network proxy control socket index, or -1 for a direct device. */
   std::string encoding;            /**< Terminal text encoding. */
   unsigned child;                  /**< Original local shell PID. */
   unsigned capacity;               /**< Bounded communication queue size in bytes. */
