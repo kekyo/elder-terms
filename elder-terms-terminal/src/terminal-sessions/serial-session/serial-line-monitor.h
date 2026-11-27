@@ -48,6 +48,7 @@ class SerialCarrierTracker {
 private:
   SerialCarrierDetect carrier_detect = SerialCarrierDetect::cd;
   bool observed_high = false;
+  bool connected = true;
 
   bool selected_signal_is_high(SerialLineSignals signals) const;
 
@@ -56,8 +57,14 @@ public:
    * Creates a carrier tracker.
    *
    * @param carrier_detect Selected signal to track.
+   * @param previously_high Whether the selected line was ever high on this open port.
    */
-  explicit SerialCarrierTracker(SerialCarrierDetect carrier_detect);
+  explicit SerialCarrierTracker(SerialCarrierDetect carrier_detect, bool previously_high = false);
+
+  /** Returns whether this selector has seen carrier since opening or changing the selector. */
+  bool has_observed_carrier() const { return observed_high; }
+  /** Returns whether sending is allowed after the most recent sample. */
+  bool is_connected() const { return connected; }
 
   /**
    * Updates the tracker with the next line-state snapshot.

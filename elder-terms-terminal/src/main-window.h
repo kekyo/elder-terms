@@ -71,6 +71,8 @@ struct MainWindow {
   bool selected = true;
   /** Header bar widget. */
   GtkWidget *header_bar = nullptr;
+  /** Docked row using this session's title, palette and icon while attached. */
+  GtkWidget *tab_row = nullptr;
   /** Connection icon at the start of the header bar. */
   GtkWidget *header_connection_icon = nullptr;
   /** Symbolic image inside the transfer button. */
@@ -169,6 +171,8 @@ struct MainWindow {
   GtkWidget *settings_widget_root = nullptr;
   /** Effective connection colors, also applied when opening settings. */
   GeneralColorSettings colors;
+  /** CSS scope for this session's header and status bar controls. */
+  std::string exterior_component_class;
   /** Provider applying the configured header-bar and status-bar background. */
   GtkCssProvider *exterior_background_provider = nullptr;
   /** Screen provider applying exterior-derived colors below exterior

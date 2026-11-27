@@ -18,6 +18,12 @@ namespace elder_terms {
 class AuthenticatedSshTransport;
 struct SerialConnectionSettings;
 
+/** A duplicate of an open port and the history needed to resume carrier detection. */
+struct TerminalSerialPort {
+  int fd = -1; /**< Owned descriptor, or -1 if duplication failed. */
+  bool carrier_observed = false; /**< The selected modem line has been high on this port. */
+};
+
 /**
  * Owned communication operations, independent of terminal parsing and widgets.
  * @remarks Callbacks retain their channel state. All operations run on one
@@ -50,6 +56,8 @@ struct TerminalTransport {
    * link's per-write deadline.
    */
   bool buffer_ymodem_output = false;
+  /** Duplicates the open serial port and snapshots its carrier history. */
+  std::function<TerminalSerialPort()> duplicate_serial_port = {};
 };
 
 /** A reusable channel factory and bounded stream-conversion policy. */
@@ -75,6 +83,8 @@ struct TerminalTransportRequest {
    * Empty for non-serial transports. Device changes require a new factory.
    */
   std::function<void(const SerialConnectionSettings &)> configure_serial = {};
+  /** Adopts an already configured port on success and resumes its live controls. */
+  std::function<TerminalTransport(TerminalSerialPort)> adopt_serial_port = {};
 };
 
 }

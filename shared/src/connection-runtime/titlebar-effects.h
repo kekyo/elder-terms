@@ -5,9 +5,16 @@
 
 #pragma once
 #include "titlebar-effect-state.h"
+#include <elder-terms/settings/general-settings.h>
 #include <gtk/gtk.h>
 
 namespace elder_terms {
+
+/** Samples the center of the GTK background, including theme gradients.
+ * @param widget Surface providing the theme style and allocation.
+ * @returns The displayed background color, or no color if rendering failed.
+ */
+std::optional<RgbColor> sample_titlebar_background(GtkWidget *widget);
 
 /**
  * Installs background effects on an existing header without changing its layout.
@@ -15,6 +22,12 @@ namespace elder_terms {
  * @remarks Calling twice is harmless. GTK animation preferences are respected.
  */
 void install_titlebar_effects(GtkWidget *header);
+
+/** Adds the session's docked row as a second view of the same animation.
+ * @param header Installed session header that outlives the row.
+ * @param row The session's list row, detached automatically on destruction.
+ */
+void share_titlebar_effects_with_tab(GtkWidget *header, GtkWidget *row);
 
 /**
  * Applies effective preferences, immediately cancelling disabled effects.
@@ -37,7 +50,7 @@ void notify_titlebar_receive(GtkWidget *header);
 void notify_titlebar_bell(GtkWidget *header);
 
 /**
- * Reports whether the header owns a frame update callback.
+ * Reports whether this session has a frame update callback on a visible surface.
  * @param header Installed header.
  * @returns False when idle, disabled, hidden, minimized or destroyed.
  */

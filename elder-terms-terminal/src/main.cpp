@@ -76,7 +76,7 @@ struct ApplicationState {
   bool owns_desktop_entry = false;
   std::string session_id, launcher, sftp_origin;
   elder_terms::SftpOriginService *sftp_service = nullptr;
-  elder_terms::TerminalTransportOrigin *ssh_origin = nullptr;
+  elder_terms::TerminalTransportOrigin *transport_origin = nullptr;
   bool cleanup_queued = false;
   gulong sensitivity_handler = 0;
   elder_terms::MainWindow *main_window = nullptr;
@@ -684,12 +684,7 @@ static gboolean on_main_window_delete(GtkWidget *, GdkEvent *, gpointer data) {
   return TRUE;
 }
 
-static bool connect_application_terminal(ApplicationState *state) {
-  if (state->closing) return false;
-  const auto profile = elder_terms::terminal_connection_profile(state->settings_store);
-  if (!profile) return false;
-  state->active_profile = *profile;
-  state->transport.reset();
+static elder_terms::TerminalSessionCallbacks session_callbacks(ApplicationState *state) {
   elder_terms::TerminalSessionCallbacks callbacks;
   callbacks.activity = [state](elder_terms::ActivityIndicatorId id) { if (state->window && !state->closing) elder_terms::note_main_window_activity(state->main_window, id); };
   callbacks.indicator_state = [state](elder_terms::ActivityIndicatorId id, bool active) {
@@ -701,6 +696,16 @@ static bool connect_application_terminal(ApplicationState *state) {
   callbacks.ssh_prompt = [state](const elder_terms::SshUserPrompt &prompt, cardio::cancellation cancellation) {
     return elder_terms::prompt_main_window_ssh_async(state->main_window, prompt, cancellation);
   };
+  return callbacks;
+}
+
+static bool connect_application_terminal(ApplicationState *state) {
+  if (state->closing) return false;
+  const auto profile = elder_terms::terminal_connection_profile(state->settings_store);
+  if (!profile) return false;
+  state->active_profile = *profile;
+  state->transport.reset();
+  const auto callbacks = session_callbacks(state);
   const elder_terms::AuthenticatedSshTransportOptions options{
       state->test_options.ssh_known_hosts_file, {}, profile->ssh_proxy};
   elder_terms::terminal_runtime_request_input_settings(state->runtime, profile->text_settings);
@@ -1800,14 +1805,14 @@ static void on_sftp_menu_item_activate(GtkMenuItem *,
     elder_terms::present_file_transfer_window(state->sftp_window);
     return;
   }
-  if (state->sftp_opening || (!state->ssh_origin && !state->connection_active)) {
+  if (state->sftp_opening || (!state->transport_origin && !state->connection_active)) {
     return;
   }
 
   std::shared_ptr<elder_terms::AuthenticatedSshTransport> transport;
   if (!state->test_options.fixture) {
     transport =
-        state->ssh_origin ? elder_terms::terminal_transport_origin_authenticated_ssh(state->ssh_origin) :
+        state->transport_origin ? elder_terms::terminal_transport_origin_authenticated_ssh(state->transport_origin) :
         state->runtime ? elder_terms::terminal_runtime_authenticated_ssh(state->runtime) : nullptr;
     if (transport == nullptr) {
       elder_terms::set_main_window_status_text(
@@ -2188,7 +2193,7 @@ static ApplicationState *create_session(const elder_terms::LaunchOptions &launch
         elder_terms::TerminalSessionConnectionPhase::disconnected);
   }
 
-  app_state.tab = elder_terms::create_terminal_tab(&*main_window, connection_profile->name,
+  app_state.tab = elder_terms::create_terminal_tab(&*main_window,
       elder_terms::terminal_docking_enabled(app_state.settings_store), {
       .host = [&app_state](GtkWidget *window, GtkWidget *content, bool selected) {
         auto *page = app_state.main_window;
@@ -2312,10 +2317,9 @@ static ApplicationState *find_page(const std::string &id) {
 
 static bool can_transfer_terminal(const ApplicationState *s) {
   return s && elder_terms::terminal_tab_allows_docking(s->tab) && !s->closing && !s->transferring &&
-      s->runtime && s->connection_active && !s->transfer_active && !s->settings_dialog && !s->transfer_file_dialog &&
+      s->runtime && !s->transfer_active && !s->settings_dialog && !s->transfer_file_dialog &&
       !elder_terms::has_modal_dialog(s->window) &&
-      (s->active_profile.kind == elder_terms::TerminalConnectionKind::local_shell ||
-       s->active_profile.kind == elder_terms::TerminalConnectionKind::ssh);
+      elder_terms::terminal_runtime_connection_state(s->runtime).phase == elder_terms::TerminalConnectionPhase::connected;
 }
 
 static cardio::promise<void> wait_for_shell(elder_terms::TerminalLocalChildReaper *reaper) {
@@ -2326,16 +2330,23 @@ static cardio::promise<void> wait_for_shell(elder_terms::TerminalLocalChildReape
   stop_if_finished();
 }
 
-static cardio::promise<void> commit_ssh_page(ApplicationState *s) {
+static cardio::promise<void> retain_dock_converter(std::shared_ptr<cardio::promise<void>> job) {
+  ++background_operations;
+  co_await *job;
+  --background_operations;
+  stop_if_finished();
+}
+
+static cardio::promise<void> commit_transport_page(ApplicationState *s) {
   s->origin_active = true;
   auto *origin = co_await elder_terms::terminal_connection_commit_transport_handoff(
       elder_terms::terminal_runtime_connection(s->runtime));
-  s->ssh_origin = origin;
+  s->transport_origin = origin;
   s->transferring = false;
   on_main_window_delete(nullptr, nullptr, s);
   if (origin) {
     co_await elder_terms::terminal_transport_origin_wait(origin);
-    s->ssh_origin = nullptr;
+    s->transport_origin = nullptr;
     elder_terms::destroy_terminal_transport_origin(origin);
   }
   s->origin_active = false;
@@ -2363,9 +2374,9 @@ static cardio::promise<elder_terms::DockPrepared> prepare_pages(std::vector<std:
   auto finish = [pages](bool commit) {
     for (auto *s : pages) {
       auto *connection = elder_terms::terminal_runtime_connection(s->runtime);
-      const bool ssh = s->active_profile.kind == elder_terms::TerminalConnectionKind::ssh;
-      if (commit && ssh) {
-        docking_jobs.emplace_back(commit_ssh_page(s));
+      const bool local = s->active_profile.kind == elder_terms::TerminalConnectionKind::local_shell;
+      if (commit && !local) {
+        docking_jobs.emplace_back(commit_transport_page(s));
         continue;
       }
       s->transferring = false;
@@ -2374,8 +2385,8 @@ static cardio::promise<elder_terms::DockPrepared> prepare_pages(std::vector<std:
         if (reaper) docking_jobs.emplace_back(wait_for_shell(reaper));
         on_main_window_delete(nullptr, nullptr, s);
       } else {
-        if (ssh) elder_terms::terminal_connection_rollback_transport_handoff(connection);
-        else elder_terms::terminal_connection_rollback_local_handoff(connection);
+        if (local) elder_terms::terminal_connection_rollback_local_handoff(connection);
+        else elder_terms::terminal_connection_rollback_transport_handoff(connection);
         apply_terminal_hyperlink_settings(s);
         update_application_terminal_presentation(s);
       }
@@ -2385,35 +2396,53 @@ static cardio::promise<elder_terms::DockPrepared> prepare_pages(std::vector<std:
     for (auto *s : pages) {
       auto *connection = elder_terms::terminal_runtime_connection(s->runtime);
       elder_terms::DockPageImage page{s->session_id, s->config_path.value_or(""), s->startup_path.value_or(""),
-          s->terminal_title, s->launcher, elder_terms::snapshot_connection_settings(s->settings_store), {}, s->sftp_origin, {}, false, -1, -1, "UTF-8", 0, 0, 0, {}};
+          s->terminal_title, s->launcher, elder_terms::snapshot_connection_settings(s->settings_store), {}, s->sftp_origin, {}, false, -1, -1, {}, 0, 0, 0, {}};
       if (!elder_terms::terminal_runtime_pause_input_for_handoff(s->runtime)) { finish(false); co_return result; }
       auto keep_fd = [&](int fd) {
         const int index = g_unix_fd_list_append(result.batch.descriptors.get(), fd, nullptr);
         close(fd);
         return index;
       };
-      if (s->active_profile.kind == elder_terms::TerminalConnectionKind::ssh) {
+      elder_terms::TerminalCodecHandoff codecs;
+      if (s->active_profile.kind != elder_terms::TerminalConnectionKind::local_shell) {
         auto image = co_await elder_terms::terminal_connection_prepare_transport_handoff(connection);
         if (!image) { finish(false); co_return result; }
         page.descriptor = keep_fd(image->data_fd);
-        page.control_descriptor = keep_fd(image->control_fd);
+        if (image->control_fd >= 0) {
+          page.control_descriptor = keep_fd(image->control_fd);
+          if (page.control_descriptor < 0) { finish(false); co_return result; }
+        } else {
+          const auto &serial = std::get<elder_terms::SerialConnectionSettings>(s->active_profile.settings);
+          page.serial = {serial.device, elder_terms::serial_device_match_mode_to_string(serial.device_match_mode),
+              serial.device_usb_serial.value_or(""), image->serial_carrier_observed};
+        }
         page.encoding = std::move(image->encoding);
+        codecs = std::move(image->codecs);
         page.checkpoint = std::move(image->checkpoint);
         page.eof = image->input_finished;
         page.capacity = image->queue_capacity;
         page.chunk = image->io_chunk_size;
-        if (page.control_descriptor < 0) { finish(false); co_return result; }
       } else {
         auto image = co_await elder_terms::terminal_connection_prepare_local_handoff(connection);
         if (!image) { finish(false); co_return result; }
         page.descriptor = keep_fd(image->master_fd);
+        page.encoding = std::move(image->encoding);
+        codecs = std::move(image->codecs);
         page.checkpoint = std::move(image->checkpoint);
         page.eof = image->input_finished;
         page.capacity = image->queue_capacity;
         page.chunk = image->io_chunk_size;
         page.child = image->child;
       }
-      if (page.descriptor < 0) { finish(false); co_return result; }
+      for (auto &job : codecs.origins) docking_jobs.emplace_back(retain_dock_converter(std::move(job)));
+      const auto keep_codec = [&](const auto &endpoint) {
+        return endpoint ? g_unix_fd_list_append(result.batch.descriptors.get(),
+            elder_terms::terminal_codec_descriptor(endpoint), nullptr) : -1;
+      };
+      page.decoder_descriptor = keep_codec(codecs.endpoints.decoder);
+      page.encoder_descriptor = keep_codec(codecs.endpoints.encoder);
+      if (page.descriptor < 0 || (codecs.endpoints.decoder && page.decoder_descriptor < 0) ||
+          (codecs.endpoints.encoder && page.encoder_descriptor < 0)) { finish(false); co_return result; }
       page.host_state = elder_terms::terminal_runtime_save_host_state(s->runtime);
       if (!page.host_state) { finish(false); co_return result; }
       page.log = co_await elder_terms::terminal_log_handoff_path(s->log_state);
@@ -2446,6 +2475,8 @@ struct StagedPage {
   bool eof;
   unsigned child, capacity, chunk;
   std::shared_ptr<GVariant> host_state;
+  elder_terms::TerminalCodecEndpoints codecs;
+  bool serial_carrier_observed;
 };
 
 static elder_terms::DockDecision stage_pages(ApplicationState *destination, const elder_terms::DockBatch &batch) {
@@ -2455,7 +2486,7 @@ static elder_terms::DockDecision stage_pages(ApplicationState *destination, cons
   for (const auto &page : batch.pages) {
     if (find_page(page.id)) { g_debug("Terminal already present"); break; }
     if (page.capacity == 0 || page.capacity > 1024 * 1024 || page.chunk == 0 ||
-        (page.control_descriptor < 0 ? page.child == 0 : page.encoding.empty())) {
+        page.encoding.empty()) {
       g_debug("Invalid terminal resume parameters");
       break;
     }
@@ -2466,8 +2497,21 @@ static elder_terms::DockDecision stage_pages(ApplicationState *destination, cons
         elder_terms::default_global_config_path()}, page.settings, 12.0);
     if (!settings.loaded || !elder_terms::settings_theme_is_resolved(settings.store)) { for (auto &warning : settings.warnings) g_debug("%s", warning.c_str()); break; }
     if (!elder_terms::terminal_docking_enabled(settings.store)) break;
+    std::optional<elder_terms::SerialConnectionSettings> active_serial;
+    if (page.control_descriptor < 0 && page.child == 0) {
+      const auto profile = elder_terms::terminal_connection_profile(settings.store);
+      const auto mode = elder_terms::parse_serial_device_match_mode(page.serial.match_mode);
+      if (!profile || profile->kind != elder_terms::TerminalConnectionKind::serial || !mode) break;
+      // Profile edits can select a different device for the next connection.
+      // Keep this open port and its recovery target associated with the original device.
+      active_serial = std::get<elder_terms::SerialConnectionSettings>(profile->settings);
+      active_serial->device = page.serial.device;
+      active_serial->device_match_mode = *mode;
+      active_serial->device_usb_serial = page.serial.usb_serial.empty() ? std::nullopt : std::optional(page.serial.usb_serial);
+    }
     auto *s = create_session(options, std::move(settings), true, page.checkpoint);
     if (!s) { g_debug("Cannot create checkpoint page"); break; }
+    if (active_serial) s->active_profile.settings = std::move(*active_serial);
     s->session_id = page.id;
     s->launcher = page.launcher;
     s->sftp_origin = page.sftp_origin;
@@ -2477,10 +2521,18 @@ static elder_terms::DockDecision stage_pages(ApplicationState *destination, cons
     const int fd = g_unix_fd_list_get(batch.descriptors.get(), page.descriptor, nullptr);
     const auto control_fd = page.control_descriptor < 0 ? -1 :
         g_unix_fd_list_get(batch.descriptors.get(), page.control_descriptor, nullptr);
-    staged.push_back({s, fd, control_fd, page.encoding, page.eof, page.child, page.capacity, page.chunk, page.host_state});
+    const auto receive_codec = [&](int index) {
+      return elder_terms::adopt_terminal_codec_descriptor(index < 0 ? -1 :
+          g_unix_fd_list_get(batch.descriptors.get(), index, nullptr));
+    };
+    staged.push_back({s, fd, control_fd, page.encoding, page.eof, page.child, page.capacity, page.chunk,
+        page.host_state, {receive_codec(page.decoder_descriptor), receive_codec(page.encoder_descriptor)},
+        page.serial.carrier_observed});
     const auto phase = elder_terms::terminal_connection_state(
         elder_terms::terminal_runtime_connection(s->runtime)).phase;
     ready = fd >= 0 && (page.control_descriptor < 0 || control_fd >= 0) &&
+        (page.decoder_descriptor < 0 || staged.back().codecs.decoder) &&
+        (page.encoder_descriptor < 0 || staged.back().codecs.encoder) &&
         (phase == elder_terms::TerminalConnectionPhase::idle ||
          phase == elder_terms::TerminalConnectionPhase::closed) &&
         track_session(s);
@@ -2503,12 +2555,25 @@ static elder_terms::DockDecision stage_pages(ApplicationState *destination, cons
           const auto &page = staged[index];
           auto *s = page.state;
           auto *connection = elder_terms::terminal_runtime_connection(s->runtime);
-          const bool resumed = page.control_fd >= 0 ? elder_terms::terminal_connection_resume_transport(connection, page.fd,
-              page.control_fd, page.eof, page.encoding, page.capacity, page.chunk) :
-              elder_terms::terminal_connection_resume_local(connection, page.fd, page.eof, page.child, page.capacity, page.chunk);
+          bool resumed;
+          if (page.control_fd >= 0) {
+            resumed = elder_terms::terminal_connection_resume_transport(connection, page.fd, page.control_fd,
+                page.eof, page.encoding, page.capacity, page.chunk, page.codecs);
+          } else if (page.child) {
+            resumed = elder_terms::terminal_connection_resume_local(connection, page.fd, page.eof, page.child,
+                page.encoding, page.capacity, page.chunk, page.codecs);
+          } else {
+            auto &request = s->transport.emplace(elder_terms::make_serial_transport_request(
+                std::get<elder_terms::SerialConnectionSettings>(s->active_profile.settings), page.encoding, session_callbacks(s)));
+            request.queue_capacity = page.capacity;
+            request.io_chunk_size = page.chunk;
+            resumed = elder_terms::terminal_runtime_resume_serial(s->runtime, {page.fd, page.serial_carrier_observed},
+                page.eof, request, page.codecs);
+          }
           if (resumed) {
             elder_terms::terminal_runtime_restore_host_state(s->runtime, s->terminal_title, page.host_state.get());
-            set_application_connection_phase(s, elder_terms::TerminalSessionConnectionPhase::connected);
+            set_application_connection_phase(s, elder_terms::terminal_connection_state(connection).carrier_connected ?
+                elder_terms::TerminalSessionConnectionPhase::connected : elder_terms::TerminalSessionConnectionPhase::disconnected);
           }
           return resumed;
         }, close_page,

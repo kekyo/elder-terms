@@ -717,6 +717,13 @@ static cardio::promise<void> watch_availability(TerminalRuntime *runtime,
   request_frame(runtime);
 }
 
+static void monitor_transport_availability(TerminalRuntime *runtime, const TerminalTransportRequest &request) {
+  if (!request.watch_availability) return;
+  runtime->recovery_request = request;
+  runtime->recovery_stop = {};
+  runtime->recovery_completion.emplace(watch_availability(runtime, request, runtime->recovery_stop.get_cancellation()));
+}
+
 static bool process_input_policy(TerminalRuntime *runtime) {
   if (runtime->pending_input) {
     const auto &settings = *runtime->pending_input;
@@ -773,14 +780,8 @@ static bool process_input_policy(TerminalRuntime *runtime) {
       (runtime->pending_recovery || !runtime->recovery_completion || runtime->recovery_completion->is_ready())) {
     auto command = std::move(*runtime->pending_connection);
     runtime->pending_connection.reset();
-    if (!runtime->pending_recovery && std::holds_alternative<TerminalTransportRequest>(command)) {
-      const auto &request = std::get<TerminalTransportRequest>(command);
-      if (request.watch_availability) {
-        runtime->recovery_request = request;
-        runtime->recovery_stop = {};
-        runtime->recovery_completion.emplace(watch_availability(runtime, request, runtime->recovery_stop.get_cancellation()));
-      }
-    }
+    if (!runtime->pending_recovery && std::holds_alternative<TerminalTransportRequest>(command))
+      monitor_transport_availability(runtime, std::get<TerminalTransportRequest>(command));
     runtime->pending_recovery = false;
     runtime->attempted_recovery_epoch = runtime->recovery_epoch;
     if (!std::visit([runtime](auto request) {
@@ -1504,6 +1505,14 @@ bool terminal_runtime_connect_transport(TerminalRuntime *runtime, TerminalTransp
   runtime->pending_connection = std::move(request);
   runtime->input_allowed = true;
   request_frame(runtime);
+  return true;
+}
+
+bool terminal_runtime_resume_serial(TerminalRuntime *runtime, TerminalSerialPort port, bool input_finished,
+    const TerminalTransportRequest &request, TerminalCodecEndpoints codecs) {
+  if (!terminal_connection_resume_serial(runtime->connection, port, input_finished, request, std::move(codecs))) return false;
+  monitor_transport_availability(runtime, request);
+  runtime->attempted_recovery_epoch = runtime->recovery_epoch;
   return true;
 }
 

@@ -19,13 +19,21 @@ struct DockPageImage {
   std::string sftp_origin;         /**< SSH process hosting shared SFTP operations. */
   std::vector<std::uint8_t> checkpoint; /**< Serialized boxrig terminal and parser state. */
   bool eof;                        /**< Whether boxrig input was finalized. */
-  int descriptor;                  /**< FD list index of the PTY master or SSH data socket. */
-  int control_descriptor;          /**< SSH control socket index, or -1 for a local PTY. */
+  int descriptor;                  /**< FD list index of the PTY master, serial port or network proxy socket. */
+  int control_descriptor;          /**< Network proxy control socket index, or -1 for a direct device. */
   std::string encoding;            /**< Terminal text encoding. */
   unsigned child;                  /**< Original local shell PID. */
   unsigned capacity;               /**< Bounded communication queue size in bytes. */
   unsigned chunk;                  /**< Preferred maximum I/O chunk size in bytes. */
   std::shared_ptr<GVariant> host_state; /**< Frozen title history and macro line context. */
+  int decoder_descriptor = -1; /**< Optional converter FD for incoming text. */
+  int encoder_descriptor = -1; /**< Optional converter FD for outgoing text. */
+  struct SerialState {
+    std::string device; /**< Original device identity used to recover this open port. */
+    std::string match_mode; /**< How to match the device on reattachment. */
+    std::string usb_serial; /**< Optional USB serial number of the original device. */
+    bool carrier_observed = false; /**< Whether the selected modem line has been high. */
+  } serial = {}; /**< State of a directly transferred serial port. */
 };
 /** Prepared group in tab order. A staged receiver may start reading only after commit. */
 struct DockBatch {

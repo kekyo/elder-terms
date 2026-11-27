@@ -80,6 +80,8 @@ elder_terms_sources = [
   'src/gtk-initialization.cpp',
   'src/main.cpp',
   'src/terminal-tabs.cpp',
+  'src/terminal-tab-row.cpp',
+  'src/terminal-tab-caption.cpp',
   'src/titlebar-dock.cpp',
   'src/dock-feedback.c',
   'src/terminal-dock-bus.cpp',
@@ -128,6 +130,8 @@ elder_terms_terminal = executable(
 )
 
 if get_option('build_tests')
+clipboard_write_helper = executable('clipboard-write-helper', 'tests/cpp/clipboard-write-helper.cpp',
+  dependencies: [gtk_dep])
 tab_tearoff_cursor_test = executable('tab-tearoff-cursor-test',
   ['tests/cpp/tab-tearoff-cursor-test.c', 'src/tab-tearoff.c', 'src/dock-feedback.c'],
   dependencies: [gtk_dep, dependency('x11'), dependency('xfixes')])
@@ -173,6 +177,20 @@ if find_program('kwin_x11', required: false).found()
     test('terminal-tab-docking-colored-close', find_program('bash'),
       args: [meson.current_source_dir() / 'tests/terminal-docking-group.sh', elder_terms_terminal],
       env: ['ELDER_TERMS_GROUP_COLOR_CLOSE=1'], timeout: 90, is_parallel: false)
+    stream_docking_test = meson.current_source_dir() / 'tests/terminal-docking-stream.sh'
+    test('terminal-tab-docking-local', find_program('bash'),
+      args: [stream_docking_test, elder_terms_terminal, 'local'],
+      depends: clipboard_write_helper, timeout: 90, is_parallel: false)
+    test('terminal-tab-docking-stateful-encoding', find_program('bash'),
+      args: [stream_docking_test, elder_terms_terminal, 'local', 'ISO-2022-JP'],
+      depends: clipboard_write_helper, timeout: 90, is_parallel: false)
+    if find_program('socat', required: false).found()
+      foreach kind : ['telnet', 'serial']
+        test('terminal-tab-docking-' + kind, find_program('bash'),
+          args: [stream_docking_test, elder_terms_terminal, kind],
+          depends: clipboard_write_helper, timeout: 90, is_parallel: false)
+      endforeach
+    endif
     if find_program('/usr/sbin/sshd', required: false).found() and find_program('socat', required: false).found() and find_program('/usr/lib/openssh/sftp-server', required: false).found()
       test('terminal-tab-docking-ssh', find_program('node'),
         args: [meson.current_source_dir() / 'tests/terminal-docking-ssh.mts', elder_terms_terminal],
@@ -306,6 +324,17 @@ terminal_titlebar_test = executable('terminal-titlebar-test',
   link_args: ['-Wl,--wrap=main'])
 test('terminal-titlebar-test', find_program('xvfb-run'), args: ['-a', terminal_titlebar_test],
   timeout: 30, env: ['G_DEBUG=fatal-criticals', 'GDK_GL=disable', 'NO_AT_BRIDGE=1'])
+tab_titlebars_test = executable('terminal-tab-titlebars-test',
+  'tests/cpp/terminal-tab-titlebars-test.cpp',
+  objects: elder_terms_terminal.extract_all_objects(recursive: false),
+  dependencies: [file_transfer_dep, elder_terms_dep, canberra_dep, boxrig_runtime_dep, boxrig_background_dep, dependency('x11')],
+  link_with: libxyzm_async_static_library, link_args: ['-Wl,--wrap=main'])
+tab_titlebars_args = ['-a', tab_titlebars_test]
+if find_program('ffmpeg', required: false).found()
+  tab_titlebars_args += [meson.current_build_dir() / 'terminal-tab-titlebars.mkv']
+endif
+test('terminal-tab-titlebars-test', find_program('xvfb-run'), args: tab_titlebars_args,
+  timeout: 45, env: ['G_DEBUG=fatal-criticals', 'GDK_GL=disable', 'NO_AT_BRIDGE=1', 'GTK_THEME=Adwaita'])
 cell_width_test = executable('terminal-cell-width-test',
   'tests/cpp/terminal-cell-width-test.cpp',
   objects: elder_terms_terminal.extract_all_objects(recursive: false),
@@ -362,6 +391,7 @@ boxrig_serial_transport_test = executable('boxrig-serial-transport-test',
   link_args: ['-Wl,--wrap=ioctl', '-Wl,--wrap=tcsetattr'])
 test('boxrig-serial-settings-test', boxrig_serial_transport_test, timeout: 30)
 test('boxrig-serial-signals-test', boxrig_serial_transport_test, args: ['signals'], timeout: 30)
+test('boxrig-serial-handoff-settings-test', boxrig_serial_transport_test, args: ['handoff'], timeout: 30)
 
 boxrig_macros_test = executable('boxrig-macros-test',
   ['tests/cpp/boxrig-macros-test.cpp', 'src/terminal-received-macros.cpp'],
@@ -477,12 +507,6 @@ test('boxrig-png-isolation-test', boxrig_png_isolation_test)
 executable(
   'clipboard-read-helper',
   'tests/cpp/clipboard-read-helper.cpp',
-  dependencies: [gtk_dep],
-)
-
-executable(
-  'clipboard-write-helper',
-  'tests/cpp/clipboard-write-helper.cpp',
   dependencies: [gtk_dep],
 )
 

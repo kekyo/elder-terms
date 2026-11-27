@@ -25,8 +25,8 @@ bool SerialCarrierTracker::selected_signal_is_high(
 }
 
 SerialCarrierTracker::SerialCarrierTracker(
-    SerialCarrierDetect carrier_detect)
-    : carrier_detect(carrier_detect) {
+    SerialCarrierDetect carrier_detect, bool previously_high)
+    : carrier_detect(carrier_detect), observed_high(previously_high) {
 }
 
 SerialCarrierEvent SerialCarrierTracker::update(SerialLineSignals signals) {
@@ -35,16 +35,10 @@ SerialCarrierEvent SerialCarrierTracker::update(SerialLineSignals signals) {
   }
 
   const bool high = selected_signal_is_high(signals);
-  if (high) {
-    observed_high = true;
-    return SerialCarrierEvent::none;
-  }
-
-  if (observed_high) {
-    observed_high = false;
-    return SerialCarrierEvent::disconnected;
-  }
-  return SerialCarrierEvent::none;
+  const bool was_connected = connected;
+  observed_high = observed_high || high;
+  connected = high || !observed_high;
+  return was_connected && !connected ? SerialCarrierEvent::disconnected : SerialCarrierEvent::none;
 }
 
 SerialLineSignals serial_line_signals_from_modem_status(int status) {

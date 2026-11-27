@@ -3,6 +3,7 @@
 // Under MIT.
 
 #include "terminal-tabs.h"
+#include "terminal-tab-row.h"
 #include "terminal-dock-bus.h"
 #include "titlebar-dock.h"
 #include "tab-tearoff.h"
@@ -167,7 +168,10 @@ static void refresh(TerminalTray *tray) {
   gtk_widget_set_visible(tray->sidebar, tray->tabs.size() > 1);
   if (tray->tabs.size() > 1) frame_page(tray, active);
   else restore_frame(tray);
-  for (auto *tab : tray->tabs) tab->actions.host(tray->window, tray->body, tab == active);
+  for (auto *tab : tray->tabs) {
+    gtk_widget_set_margin_top(tab->row, tab == tray->tabs.front() ? 0 : 2);
+    tab->actions.host(tray->window, tray->body, tab == active);
+  }
   gtk_stack_set_visible_child(GTK_STACK(tray->headers), active->page->header_bar);
   gtk_stack_set_visible_child(GTK_STACK(tray->pages), active->page->root_box);
   install_window_resize_borders(GTK_WINDOW(tray->window), active->page->frame_start_border,
@@ -307,7 +311,9 @@ static TerminalTray *make_tray(GtkWidget *window) {
   gtk_widget_set_size_request(tray->sidebar, 180, -1);
   gtk_widget_set_no_show_all(tray->sidebar, TRUE);
   tray->list = gtk_list_box_new();
-  gtk_style_context_add_class(gtk_widget_get_style_context(tray->list), "sidebar");
+  auto *list_style = gtk_widget_get_style_context(tray->list);
+  gtk_style_context_add_class(list_style, GTK_STYLE_CLASS_SIDEBAR);
+  gtk_style_context_add_class(list_style, "terminal-tab-list");
   gtk_container_add(GTK_CONTAINER(tray->sidebar), tray->list);
   tray->headers = gtk_stack_new();
   gtk_style_context_add_class(gtk_widget_get_style_context(tray->headers), "terminal-tray-headers");
@@ -491,7 +497,7 @@ static GtkWidget *dock_handle(GtkWidget *child, TerminalTab *tab) {
   return button;
 }
 
-TerminalTab *create_terminal_tab(MainWindow *page, std::string label, bool docking_enabled, TerminalTabActions actions) {
+TerminalTab *create_terminal_tab(MainWindow *page, bool docking_enabled, TerminalTabActions actions) {
   auto *tab = new TerminalTab{page, std::move(actions), docking_enabled};
   auto *window = page->window;
   // Keep the complete per-session chrome and page alive across container changes.
@@ -505,32 +511,13 @@ TerminalTab *create_terminal_tab(MainWindow *page, std::string label, bool docki
     tab->handle = dock_handle(page->header_connection_icon, tab);
     gtk_header_bar_pack_start(GTK_HEADER_BAR(page->header_bar), tab->handle);
   }
-  tab->row = gtk_list_box_row_new();
-  g_object_ref_sink(tab->row);
-  auto *line = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 0);
-  tab->pick = gtk_button_new();
-  auto *caption = gtk_label_new(label.c_str());
-  gtk_label_set_xalign(GTK_LABEL(caption), 0);
-  gtk_label_set_ellipsize(GTK_LABEL(caption), PANGO_ELLIPSIZE_END);
-  gtk_label_set_max_width_chars(GTK_LABEL(caption), 12);
-  auto *contents = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
-  auto *icon = gtk_image_new();
-  g_object_bind_property(page->header_connection_icon, "surface", icon, "surface", G_BINDING_SYNC_CREATE);
-  gtk_box_pack_start(GTK_BOX(contents), icon, FALSE, FALSE, 0);
-  gtk_box_pack_start(GTK_BOX(contents), caption, TRUE, TRUE, 0);
-  gtk_container_add(GTK_CONTAINER(tab->pick), contents);
-  auto *close = gtk_button_new_from_icon_name("window-close-symbolic", GTK_ICON_SIZE_MENU);
-  gtk_widget_set_tooltip_text(close, _("Close"));
-  gtk_button_set_relief(GTK_BUTTON(close), GTK_RELIEF_NONE);
-  gtk_button_set_relief(GTK_BUTTON(tab->pick), GTK_RELIEF_NONE);
-  gtk_style_context_add_class(gtk_widget_get_style_context(close), "close-tab");
-  gtk_box_pack_start(GTK_BOX(line), tab->pick, TRUE, TRUE, 0);
-  gtk_box_pack_end(GTK_BOX(line), close, FALSE, FALSE, 0);
-  gtk_container_add(GTK_CONTAINER(tab->row), line);
+  const auto row = create_terminal_tab_row(*page);
+  tab->row = GTK_WIDGET(g_object_ref_sink(row.row));
+  tab->pick = row.pick;
   tab->gesture = tearoff_gesture_bind(tab->pick, deferred_undock, tab->pick);
   bind_source(tab->pick, tab, true);
   g_signal_connect_swapped(tab->pick, "clicked", G_CALLBACK(select_terminal_tab), tab);
-  g_signal_connect(close, "clicked", G_CALLBACK(+[](GtkButton *, gpointer data) {
+  g_signal_connect(row.close, "clicked", G_CALLBACK(+[](GtkButton *, gpointer data) {
     static_cast<TerminalTab *>(data)->actions.close();
   }), tab);
   static GtkCssProvider *style = nullptr;
@@ -539,7 +526,13 @@ TerminalTab *create_terminal_tab(MainWindow *page, std::string label, bool docki
     gtk_css_provider_load_from_data(style,
       ".terminal-tray-headers.titlebar {padding:0; margin:0; border:0; min-width:0; min-height:0; background:none;}"
       ".terminal-dock-handle {padding:0; border:0; min-width:0; min-height:0; background:none; box-shadow:none;}"
-      "row .close-tab {opacity:0; padding:2px;} row:hover .close-tab, row .close-tab:focus {opacity:1;}", -1, nullptr);
+      "list.terminal-tab-list {padding:2px;}"
+      "row.terminal-tab {padding:0; min-height:36px; background-image:none; box-shadow:none; border:0;"
+      " border-left:2px solid transparent; transition:none;}"
+      "row.terminal-tab:selected {border-left-color:currentColor;}"
+      "row.terminal-tab button {background:none; color:inherit; border:0; box-shadow:none; text-shadow:none;"
+      " padding:0 4px; min-width:0; min-height:0;}"
+      "row.terminal-tab button * {background:none; color:inherit; text-shadow:none;}", -1, nullptr);
     gtk_style_context_add_provider_for_screen(gtk_widget_get_screen(window),
         GTK_STYLE_PROVIDER(style), GTK_STYLE_PROVIDER_PRIORITY_APPLICATION);
   }
@@ -557,6 +550,7 @@ void destroy_terminal_tab(TerminalTab *tab) {
   auto *tray = tab->tray;
   remove_page(tab);
   g_object_set_data(G_OBJECT(tab->pick), "terminal-drag-tab", nullptr);
+  tab->page->tab_row = nullptr;
   g_object_unref(tab->row);
   refresh(tray);
   update_drags();

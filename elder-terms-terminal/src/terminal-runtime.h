@@ -238,6 +238,18 @@ bool terminal_runtime_connect_local(TerminalRuntime *runtime, TerminalLocalComma
 bool terminal_runtime_connect_transport(TerminalRuntime *runtime, TerminalTransportRequest request);
 
 /**
+ * Attaches an open serial port and watches the same device for later recovery.
+ * @param runtime Runtime of the imported terminal.
+ * @param port Open port and its carrier history, adopted on success.
+ * @param input_finished EOF state from the handoff.
+ * @param request Factory with the device settings, live callbacks and encoding.
+ * @param codecs Character converters from the original terminal.
+ * @return True if the port was adopted.
+ */
+bool terminal_runtime_resume_serial(TerminalRuntime *runtime, TerminalSerialPort port, bool input_finished,
+    const TerminalTransportRequest &request, TerminalCodecEndpoints codecs);
+
+/**
  * Requests a normal-state grid and schedules its layout work.
  * @param runtime Live runtime with an active widget.
  * @param rows Preferred nonzero rows.

@@ -29,12 +29,11 @@ struct TerminalTabActions {
 /**
  * Installs a single page before the builder window is first shown.
  * @param window Terminal page and its initial host window.
- * @param label Title shown in the tab list.
  * @param docking_enabled Whether this page permits docking in either direction.
  * @param actions Operations on the page's live session.
  * @returns The new tab, owned by the session.
  */
-TerminalTab *create_terminal_tab(MainWindow *window, std::string label, bool docking_enabled, TerminalTabActions actions);
+TerminalTab *create_terminal_tab(MainWindow *window, bool docking_enabled, TerminalTabActions actions);
 /** @param tab Page to update. @param enabled Whether it permits incoming and outgoing dock operations. */
 void set_terminal_tab_docking_enabled(TerminalTab *tab, bool enabled);
 /** @param tab Page in the addressed window. @returns Whether every page in the window permits docking. */
