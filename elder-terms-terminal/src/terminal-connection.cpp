@@ -57,7 +57,6 @@ struct TerminalTransportOrigin {
   TerminalTransport transport;
   int data_fd = -1;
   int control_fd = -1;
-  std::vector<unsigned char> retained_input;
   cardio::cancellation_source stop;
   std::optional<cardio::promise<void>> inbound;
   std::optional<cardio::promise<void>> outbound;
@@ -574,9 +573,6 @@ static TerminalTransport proxy_transport(std::shared_ptr<ProxyEndpoint> endpoint
 static cardio::promise<void> pump_proxy_output(TerminalTransportOrigin *origin) {
   const auto stop = origin->stop.get_cancellation();
   try {
-    if (!origin->retained_input.empty())
-      co_await write_socket_fd(origin->data_fd, origin->retained_input, stop);
-    origin->retained_input.clear();
     std::array<unsigned char, 4096> bytes{};
     for (;;) {
       const auto count = co_await origin->transport.read(bytes, stop);
@@ -993,8 +989,7 @@ static cardio::promise<void> run_transport(TerminalConnection *connection, Termi
     boxrig_session_destroy(operation.session);
     operation.session = nullptr;
     if (operation.pending_origin) {
-      if (operation.transport.finish_read)
-        operation.pending_origin->retained_input = operation.transport.finish_read();
+      // The channel stays live. Its next read continues any partial protocol frame.
       operation.pending_origin->transport = std::move(operation.transport);
       auto *origin = operation.pending_origin.get();
       origin->outbound.emplace(pump_proxy_output(origin));

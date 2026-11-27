@@ -175,6 +175,11 @@ if find_program('kwin_x11', required: false).found()
     test('terminal-tab-docking-colored-close', find_program('bash'),
       args: [meson.current_source_dir() / 'tests/terminal-docking-group.sh', elder_terms_terminal],
       env: ['ELDER_TERMS_GROUP_COLOR_CLOSE=1'], timeout: 90, is_parallel: false)
+    if find_program('socat', required: false).found()
+      test('terminal-tab-docking-telnet', find_program('bash'),
+        args: [meson.current_source_dir() / 'tests/terminal-docking-stream.sh', elder_terms_terminal],
+        timeout: 90, is_parallel: false)
+    endif
     if find_program('/usr/sbin/sshd', required: false).found() and find_program('socat', required: false).found() and find_program('/usr/lib/openssh/sftp-server', required: false).found()
       test('terminal-tab-docking-ssh', find_program('node'),
         args: [meson.current_source_dir() / 'tests/terminal-docking-ssh.mts', elder_terms_terminal],

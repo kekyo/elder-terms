@@ -76,7 +76,7 @@ struct ApplicationState {
   bool owns_desktop_entry = false;
   std::string session_id, launcher, sftp_origin;
   elder_terms::SftpOriginService *sftp_service = nullptr;
-  elder_terms::TerminalTransportOrigin *ssh_origin = nullptr;
+  elder_terms::TerminalTransportOrigin *transport_origin = nullptr;
   bool cleanup_queued = false;
   gulong sensitivity_handler = 0;
   elder_terms::MainWindow *main_window = nullptr;
@@ -1800,14 +1800,14 @@ static void on_sftp_menu_item_activate(GtkMenuItem *,
     elder_terms::present_file_transfer_window(state->sftp_window);
     return;
   }
-  if (state->sftp_opening || (!state->ssh_origin && !state->connection_active)) {
+  if (state->sftp_opening || (!state->transport_origin && !state->connection_active)) {
     return;
   }
 
   std::shared_ptr<elder_terms::AuthenticatedSshTransport> transport;
   if (!state->test_options.fixture) {
     transport =
-        state->ssh_origin ? elder_terms::terminal_transport_origin_authenticated_ssh(state->ssh_origin) :
+        state->transport_origin ? elder_terms::terminal_transport_origin_authenticated_ssh(state->transport_origin) :
         state->runtime ? elder_terms::terminal_runtime_authenticated_ssh(state->runtime) : nullptr;
     if (transport == nullptr) {
       elder_terms::set_main_window_status_text(
@@ -2314,8 +2314,7 @@ static bool can_transfer_terminal(const ApplicationState *s) {
   return s && elder_terms::terminal_tab_allows_docking(s->tab) && !s->closing && !s->transferring &&
       s->runtime && s->connection_active && !s->transfer_active && !s->settings_dialog && !s->transfer_file_dialog &&
       !elder_terms::has_modal_dialog(s->window) &&
-      (s->active_profile.kind == elder_terms::TerminalConnectionKind::local_shell ||
-       s->active_profile.kind == elder_terms::TerminalConnectionKind::ssh);
+      s->active_profile.kind != elder_terms::TerminalConnectionKind::serial;
 }
 
 static cardio::promise<void> wait_for_shell(elder_terms::TerminalLocalChildReaper *reaper) {
@@ -2326,16 +2325,16 @@ static cardio::promise<void> wait_for_shell(elder_terms::TerminalLocalChildReape
   stop_if_finished();
 }
 
-static cardio::promise<void> commit_ssh_page(ApplicationState *s) {
+static cardio::promise<void> commit_transport_page(ApplicationState *s) {
   s->origin_active = true;
   auto *origin = co_await elder_terms::terminal_connection_commit_transport_handoff(
       elder_terms::terminal_runtime_connection(s->runtime));
-  s->ssh_origin = origin;
+  s->transport_origin = origin;
   s->transferring = false;
   on_main_window_delete(nullptr, nullptr, s);
   if (origin) {
     co_await elder_terms::terminal_transport_origin_wait(origin);
-    s->ssh_origin = nullptr;
+    s->transport_origin = nullptr;
     elder_terms::destroy_terminal_transport_origin(origin);
   }
   s->origin_active = false;
@@ -2363,9 +2362,9 @@ static cardio::promise<elder_terms::DockPrepared> prepare_pages(std::vector<std:
   auto finish = [pages](bool commit) {
     for (auto *s : pages) {
       auto *connection = elder_terms::terminal_runtime_connection(s->runtime);
-      const bool ssh = s->active_profile.kind == elder_terms::TerminalConnectionKind::ssh;
-      if (commit && ssh) {
-        docking_jobs.emplace_back(commit_ssh_page(s));
+      const bool local = s->active_profile.kind == elder_terms::TerminalConnectionKind::local_shell;
+      if (commit && !local) {
+        docking_jobs.emplace_back(commit_transport_page(s));
         continue;
       }
       s->transferring = false;
@@ -2374,8 +2373,8 @@ static cardio::promise<elder_terms::DockPrepared> prepare_pages(std::vector<std:
         if (reaper) docking_jobs.emplace_back(wait_for_shell(reaper));
         on_main_window_delete(nullptr, nullptr, s);
       } else {
-        if (ssh) elder_terms::terminal_connection_rollback_transport_handoff(connection);
-        else elder_terms::terminal_connection_rollback_local_handoff(connection);
+        if (local) elder_terms::terminal_connection_rollback_local_handoff(connection);
+        else elder_terms::terminal_connection_rollback_transport_handoff(connection);
         apply_terminal_hyperlink_settings(s);
         update_application_terminal_presentation(s);
       }
@@ -2392,7 +2391,7 @@ static cardio::promise<elder_terms::DockPrepared> prepare_pages(std::vector<std:
         close(fd);
         return index;
       };
-      if (s->active_profile.kind == elder_terms::TerminalConnectionKind::ssh) {
+      if (s->active_profile.kind != elder_terms::TerminalConnectionKind::local_shell) {
         auto image = co_await elder_terms::terminal_connection_prepare_transport_handoff(connection);
         if (!image) { finish(false); co_return result; }
         page.descriptor = keep_fd(image->data_fd);
