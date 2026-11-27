@@ -81,6 +81,7 @@ elder_terms_sources = [
   'src/main.cpp',
   'src/terminal-tabs.cpp',
   'src/terminal-tab-row.cpp',
+  'src/terminal-tab-caption.cpp',
   'src/titlebar-dock.cpp',
   'src/dock-feedback.c',
   'src/terminal-dock-bus.cpp',

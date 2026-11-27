@@ -104,6 +104,126 @@ static GdkPoint band_point(GtkWidget *surface, int percent) {
   return window_point(surface, gtk_widget_get_allocated_width(surface) * percent / 100, 5);
 }
 
+// Compare glyph shapes in the recording against short labels rendered by GTK
+// with the same font. This also distinguishes the last word from an ellipsis.
+static std::string glyphs(const TabVideo &video, GtkWidget *caption, int x, int width) {
+  const auto point = window_point(caption, x, 0);
+  std::string mask;
+  for (int y = 0; y < gtk_widget_get_allocated_height(caption); ++y)
+    for (int dx = 0; dx < width; ++dx)
+      mask.push_back(video.red({point.x + dx, point.y + y}) > 190);
+  return mask;
+}
+
+static bool same_glyphs(const std::string &sample, const std::string &reference) {
+  if (sample.size() != reference.size()) return false;
+  // The hover background can put an antialiased edge across the ink threshold.
+  int differences = 0;
+  for (size_t i = 0; i < sample.size(); ++i)
+    if (sample[i] != reference[i] && ++differences > 3) return false;
+  return true;
+}
+
+static void check_title_scroll(MainWindow &page, TerminalTab *tab, TabVideo &video, GtkWidget *caption) {
+  constexpr int sample_width = 32;
+  auto *settings = gtk_widget_get_settings(caption);
+  auto *paned = GTK_PANED(gtk_widget_get_ancestor(caption, GTK_TYPE_PANED));
+  const int sidebar = gtk_paned_get_position(paned);
+  auto width = [caption] { return gtk_widget_get_allocated_width(caption); };
+  const std::string first = "Compile application sources and libraries / BUILD-READY";
+  const std::string skipped = "Review intermediate changes and artifacts / UNUSED";
+  const std::string latest = "Deploy current application to staging / DEPLOY-DONE";
+  set_titlebar_effect_strengths(page.header_bar, TitlebarEffectStrength::disabled, TitlebarEffectStrength::disabled);
+  g_object_set(settings, "gtk-enable-animations", FALSE, nullptr);
+  set_main_window_title(&page, latest);
+  video.next();
+  const auto idle = glyphs(video, caption, 0, width());
+  auto reference = [&](const char *text, bool at_end) {
+    set_main_window_title(&page, text);
+    video.next();
+    int span;
+    pango_layout_get_pixel_size(gtk_label_get_layout(GTK_LABEL(caption)), &span, nullptr);
+    assert(span >= sample_width);
+    return glyphs(video, caption, at_end ? span - sample_width : 0, sample_width);
+  };
+  const auto first_head = reference("Compile", false);
+  const auto first_tail = reference("BUILD-READY", true);
+  const auto next_head = reference("Deploy", false);
+  const auto next_tail = reference("DEPLOY-DONE", true);
+  const auto skipped_head = reference("Review", false);
+  g_object_set(settings, "gtk-enable-animations", TRUE, nullptr);
+  set_main_window_title(&page, first);
+  video.next();
+  assert(glyphs(video, caption, 0, sample_width) == first_head);
+  bool changed = false, finished_first = false, started_latest = false, finished_latest = false;
+  const auto deadline = g_get_monotonic_time() + 12 * G_TIME_SPAN_SECOND;
+  do {
+    video.next();
+    const auto head = glyphs(video, caption, 0, sample_width);
+    const auto tail = glyphs(video, caption, width() - sample_width, sample_width);
+    assert(!same_glyphs(head, skipped_head));
+    if (!changed && !same_glyphs(head, first_head)) {
+      changed = true;
+      set_main_window_title(&page, skipped);
+      set_main_window_title(&page, latest);
+      auto *pick = gtk_widget_get_ancestor(caption, GTK_TYPE_BUTTON);
+      auto *tooltip = gtk_widget_get_tooltip_text(pick);
+      assert(tooltip && latest == tooltip);
+      g_free(tooltip);
+      assert(latest == gtk_label_get_text(GTK_LABEL(page.header_title_label)));
+      select_terminal_tab(tab);
+      // Change both allocations in mid-flight. The current pass must finish.
+      point_at(page.tab_row, 60, 15);
+      gtk_paned_set_position(paned, sidebar - 16);
+    } else if (changed && !finished_first && same_glyphs(tail, first_tail)) {
+      finished_first = true;
+      point_at(page.root_box, 250, 150);
+      gtk_paned_set_position(paned, sidebar);
+    } else if (changed && same_glyphs(head, next_head)) {
+      assert(finished_first);
+      started_latest = true;
+    }
+    if (started_latest && same_glyphs(tail, next_tail)) finished_latest = true;
+    if (finished_latest && glyphs(video, caption, 0, width()) == idle) break;
+  } while (g_get_monotonic_time() < deadline);
+  assert(changed && finished_first && started_latest && finished_latest);
+  assert(glyphs(video, caption, 0, width()) == idle);
+
+  // Repeated notifications and allocation changes leave an idle label still.
+  g_object_notify(G_OBJECT(page.header_title_label), "label");
+  point_at(page.tab_row, 60, 15);
+  gtk_paned_set_position(paned, sidebar - 20);
+  video.next();
+  const auto narrow = glyphs(video, caption, 0, width());
+  const auto until = g_get_monotonic_time() + G_TIME_SPAN_SECOND;
+  while (g_get_monotonic_time() < until) {
+    video.next();
+    assert(glyphs(video, caption, 0, width()) == narrow);
+  }
+  point_at(page.root_box, 250, 150);
+  gtk_paned_set_position(paned, sidebar);
+  set_main_window_title(&page, first);
+  set_main_window_title(&page, latest);
+  g_object_set(settings, "gtk-enable-animations", FALSE, nullptr);
+  video.next();
+  assert(glyphs(video, caption, 0, width()) == idle);
+  g_object_set(settings, "gtk-enable-animations", TRUE, nullptr);
+  set_main_window_title(&page, "Ready");
+  video.next();
+  const auto ready = glyphs(video, caption, 0, width());
+  set_main_window_title(&page, first);
+  video.next();
+  set_main_window_title(&page, "Ready");
+  bool saw_tail = false;
+  const auto short_deadline = g_get_monotonic_time() + 8 * G_TIME_SPAN_SECOND;
+  do {
+    video.next();
+    if (same_glyphs(glyphs(video, caption, width() - sample_width, sample_width), first_tail)) saw_tail = true;
+    if (glyphs(video, caption, 0, width()) == ready) break;
+  } while (g_get_monotonic_time() < short_deadline);
+  assert(saw_tail && glyphs(video, caption, 0, width()) == ready);
+}
+
 static TerminalTab *tab_for(MainWindow &page, const char *name) {
   set_connection_window_icon(GTK_WINDOW(page.window), GTK_IMAGE(page.header_connection_icon), "default", 20);
   set_main_window_connection_phase(&page, TerminalSessionConnectionPhase::connected);
@@ -230,6 +350,7 @@ extern "C" int __wrap_main(int argc, char **argv) {
     assert(video.red(b_center) == b_base && video.red(b_header) == header_base);
   } while (titlebar_effects_running(first->header_bar));
   assert(saw_flash && video.red(a_center) == 0x6c);
+  check_title_scroll(*first, a, video, GTK_WIDGET(caption));
   destroy_terminal_runtime(second->runtime);
   second->runtime = nullptr;
   destroy_terminal_tab(b);
@@ -238,6 +359,6 @@ extern "C" int __wrap_main(int argc, char **argv) {
   destroy_terminal_tab(a);
   release_main_window(&*second);
   release_main_window(&*first);
-  std::puts("PASS docked tab title, color and full-width hover layout");
+  std::puts("PASS docked tab titles, hover layout, shared effects and scrolling");
   return 0;
 }

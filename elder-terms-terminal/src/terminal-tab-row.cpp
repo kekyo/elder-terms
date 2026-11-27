@@ -3,6 +3,7 @@
 // Under MIT.
 
 #include "terminal-tab-row.h"
+#include "terminal-tab-caption.h"
 #include "../../shared/src/connection-runtime/titlebar-effects.h"
 #include "../../shared/src/connection-runtime/widget-background.h"
 #include <elder-terms/terminal-color-filter.h>
@@ -49,12 +50,7 @@ TerminalTabRow create_terminal_tab_row(MainWindow &page) {
   auto *row = gtk_list_box_row_new();
   auto *line = gtk_overlay_new();
   auto *pick = gtk_button_new();
-  auto *caption = gtk_label_new(nullptr);
-  gtk_label_set_xalign(GTK_LABEL(caption), 0);
-  gtk_label_set_single_line_mode(GTK_LABEL(caption), TRUE);
-  gtk_label_set_ellipsize(GTK_LABEL(caption), PANGO_ELLIPSIZE_END);
-  gtk_label_set_max_width_chars(GTK_LABEL(caption), 1);
-  g_object_bind_property(page.header_title_label, "label", caption, "label", G_BINDING_SYNC_CREATE);
+  auto *caption = create_terminal_tab_caption(page.header_title_label);
   g_object_bind_property(page.header_title_label, "label", pick, "tooltip-text", G_BINDING_SYNC_CREATE);
   auto *contents = gtk_box_new(GTK_ORIENTATION_HORIZONTAL, 5);
   auto *icon = gtk_image_new();
