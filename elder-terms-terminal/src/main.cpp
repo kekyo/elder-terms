@@ -2188,7 +2188,7 @@ static ApplicationState *create_session(const elder_terms::LaunchOptions &launch
         elder_terms::TerminalSessionConnectionPhase::disconnected);
   }
 
-  app_state.tab = elder_terms::create_terminal_tab(&*main_window, connection_profile->name,
+  app_state.tab = elder_terms::create_terminal_tab(&*main_window,
       elder_terms::terminal_docking_enabled(app_state.settings_store), {
       .host = [&app_state](GtkWidget *window, GtkWidget *content, bool selected) {
         auto *page = app_state.main_window;

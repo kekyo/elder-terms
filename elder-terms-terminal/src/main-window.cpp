@@ -24,6 +24,7 @@
 #include <glib/gi18n-lib.h>
 
 #include "main-window.h"
+#include "terminal-tab-row.h"
 #include "../../shared/src/connection-runtime/titlebar-effects.h"
 #include "../../shared/src/connection-runtime/window-resize-border.h"
 #include "../../shared/src/connection-runtime/compact-header.h"
@@ -1257,6 +1258,7 @@ void set_main_window_colors(MainWindow *main_window,
                                       settings.exterior_background);
   set_main_window_terminal_background(main_window,
                                       settings.background);
+  update_terminal_tab_colors(*main_window);
 }
 
 void set_main_window_settings_dialog(

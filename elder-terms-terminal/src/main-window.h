@@ -71,6 +71,8 @@ struct MainWindow {
   bool selected = true;
   /** Header bar widget. */
   GtkWidget *header_bar = nullptr;
+  /** Docked row using this session's title, palette and icon while attached. */
+  GtkWidget *tab_row = nullptr;
   /** Connection icon at the start of the header bar. */
   GtkWidget *header_connection_icon = nullptr;
   /** Symbolic image inside the transfer button. */

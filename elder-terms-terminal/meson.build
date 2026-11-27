@@ -80,6 +80,7 @@ elder_terms_sources = [
   'src/gtk-initialization.cpp',
   'src/main.cpp',
   'src/terminal-tabs.cpp',
+  'src/terminal-tab-row.cpp',
   'src/titlebar-dock.cpp',
   'src/dock-feedback.c',
   'src/terminal-dock-bus.cpp',
@@ -306,6 +307,13 @@ terminal_titlebar_test = executable('terminal-titlebar-test',
   link_args: ['-Wl,--wrap=main'])
 test('terminal-titlebar-test', find_program('xvfb-run'), args: ['-a', terminal_titlebar_test],
   timeout: 30, env: ['G_DEBUG=fatal-criticals', 'GDK_GL=disable', 'NO_AT_BRIDGE=1'])
+tab_titlebars_test = executable('terminal-tab-titlebars-test',
+  'tests/cpp/terminal-tab-titlebars-test.cpp',
+  objects: elder_terms_terminal.extract_all_objects(recursive: false),
+  dependencies: [file_transfer_dep, elder_terms_dep, canberra_dep, boxrig_runtime_dep, boxrig_background_dep, dependency('x11')],
+  link_with: libxyzm_async_static_library, link_args: ['-Wl,--wrap=main'])
+test('terminal-tab-titlebars-test', find_program('xvfb-run'), args: ['-a', tab_titlebars_test],
+  timeout: 45, env: ['G_DEBUG=fatal-criticals', 'GDK_GL=disable', 'NO_AT_BRIDGE=1', 'GTK_THEME=Adwaita'])
 cell_width_test = executable('terminal-cell-width-test',
   'tests/cpp/terminal-cell-width-test.cpp',
   objects: elder_terms_terminal.extract_all_objects(recursive: false),

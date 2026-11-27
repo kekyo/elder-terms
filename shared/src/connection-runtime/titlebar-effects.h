@@ -5,9 +5,16 @@
 
 #pragma once
 #include "titlebar-effect-state.h"
+#include <elder-terms/settings/general-settings.h>
 #include <gtk/gtk.h>
 
 namespace elder_terms {
+
+/** Samples the center of the GTK background, including theme gradients.
+ * @param widget Surface providing the theme style and allocation.
+ * @returns The displayed background color, or no color if rendering failed.
+ */
+std::optional<RgbColor> sample_titlebar_background(GtkWidget *widget);
 
 /**
  * Installs background effects on an existing header without changing its layout.
