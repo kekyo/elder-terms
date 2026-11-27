@@ -2389,7 +2389,7 @@ static cardio::promise<elder_terms::DockPrepared> prepare_pages(std::vector<std:
     for (auto *s : pages) {
       auto *connection = elder_terms::terminal_runtime_connection(s->runtime);
       elder_terms::DockPageImage page{s->session_id, s->config_path.value_or(""), s->startup_path.value_or(""),
-          s->terminal_title, s->launcher, elder_terms::snapshot_connection_settings(s->settings_store), {}, s->sftp_origin, {}, false, -1, -1, "UTF-8", 0, 0, 0, {}};
+          s->terminal_title, s->launcher, elder_terms::snapshot_connection_settings(s->settings_store), {}, s->sftp_origin, {}, false, -1, -1, {}, 0, 0, 0, {}};
       if (!elder_terms::terminal_runtime_pause_input_for_handoff(s->runtime)) { finish(false); co_return result; }
       auto keep_fd = [&](int fd) {
         const int index = g_unix_fd_list_append(result.batch.descriptors.get(), fd, nullptr);
@@ -2413,6 +2413,7 @@ static cardio::promise<elder_terms::DockPrepared> prepare_pages(std::vector<std:
         auto image = co_await elder_terms::terminal_connection_prepare_local_handoff(connection);
         if (!image) { finish(false); co_return result; }
         page.descriptor = keep_fd(image->master_fd);
+        page.encoding = std::move(image->encoding);
         page.checkpoint = std::move(image->checkpoint);
         page.eof = image->input_finished;
         page.capacity = image->queue_capacity;
@@ -2519,7 +2520,7 @@ static elder_terms::DockDecision stage_pages(ApplicationState *destination, cons
                 page.eof, page.encoding, page.capacity, page.chunk);
           } else if (page.child) {
             resumed = elder_terms::terminal_connection_resume_local(connection, page.fd, page.eof, page.child,
-                page.capacity, page.chunk);
+                page.encoding, page.capacity, page.chunk);
           } else {
             auto &request = s->transport.emplace(elder_terms::make_serial_transport_request(
                 std::get<elder_terms::SerialConnectionSettings>(s->active_profile.settings), page.encoding, session_callbacks(s)));

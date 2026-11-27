@@ -69,11 +69,20 @@ if [[ $kind == telnet ]]; then
   wait_for grep -q 'listening on' "$scratch/peer.log"
   peer="address=127.0.0.1
 port=$(sed -n '/listening on/s/.*://p' "$scratch/peer.log")"
-else
+elif [[ $kind == serial ]]; then
   socat PTY,raw,echo=0,wait-slave,link="$scratch/port" STDIO <"$scratch/input" >"$scratch/output" 2>"$scratch/peer.log" & pids+=($!)
   wait_for test -L "$scratch/port"
   peer="device=$scratch/port
 baudrate=19200"
+else
+  cat > "$scratch/shell.sh" <<SHELL
+#!/bin/sh
+stty raw -echo
+tty > "$scratch/tty"
+exec cat > "$scratch/output"
+SHELL
+  chmod +x "$scratch/shell.sh"
+  peer="command_line=$scratch/shell.sh"
 fi
 cat > "$scratch/Remote.ini" <<INI
 [general]
@@ -91,6 +100,10 @@ INI
 wait_for window Remote >/dev/null
 remote=$(window Remote)
 xdotool windowmove --sync "$remote" 930 100
+if [[ $kind == local ]]; then
+  wait_for test -s "$scratch/tty"
+  exec 3>"$(cat "$scratch/tty")"
+fi
 # Leave a TTYPE SEND subnegotiation open across the handoff.
 if [[ $kind == telnet ]]; then
   printf '\377\375\030\033]2;Ready\007\377\372\030\001' >&3

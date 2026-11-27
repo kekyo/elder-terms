@@ -59,6 +59,8 @@ struct TerminalLocalHandoff {
   int master_fd = -1;
   /** Original shell PID; only its spawning process can reap it. */
   pid_t child = 0;
+  /** Active peer encoding, including changes applied after the shell started. */
+  std::string encoding;
   /** Capacity of each bounded application queue. */
   std::size_t queue_capacity = 0;
   /** Maximum operating-system I/O chunk size. */
@@ -172,7 +174,7 @@ void destroy_terminal_connection(TerminalConnection *connection);
 bool terminal_connection_start_local(TerminalConnection *connection, TerminalLocalCommand command);
 
 /**
- * Pauses a UTF-8 local connection at a boxrig checkpoint boundary.
+ * Pauses a local connection at a boxrig checkpoint boundary.
  * @param connection Connected local owner; callers must inhibit new terminal input.
  * @return Handoff with a duplicated master FD, or nullopt if the state is busy.
  * @remarks On failure the connection resumes automatically. The returned FD is
@@ -206,12 +208,13 @@ void destroy_terminal_local_child_reaper(TerminalLocalChildReaper *reaper);
  * @param master_fd Nonblocking received FD; ownership transfers only on success.
  * @param input_finished EOF flag from the handoff.
  * @param child Original child PID, monitored but never reaped here.
+ * @param encoding Active PTY character encoding at the handoff.
  * @param queue_capacity Bounded queue size from the source.
  * @param io_chunk_size Maximum I/O chunk size from the source.
  * @return True if the descriptor was adopted.
  */
 bool terminal_connection_resume_local(TerminalConnection *connection, int master_fd,
-    bool input_finished, pid_t child, std::size_t queue_capacity, std::size_t io_chunk_size);
+    bool input_finished, pid_t child, std::string encoding, std::size_t queue_capacity, std::size_t io_chunk_size);
 
 /** Pauses a connected SSH or other nonlocal transport at a checkpoint boundary. */
 cardio::promise<std::optional<TerminalTransportHandoff>> terminal_connection_prepare_transport_handoff(

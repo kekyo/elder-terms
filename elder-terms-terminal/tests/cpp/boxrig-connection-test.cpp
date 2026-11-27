@@ -441,7 +441,7 @@ static cardio::promise<void> scenarios(Test *test) {
         destination.changed.trigger();
       });
   expect(terminal_connection_resume_local(destination.connection, handoff->master_fd,
-      handoff->input_finished, handoff->child, handoff->queue_capacity, handoff->io_chunk_size),
+      handoff->input_finished, handoff->child, handoff->encoding, handoff->queue_capacity, handoff->io_chunk_size),
       "resume direct PTY I/O");
   handoff->master_fd = -1;
   auto *reaper = terminal_connection_commit_local_handoff(test->connection);
@@ -469,7 +469,7 @@ static cardio::promise<void> scenarios(Test *test) {
         third.changed.trigger();
       });
   expect(terminal_connection_resume_local(third.connection, second_handoff->master_fd,
-      second_handoff->input_finished, second_handoff->child,
+      second_handoff->input_finished, second_handoff->child, second_handoff->encoding,
       second_handoff->queue_capacity, second_handoff->io_chunk_size),
       "adopt second-generation PTY master");
   second_handoff->master_fd = -1;
@@ -764,7 +764,7 @@ static int handoff_receiver_main(int socket, bool abandon) {
   test.connection = create_terminal_connection(test.core, [&] { wake(&test); },
       [&test](std::span<const unsigned char>, std::span<const unsigned char>) { test.changed.trigger(); });
   expect(terminal_connection_resume_local(test.connection, master, wire.input_finished != 0,
-      wire.child, wire.capacity, wire.chunk), "adopt master in receiving process");
+      wire.child, "UTF-8", wire.capacity, wire.chunk), "adopt master in receiving process");
   char ready = 'R';
   socket_bytes(socket, &ready, 1, true);
   char commit = 0;

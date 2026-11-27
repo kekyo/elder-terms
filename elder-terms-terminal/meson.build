@@ -176,7 +176,7 @@ if find_program('kwin_x11', required: false).found()
       args: [meson.current_source_dir() / 'tests/terminal-docking-group.sh', elder_terms_terminal],
       env: ['ELDER_TERMS_GROUP_COLOR_CLOSE=1'], timeout: 90, is_parallel: false)
     if find_program('socat', required: false).found()
-      foreach kind : ['telnet', 'serial']
+      foreach kind : ['telnet', 'serial', 'local']
         test('terminal-tab-docking-' + kind, find_program('bash'),
           args: [meson.current_source_dir() / 'tests/terminal-docking-stream.sh', elder_terms_terminal, kind],
           timeout: 90, is_parallel: false)

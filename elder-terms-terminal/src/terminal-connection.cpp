@@ -858,9 +858,8 @@ static cardio::promise<void> run_resumed_local(TerminalConnection *connection, i
   std::optional<cardio::promise<void>> reader;
   std::optional<cardio::promise<void>> writer;
   try {
-    operation.decoder = create_terminal_text_decoder("UTF-8");
-    operation.encoder = create_terminal_text_encoder("UTF-8");
-    connection->state.encoding = "UTF-8";
+    operation.decoder = create_terminal_text_decoder(connection->state.encoding);
+    operation.encoder = create_terminal_text_encoder(connection->state.encoding);
     operation.transport.read = [master_fd](std::span<unsigned char> bytes, cardio::cancellation stop) {
       return read_pty_fd(master_fd, bytes, stop);
     };
@@ -1044,10 +1043,11 @@ bool terminal_connection_start_local(TerminalConnection *connection, TerminalLoc
 }
 
 bool terminal_connection_resume_local(TerminalConnection *connection, int master_fd,
-    bool input_finished, pid_t child, std::size_t queue_capacity, std::size_t io_chunk_size) {
-  if (master_fd < 0 || child <= 0 ||
+    bool input_finished, pid_t child, std::string encoding, std::size_t queue_capacity, std::size_t io_chunk_size) {
+  if (master_fd < 0 || child <= 0 || encoding.empty() ||
       !prepare_connection(connection, queue_capacity, io_chunk_size)) return false;
   connection->state.child = child;
+  connection->state.encoding = std::move(encoding);
   connection->state.spawn.state = BOXRIG_POSIX_PTY_SPAWN_SUCCEEDED;
   connection->completion.emplace(run_resumed_local(connection, master_fd, input_finished));
   connection->wake();
@@ -1130,7 +1130,6 @@ cardio::promise<std::optional<TerminalLocalHandoff>> terminal_connection_prepare
     TerminalConnection *connection) {
   if (!connection || !connection->operation ||
       connection->state.phase != TerminalConnectionPhase::connected ||
-      connection->state.encoding != "UTF-8" ||
       (!connection->operation->pty && connection->operation->local_fd < 0) ||
       !connection->operation->session ||
       connection->operation->handoff_preparing || connection->operation->handoff_prepared ||
@@ -1185,6 +1184,7 @@ cardio::promise<std::optional<TerminalLocalHandoff>> terminal_connection_prepare
     handoff.input_finished = input_finished;
     handoff.master_fd = fd;
     handoff.child = connection->state.child;
+    handoff.encoding = connection->state.encoding;
     handoff.queue_capacity = operation.incoming.storage.size();
     handoff.io_chunk_size = operation.chunk_size;
     operation.handoff_preparing = false;
