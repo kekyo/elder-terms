@@ -107,16 +107,18 @@ terminal_span() {
 }
 before_span=$(terminal_span "$first")
 xdotool key ctrl+shift+u
-split() { [[ $(window Second) != "$first" ]]; }
+split() {
+  detached=$(window Second) && [[ -n $detached && $detached != "$first" ]]
+}
 wait_until split
 wait_until is_not_pixel 50 250 'srgb(250,250,250)'
 wait_until is_pixel 7 250 'srgb(165,29,45)'
-after_span=$(terminal_span "$(window Second)")
+after_span=$(terminal_span "$detached")
 if [[ $after_span != "$before_span" ]]; then
   echo "Terminal display width changed on undock: $before_span -> $after_span pixels" >&2
   exit 1
 fi
 xdotool windowactivate --sync "$first" key alt+F4
-xdotool windowactivate --sync "$(window Second)" key alt+F4
+xdotool windowactivate --sync "$detached" key alt+F4
 for pid in "${pids[@]:1}"; do wait "$pid"; done
 if grep -E 'Gtk-CRITICAL|Gtk-WARNING' "$scratch/"{First,Second}.log; then exit 1; fi
