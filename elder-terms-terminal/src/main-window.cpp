@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <array>
 #include <cstddef>
+#include <cstdint>
 #include <filesystem>
 #include <iostream>
 #include <memory>
@@ -49,8 +50,6 @@ static constexpr const char *transfer_progress_notice_label_style_class =
     "transfer-progress-notice-label";
 static constexpr const char *frame_border_style_class =
     "terminal-window-frame-border";
-static constexpr const char *main_exterior_component_style_class =
-    "main-exterior-components";
 static constexpr const char *main_window_css =
     ".terminal-dim-overlay {"
     "  background-color: rgba(0, 0, 0, 0.35);"
@@ -620,10 +619,10 @@ static void clear_main_window_exterior_background(MainWindow *main_window) {
   }
   update_widget_style_class(
       main_window->header_bar,
-      main_exterior_component_style_class, false);
+      main_window->exterior_component_class.c_str(), false);
   update_widget_style_class(
       main_window->status_bar,
-      main_exterior_component_style_class, false);
+      main_window->exterior_component_class.c_str(), false);
   GtkCssProvider *provider = main_window->exterior_background_provider;
   if (provider != nullptr) {
     remove_main_window_exterior_provider(
@@ -763,7 +762,7 @@ static void set_main_window_exterior_background(
 
   GtkCssProvider *component_provider =
       create_scoped_widget_component_background_provider(
-          color.value(), main_exterior_component_style_class,
+          color.value(), main_window->exterior_component_class.c_str(),
           "exterior controls");
   main_window->exterior_background_provider = provider;
   main_window->exterior_component_background_provider =
@@ -782,10 +781,10 @@ static void set_main_window_exterior_background(
   if (component_provider != nullptr) {
     update_widget_style_class(
         main_window->header_bar,
-        main_exterior_component_style_class, true);
+        main_window->exterior_component_class.c_str(), true);
     update_widget_style_class(
         main_window->status_bar,
-        main_exterior_component_style_class, true);
+        main_window->exterior_component_class.c_str(), true);
     GdkScreen *screen = main_window->style_screen;
     if (screen != nullptr) {
       gtk_style_context_add_provider_for_screen(
@@ -1018,6 +1017,8 @@ std::optional<MainWindow> load_main_window(TerminalAmbiguousWidth ambiguous_widt
   }
   if (main_window.window) prepare_terminal_background_window(main_window.window);
   main_window.header_bar = required_widget(main_window.builder, "header_bar");
+  main_window.exterior_component_class = "main-exterior-components-" +
+      std::to_string(reinterpret_cast<std::uintptr_t>(main_window.header_bar));
   main_window.header_connection_icon =
       required_widget(main_window.builder, "header_connection_icon");
   main_window.transfer_button_image =

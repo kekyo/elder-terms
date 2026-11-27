@@ -171,6 +171,8 @@ struct MainWindow {
   GtkWidget *settings_widget_root = nullptr;
   /** Effective connection colors, also applied when opening settings. */
   GeneralColorSettings colors;
+  /** CSS scope for this session's header and status bar controls. */
+  std::string exterior_component_class;
   /** Provider applying the configured header-bar and status-bar background. */
   GtkCssProvider *exterior_background_provider = nullptr;
   /** Screen provider applying exterior-derived colors below exterior

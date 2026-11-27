@@ -168,7 +168,10 @@ static void refresh(TerminalTray *tray) {
   gtk_widget_set_visible(tray->sidebar, tray->tabs.size() > 1);
   if (tray->tabs.size() > 1) frame_page(tray, active);
   else restore_frame(tray);
-  for (auto *tab : tray->tabs) tab->actions.host(tray->window, tray->body, tab == active);
+  for (auto *tab : tray->tabs) {
+    gtk_widget_set_margin_top(tab->row, tab == tray->tabs.front() ? 0 : 2);
+    tab->actions.host(tray->window, tray->body, tab == active);
+  }
   gtk_stack_set_visible_child(GTK_STACK(tray->headers), active->page->header_bar);
   gtk_stack_set_visible_child(GTK_STACK(tray->pages), active->page->root_box);
   install_window_resize_borders(GTK_WINDOW(tray->window), active->page->frame_start_border,
@@ -527,7 +530,6 @@ TerminalTab *create_terminal_tab(MainWindow *page, bool docking_enabled, Termina
       ".terminal-dock-handle {padding:0; border:0; min-width:0; min-height:0; background:none; box-shadow:none;}"
       "row.terminal-tab {padding:0; min-height:36px; background-image:none; box-shadow:none; border:0;"
       " border-left:2px solid transparent; transition:none;}"
-      "row.terminal-tab + row.terminal-tab {margin-top:2px;}"
       "row.terminal-tab:selected {border-left-color:currentColor;}"
       "row.terminal-tab button {background:none; color:inherit; border:0; box-shadow:none; text-shadow:none;"
       " padding:0 4px; min-width:0; min-height:0;}"

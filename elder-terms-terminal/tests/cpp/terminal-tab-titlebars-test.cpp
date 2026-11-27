@@ -4,6 +4,8 @@
 
 #include "../../src/terminal-tabs.h"
 #include "../../src/terminal-runtime.h"
+#include "../../../shared/src/connection-runtime/titlebar-effects.h"
+#include <elder-terms/connection-icon-image.h>
 #include <gdk/gdkx.h>
 #include <cassert>
 #include <cstdio>
@@ -58,7 +60,52 @@ static unsigned pixel(GtkWidget *widget, int x, int y) {
   return color;
 }
 
+// Encode exactly the native window pixels used for the frame-by-frame checks.
+struct TabVideo {
+  GtkWidget *window;
+  int width;
+  GdkPixbuf *frame = nullptr;
+  GSubprocess *encoder = nullptr;
+
+  TabVideo(GtkWidget *window, const char *path) : window(window), width(gtk_widget_get_allocated_width(window) & ~3) {
+    next();
+    if (path) {
+      const auto size = std::to_string(width) + "x160";
+      encoder = g_subprocess_new(G_SUBPROCESS_FLAGS_STDIN_PIPE, nullptr, "ffmpeg", "-nostdin", "-y", "-loglevel", "error",
+          "-f", "rawvideo", "-framerate", "60", "-pixel_format", gdk_pixbuf_get_has_alpha(frame) ? "rgba" : "rgb24",
+          "-video_size", size.c_str(), "-i", "pipe:0", "-c:v", "ffv1", "-threads", "1", path, nullptr);
+      assert(encoder);
+    }
+  }
+  void next() {
+    paint(window);
+    g_clear_object(&frame);
+    frame = gdk_pixbuf_get_from_window(gtk_widget_get_window(window), 0, 0, width, 160);
+    assert(frame);
+    if (encoder) assert(g_output_stream_write_all(g_subprocess_get_stdin_pipe(encoder),
+        gdk_pixbuf_read_pixels(frame), gdk_pixbuf_get_byte_length(frame), nullptr, nullptr, nullptr));
+  }
+  int red(GdkPoint point) const {
+    assert(point.x >= 0 && point.x < width && point.y >= 0 && point.y < 160);
+    return gdk_pixbuf_read_pixels(frame)[point.y * gdk_pixbuf_get_rowstride(frame) +
+        point.x * gdk_pixbuf_get_n_channels(frame)];
+  }
+  ~TabVideo() {
+    g_clear_object(&frame);
+    if (encoder) {
+      assert(g_output_stream_close(g_subprocess_get_stdin_pipe(encoder), nullptr, nullptr));
+      assert(g_subprocess_wait_check(encoder, nullptr, nullptr));
+      g_object_unref(encoder);
+    }
+  }
+};
+
+static GdkPoint band_point(GtkWidget *surface, int percent) {
+  return window_point(surface, gtk_widget_get_allocated_width(surface) * percent / 100, 5);
+}
+
 static TerminalTab *tab_for(MainWindow &page, const char *name) {
+  set_connection_window_icon(GTK_WINDOW(page.window), GTK_IMAGE(page.header_connection_icon), "default", 20);
   set_main_window_connection_phase(&page, TerminalSessionConnectionPhase::connected);
   set_main_window_title(&page, name);
   TerminalTabActions actions{};
@@ -142,6 +189,47 @@ extern "C" int __wrap_main(int argc, char **argv) {
   gtk_style_context_remove_provider(gtk_widget_get_style_context(first->header_bar), GTK_STYLE_PROVIDER(theme));
   g_object_unref(theme);
   set_main_window_colors(&*first, {RgbColor{0x7a, 0x22, 0x22}, {}});
+  set_main_window_title(&*first, "First");
+  paint(row);
+  const auto button = pixel(second->application_menu_button_image, 2, 2);
+  assert((button & 255) > (button >> 16));
+  TabVideo video(first->window, argc > 1 ? argv[1] : nullptr);
+  const auto a_left = band_point(row, 25);
+  const auto a_center = band_point(row, 50);
+  const auto a_right = band_point(row, 75);
+  const auto b_center = band_point(selected, 50);
+  const auto b_header = band_point(second->header_bar, 50);
+  const auto b_base = video.red(b_center);
+  const auto header_base = video.red(b_header);
+  const unsigned char output[] = {'x'};
+  note_main_window_output(&*first, output);
+  bool saw_background = false, saw_shared_center = false;
+  const auto start = g_get_monotonic_time();
+  do {
+    video.next();
+    if (!saw_background) {
+      assert(video.red(b_center) == b_base && video.red(b_header) == header_base);
+      if (video.red(a_left) > 0x6c + 8 && video.red(a_right) == 0x6c) {
+        saw_background = true;
+        select_terminal_tab(a);
+      }
+    } else if (video.red(a_center) > 0x6c + 10 && video.red(a_left) < 0x6c + 4 &&
+        video.red(a_right) < 0x6c + 4 && video.red(band_point(first->header_bar, 50)) > 0x7a + 10) {
+      saw_shared_center = true;
+    }
+  } while (g_get_monotonic_time() - start < 1600000);
+  assert(saw_background && saw_shared_center);
+  select_terminal_tab(b);
+  video.next();
+  notify_titlebar_bell(first->header_bar);
+  bool saw_flash = false;
+  do {
+    video.next();
+    const int flash = video.red(a_center);
+    if (flash > 0x6c + 5 && flash == video.red(a_right) && flash == video.red(a_left)) saw_flash = true;
+    assert(video.red(b_center) == b_base && video.red(b_header) == header_base);
+  } while (titlebar_effects_running(first->header_bar));
+  assert(saw_flash && video.red(a_center) == 0x6c);
   destroy_terminal_runtime(second->runtime);
   second->runtime = nullptr;
   destroy_terminal_tab(b);

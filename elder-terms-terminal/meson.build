@@ -312,7 +312,11 @@ tab_titlebars_test = executable('terminal-tab-titlebars-test',
   objects: elder_terms_terminal.extract_all_objects(recursive: false),
   dependencies: [file_transfer_dep, elder_terms_dep, canberra_dep, boxrig_runtime_dep, boxrig_background_dep, dependency('x11')],
   link_with: libxyzm_async_static_library, link_args: ['-Wl,--wrap=main'])
-test('terminal-tab-titlebars-test', find_program('xvfb-run'), args: ['-a', tab_titlebars_test],
+tab_titlebars_args = ['-a', tab_titlebars_test]
+if find_program('ffmpeg', required: false).found()
+  tab_titlebars_args += [meson.current_build_dir() / 'terminal-tab-titlebars.mkv']
+endif
+test('terminal-tab-titlebars-test', find_program('xvfb-run'), args: tab_titlebars_args,
   timeout: 45, env: ['G_DEBUG=fatal-criticals', 'GDK_GL=disable', 'NO_AT_BRIDGE=1', 'GTK_THEME=Adwaita'])
 cell_width_test = executable('terminal-cell-width-test',
   'tests/cpp/terminal-cell-width-test.cpp',

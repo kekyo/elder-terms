@@ -94,6 +94,7 @@ TerminalTabRow create_terminal_tab_row(MainWindow &page) {
   g_signal_connect(row, "map", G_CALLBACK(+[](GtkWidget *row, gpointer) { update_palette(row); }), nullptr);
   page.tab_row = row;
   update_palette(row);
+  share_titlebar_effects_with_tab(page.header_bar, row);
   return {row, pick, close};
 }
 }
