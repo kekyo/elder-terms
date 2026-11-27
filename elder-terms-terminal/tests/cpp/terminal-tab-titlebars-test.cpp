@@ -60,6 +60,30 @@ static unsigned pixel(GtkWidget *widget, int x, int y) {
   return color;
 }
 
+static void check_sidebar_padding(GtkWidget *list, GtkWidget *row) {
+  // Give the theme's sidebar a color distinct from the window behind it.
+  auto *theme = gtk_css_provider_new();
+  gtk_css_provider_load_from_data(theme, "list.sidebar { background: #324456; }", -1, nullptr);
+  auto *style = gtk_widget_get_style_context(list);
+  gtk_style_context_add_provider(style, GTK_STYLE_PROVIDER(theme), GTK_STYLE_PROVIDER_PRIORITY_USER);
+  paint(row);
+  const int width = gtk_widget_get_allocated_width(row);
+  const int height = gtk_widget_get_allocated_height(row);
+  auto *viewport = gtk_widget_get_ancestor(list, GTK_TYPE_VIEWPORT);
+  const int bottom = gtk_widget_get_allocated_height(viewport);
+  const auto background = pixel(row, 20, 3 * height);
+  assert(background == 0x324456);
+  for (int d = 1; d <= 2; ++d) {
+    assert(pixel(row, 20, -d) == background);
+    assert(pixel(row, -d, height / 2) == background);
+    assert(pixel(row, width - 1 + d, height / 2) == background);
+    assert(pixel(row, 20, height - 1 + d) == background);
+    assert(pixel(viewport, 20, bottom - d) == background);
+  }
+  gtk_style_context_remove_provider(style, GTK_STYLE_PROVIDER(theme));
+  g_object_unref(theme);
+}
+
 // Encode exactly the native window pixels used for the frame-by-frame checks.
 struct TabVideo {
   GtkWidget *window;
@@ -284,6 +308,7 @@ extern "C" int __wrap_main(int argc, char **argv) {
   auto *list = GTK_LIST_BOX(descendant(first->window, GTK_TYPE_LIST_BOX));
   assert(list);
   auto *row = GTK_WIDGET(gtk_list_box_get_row_at_index(list, 0));
+  check_sidebar_padding(GTK_WIDGET(list), row);
   auto *caption = GTK_LABEL(descendant(row, GTK_TYPE_LABEL));
   assert(caption);
   point_at(second->root_box, 250, 150);

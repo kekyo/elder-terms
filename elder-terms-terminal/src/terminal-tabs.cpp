@@ -311,11 +311,9 @@ static TerminalTray *make_tray(GtkWidget *window) {
   gtk_widget_set_size_request(tray->sidebar, 180, -1);
   gtk_widget_set_no_show_all(tray->sidebar, TRUE);
   tray->list = gtk_list_box_new();
-  gtk_widget_set_margin_start(tray->list, 2);
-  gtk_widget_set_margin_end(tray->list, 2);
-  gtk_widget_set_margin_top(tray->list, 2);
-  gtk_widget_set_margin_bottom(tray->list, 2);
-  gtk_style_context_add_class(gtk_widget_get_style_context(tray->list), "sidebar");
+  auto *list_style = gtk_widget_get_style_context(tray->list);
+  gtk_style_context_add_class(list_style, GTK_STYLE_CLASS_SIDEBAR);
+  gtk_style_context_add_class(list_style, "terminal-tab-list");
   gtk_container_add(GTK_CONTAINER(tray->sidebar), tray->list);
   tray->headers = gtk_stack_new();
   gtk_style_context_add_class(gtk_widget_get_style_context(tray->headers), "terminal-tray-headers");
@@ -528,6 +526,7 @@ TerminalTab *create_terminal_tab(MainWindow *page, bool docking_enabled, Termina
     gtk_css_provider_load_from_data(style,
       ".terminal-tray-headers.titlebar {padding:0; margin:0; border:0; min-width:0; min-height:0; background:none;}"
       ".terminal-dock-handle {padding:0; border:0; min-width:0; min-height:0; background:none; box-shadow:none;}"
+      "list.terminal-tab-list {padding:2px;}"
       "row.terminal-tab {padding:0; min-height:36px; background-image:none; box-shadow:none; border:0;"
       " border-left:2px solid transparent; transition:none;}"
       "row.terminal-tab:selected {border-left-color:currentColor;}"
